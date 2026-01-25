@@ -16,6 +16,7 @@ Submodules:
 - e2e_model: Unified E2E model
 - modular_encoder: Modular Encoder Architecture for incremental learning
 - modular_policy: Modular Driving Policy with freeze/unfreeze capability
+- hybrid_policy: Hybrid Policy for Phase B → C transition (preserves ML-Agents checkpoint)
 """
 
 from .e2e_model import (
@@ -39,6 +40,12 @@ from .modular_policy import (
     create_modular_policy_config_phase_c1,
 )
 
+from .hybrid_policy import (
+    HybridDrivingPolicy,
+    HybridPolicyConfig,
+    create_hybrid_policy_config_phase_c1 as create_hybrid_config_phase_c1,
+)
+
 __all__ = [
     # E2E Model
     "E2EDrivingModel",
@@ -55,6 +62,10 @@ __all__ = [
     "ModularPolicyConfig",
     "create_modular_policy_config_phase_b",
     "create_modular_policy_config_phase_c1",
+    # Hybrid Policy (Phase B → C transition)
+    "HybridDrivingPolicy",
+    "HybridPolicyConfig",
+    "create_hybrid_config_phase_c1",
     # Submodules
     "backbone",
     "neck",
