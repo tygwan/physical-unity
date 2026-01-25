@@ -70,11 +70,12 @@
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| Simulation | Unity 2023.2+ | 물리 기반 시뮬레이션 환경 |
+| Simulation | Unity 6 (6000.x) | 물리 기반 시뮬레이션 환경 |
 | Sensors | AWSIM | LiDAR, Camera, Radar 시뮬레이션 |
 | Bridge | ros2-for-unity | Unity-ROS2 통신 |
-| Training | PyTorch 2.0+ | 딥러닝 모델 학습 |
-| RL Framework | ML-Agents 3.0 | Unity RL 학습 인터페이스 |
+| Training | PyTorch 2.1+ | 딥러닝 모델 학습 |
+| RL Framework | ML-Agents 4.0 | Unity RL 학습 인터페이스 |
+| Inference | Unity Sentis 2.4+ | 모델 추론 엔진 |
 | Experiment | MLflow / W&B | 실험 추적 및 관리 |
 
 ---
@@ -339,24 +340,26 @@ class PlanningPolicy(nn.Module):
 class RewardFunction:
     """
     Composite Reward Function for Autonomous Driving
+    v8 수정: gradient stability 개선, rate-independent penalties
     """
 
     def __init__(self, config):
         self.weights = config.get('reward_weights', {
             'progress': 1.0,
             'goal_reached': 10.0,
-            'collision': -10.0,
-            'near_collision': -0.5,
-            'off_road': -5.0,
+            'collision': -5.0,           # v8: -10→-5 (PPO stability)
+            'near_collision': -1.5,      # v8: rate-independent (×dt)
+            'off_road': -5.0,            # v8: + episode termination
             'jerk': -0.1,
             'lateral_acc': -0.05,
             'steering_rate': -0.02,
             'lane_keeping': 0.5,
-            'speed_limit': -0.5,
+            'speed_compliance': 0.3,
+            'speed_over_limit': -0.5,    # progressive: -0.5 ~ -3.0
             'traffic_light': -5.0
         })
 
-    def compute(self, state, action, next_state, info):
+    def compute(self, state, action, next_state, info, dt=0.02):
         reward = 0.0
 
         # Progress reward (moving towards goal)
@@ -366,19 +369,21 @@ class RewardFunction:
         if info['goal_reached']:
             reward += self.weights['goal_reached']
 
-        # Safety penalties
+        # Safety penalties (terminate on critical failures)
         if info['collision']:
             reward += self.weights['collision']
             return reward, True  # Episode done
 
-        if info['ttc'] < 2.0:  # Time-to-collision < 2 seconds
-            reward += self.weights['near_collision']
-
         if info['off_road']:
             reward += self.weights['off_road']
+            return reward, True  # v8: Episode done (prevent accumulation)
+
+        # Near-collision: rate-independent (per-second, not per-frame)
+        if info['ttc'] < 2.0:
+            reward += self.weights['near_collision'] * dt
 
         # Comfort rewards
-        jerk = abs(next_state['acceleration'] - state['acceleration']) / 0.1
+        jerk = abs(next_state['acceleration'] - state['acceleration']) / dt
         reward += self.weights['jerk'] * jerk
 
         reward += self.weights['lateral_acc'] * abs(info['lateral_acceleration'])
@@ -388,14 +393,129 @@ class RewardFunction:
         if info['in_lane']:
             reward += self.weights['lane_keeping']
 
-        if info['speed'] > info['speed_limit']:
-            reward += self.weights['speed_limit']
+        # Speed compliance (80-100% of limit)
+        speed_ratio = info['speed'] / max(info['speed_limit'], 0.1)
+        if 0.8 <= speed_ratio <= 1.0:
+            reward += self.weights['speed_compliance']
+        elif speed_ratio > 1.0:
+            over_ratio = speed_ratio - 1.0
+            reward += max(self.weights['speed_over_limit'] * min(over_ratio * 10, 6.0), -3.0)
 
-        if info['traffic_violation']:
+        if info.get('traffic_violation'):
             reward += self.weights['traffic_light']
 
         return reward, False
 ```
+
+### 3.4 Modular Encoder Architecture (Incremental Learning)
+
+**Added**: 2026-01-25
+
+The Modular Encoder Architecture enables incremental learning by preserving training when observation space changes (e.g., 242D → 254D for adding lane info).
+
+#### 3.4.1 Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MODULAR ENCODER ARCHITECTURE                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌─────────┐ ┌───────────┐  │
+│  │   Ego    │ │  History  │ │  Agents  │ │  Route  │ │   Speed   │  │
+│  │ Encoder  │ │  Encoder  │ │ Encoder  │ │ Encoder │ │  Encoder  │  │
+│  │  (8D)    │ │   (40D)   │ │  (160D)  │ │  (30D)  │ │   (4D)    │  │
+│  │ FROZEN   │ │  FROZEN   │ │  FROZEN  │ │ FROZEN  │ │  FROZEN   │  │
+│  └────┬─────┘ └─────┬─────┘ └────┬─────┘ └────┬────┘ └─────┬─────┘  │
+│       │64D          │64D         │128D        │64D         │32D     │
+│       └─────────────┴────────────┴────────────┴────────────┘        │
+│                                  │                                   │
+│                           ┌──────┴──────┐                           │
+│                           │   Fusion    │ ← 352D (existing)         │
+│                           │   Layer     │                           │
+│                           └──────┬──────┘                           │
+│                                  │                                   │
+│       ┌──────────────────────────┼──────────────────────────┐       │
+│       │                    ┌─────┴─────┐                    │       │
+│       │                    │   Lane    │ ← NEW (12D)        │       │
+│       │                    │  Encoder  │   TRAINABLE        │       │
+│       │                    └─────┬─────┘                    │       │
+│       │                          │32D                       │       │
+│       └──────────────────────────┼──────────────────────────┘       │
+│                                  │                                   │
+│                           ┌──────┴──────┐                           │
+│                           │  Expanded   │ ← 384D (expanded)         │
+│                           │   Fusion    │   Partial trainable       │
+│                           └──────┬──────┘                           │
+│                                  │                                   │
+│                           ┌──────┴──────┐                           │
+│                           │   Policy    │                           │
+│                           │    Head     │                           │
+│                           └─────────────┘                           │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.4.2 Key Components
+
+```python
+# python/src/models/modular_encoder.py
+
+@dataclass
+class EncoderModuleConfig:
+    name: str                    # e.g., "ego", "lane"
+    input_dim: int               # Input dimension
+    hidden_dims: List[int]       # Hidden layer sizes
+    output_dim: int              # Output feature dimension
+    frozen: bool = False         # Whether weights are frozen
+
+class ModularEncoder(nn.Module):
+    """
+    Modular encoder with named sub-encoders and fusion layer.
+
+    Key methods:
+    - freeze_encoder(name): Freeze specific encoder
+    - unfreeze_encoder(name): Unfreeze specific encoder
+    - add_encoder(config): Add new encoder with weight transfer
+    - load_encoder_weights(path): Partial weight loading
+    """
+
+    def add_encoder(self, enc_config, freeze_existing=True):
+        # 1. Freeze existing encoders to preserve learned features
+        # 2. Add new encoder module
+        # 3. Expand fusion layer with weight transfer
+        # 4. Update observation slicing indices
+```
+
+#### 3.4.3 Two-Phase Training Workflow
+
+```yaml
+# python/configs/planning/modular_ppo_phaseC1.yaml
+
+modular_encoder:
+  frozen_encoders: [ego, history, agents, route, speed]
+  new_encoders:
+    lane:
+      input_dim: 12
+      hidden_dims: [32, 32]
+      output_dim: 32
+
+training:
+  phase_1:  # New encoder only (500K steps)
+    frozen: [ego, history, agents, route, speed]
+    lr: 1.5e-4
+
+  phase_2:  # Fine-tune all (1.5M steps)
+    frozen: []
+    lr: 3e-5
+```
+
+#### 3.4.4 Benefits
+
+| Metric | Before (Restart) | After (Modular) |
+|--------|------------------|-----------------|
+| Phase B knowledge | Lost | Preserved |
+| Training efficiency | 2M steps from scratch | 500K + 1.5M incremental |
+| Reward after 500K | ~-100 (learning basics) | ~+700 (building on B) |
+| Future changes | Full restart | Add encoder + partial train |
 
 ---
 
@@ -878,38 +998,46 @@ def export_to_onnx(model, output_path: str):
     )
 ```
 
-### 9.2 Unity Inference
+### 9.2 Unity Inference (Sentis)
 
 ```csharp
 // Assets/Scripts/Inference/PlanningInference.cs
 
-using Unity.Barracuda;
+using Unity.Sentis;
+using UnityEngine;
 
 public class PlanningInference : MonoBehaviour
 {
-    public NNModel planningModel;
-    private IWorker worker;
+    public ModelAsset planningModel;
+    private Worker worker;
+    private Model runtimeModel;
 
     void Start()
     {
-        var model = ModelLoader.Load(planningModel);
-        worker = WorkerFactory.CreateWorker(WorkerFactory.Type.ComputePrecompiled, model);
+        runtimeModel = ModelLoader.Load(planningModel);
+        worker = new Worker(runtimeModel, BackendType.GPUCompute);
     }
 
     public Vector2 GetAction(float[] egoState, float[] routeInfo, float[] surrounding)
     {
-        var egoTensor = new Tensor(1, 8, egoState);
-        var routeTensor = new Tensor(1, 30, routeInfo);
-        var surrTensor = new Tensor(1, 40, surrounding);
+        using var egoTensor = new Tensor<float>(new TensorShape(1, 8), egoState);
+        using var routeTensor = new Tensor<float>(new TensorShape(1, 30), routeInfo);
+        using var surrTensor = new Tensor<float>(new TensorShape(1, 40), surrounding);
 
-        worker.Execute(new Dictionary<string, Tensor> {
-            {"ego_state", egoTensor},
-            {"route_info", routeTensor},
-            {"surrounding", surrTensor}
-        });
+        worker.SetInput("ego_state", egoTensor);
+        worker.SetInput("route_info", routeTensor);
+        worker.SetInput("surrounding", surrTensor);
+        worker.Schedule();
 
-        var output = worker.PeekOutput("action_mean");
+        var output = worker.PeekOutput("action_mean") as Tensor<float>;
+        output.CompleteOperationsAndDownload();
+
         return new Vector2(output[0], output[1]);  // acceleration, steering
+    }
+
+    void OnDestroy()
+    {
+        worker?.Dispose();
     }
 }
 ```
@@ -933,7 +1061,8 @@ public class PlanningInference : MonoBehaviour
 |-----------|---------------|-------|
 | TensorRT | < 10ms | NVIDIA optimized |
 | ONNX Runtime | < 30ms | Cross-platform |
-| Barracuda (Unity) | < 50ms | Unity native |
+| Unity Sentis (GPU) | < 30ms | Unity native, GPU accelerated |
+| Unity Sentis (CPU) | < 50ms | Unity native, CPU fallback |
 
 ---
 

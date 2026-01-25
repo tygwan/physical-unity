@@ -1,0 +1,129 @@
+# Modular PPO Configuration for Phase C-1
+#
+# This config adds lane observation (12D) to Phase B (242D → 254D)
+# while preserving Phase B training through modular encoder architecture.
+#
+# Two-Phase Training:
+#   Phase 1: Train new lane encoder + fusion (500K steps)
+#            - Existing encoders frozen to preserve Phase B knowledge
+#            - Only lane encoder and fusion layer trainable
+#
+#   Phase 2: Fine-tune all encoders (1.5M steps)
+#            - All encoders unfrozen
+#            - Lower learning rate for gradual adaptation
+#
+# Usage:
+#   python -m src.training.train_modular_rl \
+#       --config python/configs/planning/modular_ppo_phaseC1.yaml \
+#       --run-id modular_phaseC1
+
+# Modular Encoder Configuration
+modular_encoder:
+  version: "1.1"
+
+  # Encoders to freeze during Phase 1
+  # These preserve the Phase B trained features (+903 reward)
+  frozen_encoders:
+    - ego       # 8D → 64D
+    - history   # 40D → 64D
+    - agents    # 160D → 128D
+    - route     # 30D → 64D
+    - speed     # 4D → 32D
+
+  # New encoders to add for Phase C-1
+  new_encoders:
+    lane:
+      input_dim: 12       # Lane observations (left/right/current lane info)
+      hidden_dims: [32, 32]
+      output_dim: 32
+      frozen: false       # New encoder is trainable
+
+  # Checkpoint from Phase B training
+  checkpoint:
+    path: "results/v12_phaseB/E2EDrivingAgent-best.pt"
+    load_encoders: true   # Load encoder weights
+    load_fusion: true     # Load fusion layer weights
+    load_heads: false     # Don't load heads (will adapt to new fusion output)
+
+# Training Configuration
+training:
+  # Total steps = phase_1 + phase_2
+  total_steps: 2000000
+
+  # Two-Phase Training
+  phase_1:
+    # Phase 1: Only train new lane encoder + fusion
+    steps: 500000
+    lr: 1.5e-4            # Higher LR for new encoder
+    frozen:
+      - ego
+      - history
+      - agents
+      - route
+      - speed
+
+  phase_2:
+    # Phase 2: Fine-tune all encoders
+    steps: 1500000
+    lr: 3.0e-5            # Lower LR for fine-tuning
+    frozen: []            # Nothing frozen
+
+  # Core PPO hyperparameters
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_epsilon: 0.2
+  value_loss_coef: 0.5
+  entropy_coef: 0.01
+  max_grad_norm: 0.5
+
+  # Rollout settings
+  num_steps: 2048
+  num_epochs: 10
+  batch_size: 256
+
+  # Learning rate schedule
+  lr: 1.5e-4              # Base LR (used in Phase 1)
+  lr_schedule: "linear"
+
+  # Reward shaping
+  reward_scale: 1.0
+  reward_clip: 10.0
+
+# Environment Configuration
+environment:
+  type: "unity"
+  port: 5004
+  time_scale: 20.0
+  obs_dim: 254            # 242 (Phase B) + 12 (lane) = 254
+
+# Output Configuration
+output:
+  dir: "experiments/modular_rl"
+  run_id: "phaseC1_lane"
+  log_interval: 10
+  save_interval: 50
+  eval_interval: 20
+
+# Observation Space Reference (254D total)
+# ==========================================
+# ego (8D):      x, y, vx, vy, cos_h, sin_h, ax, ay
+# history (40D): 5 past steps x 8D ego state
+# agents (160D): 20 agents x 8 features (x, y, vx, vy, cos_h, sin_h, w, l)
+# route (30D):   10 waypoints x 3 (x, y, dist)
+# speed (4D):    speed, target_speed, speed_limit, speed_error
+# lane (12D):    NEW - left_lane(4D), right_lane(4D), current_lane(4D)
+#
+# Lane observation breakdown (12D):
+#   left_lane:    distance, angle, curvature, width
+#   right_lane:   distance, angle, curvature, width
+#   current_lane: offset, heading_error, curvature, width
+
+# Expected Results
+# ================
+# Phase B baseline:   +903 reward (after 2M steps)
+# Phase C-1 Phase 1:  ~+700 reward (building on Phase B features)
+# Phase C-1 Phase 2:  ~+950 reward (target with lane information)
+#
+# Without modular encoder:
+#   - Would need to restart from scratch (~-100 at 500K steps)
+#   - Phase B knowledge completely lost
