@@ -164,6 +164,14 @@ namespace ADPlatform.Environment
                 waypointManager.SetSpeedZoneCount(speedZoneCount);
             }
 
+            // Road curvature (Phase E: Curved Roads)
+            float roadCurvature = envParams.GetWithDefault("road_curvature", 0f);
+            float curveDirectionVariation = envParams.GetWithDefault("curve_direction_variation", 0f);
+            if (waypointManager != null && roadCurvature > 0.01f)
+            {
+                waypointManager.SetRoadCurvature(roadCurvature, curveDirectionVariation);
+            }
+
             // NPC speed variation range (curriculum: 0.0 -> 0.3)
             float speedVariation = envParams.GetWithDefault("npc_speed_variation", 0.0f);
 

@@ -10,6 +10,7 @@
 | v12 Phase B | Overtake vs Follow Decision | 2M | **+903** | **COMPLETED** |
 | **v12 Phase C** | **Multi-NPC Generalization** | **4M** | **+961 (peak +1086)** | **COMPLETED** ✅ |
 | **v12 Phase D** | **Lane Observation (254D)** | **6M** | **+332 (peak +402)** | **COMPLETED** ✅ |
+| **v12 Phase E** | **Curved Roads + Non-standard Angles** | **4-6M** | - | **NEXT** 🔄 |
 | v12_ModularEncoder | Modular Architecture for Incremental Learning | - | - | Superseded |
 | v12_HybridPolicy | Phase C-1 Hybrid Training | 3M | -82.7 best | **FAILED** (Catastrophic Forgetting) |
 
@@ -416,6 +417,64 @@ Off-road: -5.0 (immediate episode end)
 | **Phase D** | **+332** | 2 NPC, lane obs | **254D** | **Lane awareness** |
 
 > **Note**: Phase D reward is lower due to different curriculum (2 NPC focus, not 4 NPC). Direct comparison with Phase C is not meaningful as they test different capabilities.
+
+---
+
+### Phase E Plan (v12_phaseE) - NEXT
+
+#### Training Information
+| Field | Value |
+|-------|-------|
+| Version | v12_phaseE |
+| Date | 2026-01-27 (planned) |
+| Status | **NEXT** 🔄 |
+| Config | `python/configs/planning/vehicle_ppo_v12_phaseE.yaml` |
+| Initialize From | `v12_phaseD/E2EDrivingAgent.onnx` |
+| Observation | 254D (same as Phase D) |
+
+#### Intent
+- Learn to navigate curved roads with varying curvature
+- Handle non-standard road angles (not just straight forward)
+- Curriculum: straight → gentle curves → moderate → sharp curves
+- Maintain Phase D capabilities (lane awareness, NPC handling)
+
+#### Key Changes from Phase D
+| Aspect | Phase D | Phase E |
+|--------|---------|---------|
+| Road Type | Straight only | **Curved roads** |
+| Curvature | 0 | 0 → 0.3 → 0.6 → 1.0 |
+| Curve Direction | N/A | Single → Mixed |
+| Goal Distance | 80-230m | 100-200m (shorter for curves) |
+| NPC Count | 1-4 | 0-2 (safety on curves) |
+
+#### Curriculum Design
+| Lesson | Curvature | Direction | NPCs | Goal |
+|--------|-----------|-----------|------|------|
+| Straight | 0.0 | N/A | 0 | Baseline verification |
+| GentleCurves | 0.3 | Single | 0-1 | Basic curve navigation |
+| ModerateCurves | 0.6 | Single | 1 | Tighter curves |
+| SharpCurves | 1.0 | Mixed | 1-2 | Full capability |
+
+#### Unity Environment Changes
+1. **WaypointManager.cs**: Added `roadCurvature`, `curveDirectionVariation` parameters
+2. **WaypointManager.cs**: New `GenerateCurvedWaypoints()` method
+3. **DrivingSceneManager.cs**: Reads `road_curvature` from curriculum parameters
+
+#### Expected Challenges
+1. **Steering stability**: Agent may oscillate on curves
+2. **Speed control**: Need to slow down on sharp curves
+3. **Lane keeping**: Lateral deviation more complex on curves
+4. **NPC interaction**: Overtaking on curves is risky
+
+#### Success Criteria
+- [ ] Navigate gentle curves (curvature 0.3) without off-road
+- [ ] Navigate sharp curves (curvature 1.0) at safe speed
+- [ ] Maintain reward > +200 on curved roads with 1 NPC
+- [ ] No increase in collision rate vs Phase D
+
+#### Estimated Duration
+- **Steps**: 4-6M
+- **Time**: ~1-1.5 hours (at 20x time scale)
 
 ---
 

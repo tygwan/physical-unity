@@ -45,6 +45,20 @@ namespace ADPlatform.Agents
         public float laneX = 1.75f;          // X position of the lane
         public float waypointY = 0.5f;
 
+        [Header("Road Curvature (Phase E)")]
+        [Tooltip("Road curvature intensity: 0 = straight, 1.0 = max curves")]
+        [Range(0f, 1f)]
+        public float roadCurvature = 0f;
+        [Tooltip("Curve direction variation: 0 = single direction, 1.0 = random left/right")]
+        [Range(0f, 1f)]
+        public float curveDirectionVariation = 0f;
+        [Tooltip("Maximum curve angle in degrees (at curvature = 1.0)")]
+        public float maxCurveAngle = 45f;
+        [Tooltip("Minimum curve segment length in meters")]
+        public float minCurveSegmentLength = 50f;
+        [Tooltip("Maximum curve segment length in meters")]
+        public float maxCurveSegmentLength = 150f;
+
         [Header("Speed Zones")]
         [Tooltip("Number of speed zones (controlled by curriculum 'speed_zone_count' parameter)")]
         public int numSpeedZones = 1;         // Curriculum-controlled: 1~4 zones
@@ -107,6 +121,7 @@ namespace ADPlatform.Agents
 
         /// <summary>
         /// Generate waypoints along the road with speed limit tags
+        /// Supports curved roads when roadCurvature > 0 (Phase E)
         /// </summary>
         public void GenerateWaypoints()
         {
@@ -117,7 +132,34 @@ namespace ADPlatform.Agents
             }
             waypoints.Clear();
 
-            // Generate waypoints from -roadLength/2 to +roadLength/2
+            if (roadCurvature <= 0.01f)
+            {
+                // Straight road (Phase A-D behavior)
+                GenerateStraightWaypoints();
+            }
+            else
+            {
+                // Curved road (Phase E+)
+                GenerateCurvedWaypoints();
+            }
+
+            // Assign speed limits to waypoints
+            waypointSpeedLimits = new float[waypoints.Count];
+            for (int i = 0; i < waypoints.Count; i++)
+            {
+                // Use arc length approximation for curved roads
+                float progressZ = (float)i / waypoints.Count * roadLength - roadLength / 2f;
+                waypointSpeedLimits[i] = GetSpeedLimitAtZ(progressZ);
+            }
+
+            UnityEngine.Debug.Log($"[WaypointManager] Generated {waypoints.Count} waypoints, curvature={roadCurvature:F2}");
+        }
+
+        /// <summary>
+        /// Generate straight waypoints (Phase A-D original behavior)
+        /// </summary>
+        private void GenerateStraightWaypoints()
+        {
             float startZ = -roadLength / 2f;
             float endZ = roadLength / 2f;
             int count = 0;
@@ -130,16 +172,89 @@ namespace ADPlatform.Agents
                 waypoints.Add(wp.transform);
                 count++;
             }
+        }
 
-            // Assign speed limits to waypoints
-            waypointSpeedLimits = new float[count];
-            for (int i = 0; i < count; i++)
+        /// <summary>
+        /// Generate curved waypoints (Phase E)
+        /// Creates smooth curves with varying directions based on curriculum parameters
+        /// </summary>
+        private void GenerateCurvedWaypoints()
+        {
+            // Current position and heading
+            Vector3 currentPos = new Vector3(laneX, waypointY, -roadLength / 2f);
+            float currentHeading = 0f;  // 0 = forward (Z+), in degrees
+            float totalDistance = 0f;
+            int count = 0;
+            int curveDirection = 1;  // 1 = right, -1 = left
+
+            // Determine curve segments
+            float segmentLength = Random.Range(minCurveSegmentLength, maxCurveSegmentLength);
+            float segmentProgress = 0f;
+            float targetCurveAngle = GetRandomCurveAngle(curveDirection);
+
+            while (totalDistance < roadLength)
             {
-                float wpZ = waypoints[i].localPosition.z;
-                waypointSpeedLimits[i] = GetSpeedLimitAtZ(wpZ);
-            }
+                // Create waypoint
+                GameObject wp = new GameObject($"WP_{count:D3}");
+                wp.transform.SetParent(transform);
+                wp.transform.localPosition = currentPos;
+                waypoints.Add(wp.transform);
+                count++;
 
-            UnityEngine.Debug.Log($"[WaypointManager] Generated {count} waypoints, {speedZones.Count} speed zones");
+                // Update segment progress
+                segmentProgress += waypointSpacing;
+                if (segmentProgress >= segmentLength)
+                {
+                    // Start new curve segment
+                    segmentProgress = 0f;
+                    segmentLength = Random.Range(minCurveSegmentLength, maxCurveSegmentLength);
+
+                    // Determine curve direction
+                    if (curveDirectionVariation > 0.5f)
+                    {
+                        // Random direction
+                        curveDirection = Random.value > 0.5f ? 1 : -1;
+                    }
+                    else
+                    {
+                        // Alternate or maintain direction
+                        curveDirection = -curveDirection;
+                    }
+                    targetCurveAngle = GetRandomCurveAngle(curveDirection);
+                }
+
+                // Apply gradual heading change (smooth curve)
+                float curveRate = (targetCurveAngle / segmentLength) * waypointSpacing;
+                currentHeading += curveRate;
+                currentHeading = Mathf.Clamp(currentHeading, -maxCurveAngle, maxCurveAngle);
+
+                // Move to next position
+                float headingRad = currentHeading * Mathf.Deg2Rad;
+                Vector3 moveDir = new Vector3(Mathf.Sin(headingRad), 0f, Mathf.Cos(headingRad));
+                currentPos += moveDir * waypointSpacing;
+                totalDistance += waypointSpacing;
+            }
+        }
+
+        /// <summary>
+        /// Get random curve angle based on curvature intensity and direction
+        /// </summary>
+        private float GetRandomCurveAngle(int direction)
+        {
+            float baseAngle = maxCurveAngle * roadCurvature;
+            float angle = Random.Range(baseAngle * 0.3f, baseAngle);
+            return angle * direction;
+        }
+
+        /// <summary>
+        /// Set road curvature from curriculum parameter (Phase E)
+        /// Called by DrivingSceneManager when environment resets
+        /// </summary>
+        public void SetRoadCurvature(float curvature, float directionVariation = 0f)
+        {
+            roadCurvature = Mathf.Clamp01(curvature);
+            curveDirectionVariation = Mathf.Clamp01(directionVariation);
+            GenerateWaypoints();
         }
 
         /// <summary>
