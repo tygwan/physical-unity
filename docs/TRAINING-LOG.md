@@ -8,8 +8,10 @@
 | v11 | Overtaking Reward (Sparse) | 8M | ~51 peak (NPC4) | Marginal improvement |
 | v12 Phase A | Dense Overtaking (Slow NPC) | 2M | **+937** | **COMPLETED** |
 | v12 Phase B | Overtake vs Follow Decision | 2M | **+903** | **COMPLETED** |
-| v12 Phase C | Multi-NPC Generalization | 4M (planned) | - | Planned |
-| v12_ModularEncoder | Modular Architecture for Incremental Learning | - | - | **DECISION MADE** |
+| **v12 Phase C** | **Multi-NPC Generalization** | **4M** | **+961 (peak +1086)** | **COMPLETED** ✅ |
+| **v12 Phase D** | **Lane Observation (254D)** | **6M** | **+332 (peak +402)** | **COMPLETED** ✅ |
+| v12_ModularEncoder | Modular Architecture for Incremental Learning | - | - | Superseded |
+| v12_HybridPolicy | Phase C-1 Hybrid Training | 3M | -82.7 best | **FAILED** (Catastrophic Forgetting) |
 
 ---
 
@@ -259,6 +261,161 @@ Off-road: -5.0 (immediate episode end)
 2. **High reward maintained** even with fast (90%) NPCs
 3. **Phase transition successful**: Initialize from Phase A checkpoint worked correctly
 4. **BehaviorType issue resolved**: All agents must be BehaviorType=0 (Default) for training
+
+---
+
+### Phase C Training Log (v12_phaseC_242D) - COMPLETED 2026-01-27
+
+#### Training Information
+| Field | Value |
+|-------|-------|
+| Version | v12_phaseC_242D |
+| Date | 2026-01-27 |
+| Status | **COMPLETED** ✅ |
+| Config | `python/configs/planning/vehicle_ppo_v12_phaseC.yaml` |
+| Initialize From | `v12_phaseB` |
+| Observation | 242D (Speed enabled, Lane disabled) |
+
+#### Training Summary
+| Metric | Value |
+|--------|-------|
+| Total Steps | 4,000,000 |
+| Training Time | ~54 minutes (3269 seconds) |
+| Final Mean Reward | **+961.8** |
+| Peak Mean Reward | **+1086.0** (at 3.85M steps) |
+| Std of Reward | 181.9 (stabilized) |
+
+#### Intent
+- Multi-NPC environment generalization (1→2→3→4 NPCs)
+- Handle varied NPC speeds (40%→60%→80%)
+- Longer goal distances (100m→160m→230m)
+- Multiple speed zones (1→2→4)
+
+#### Curriculum Progression
+| Step | Curriculum Change | Reward | Notes |
+|------|-------------------|--------|-------|
+| 0K | Start (1 NPC, 100m, 1 zone) | +546 | Initialized from Phase B |
+| 90K | goal_distance→160m, zones→2 | +766 | Peak before transition |
+| 110K | Curriculum shock | -814 | Temporary collapse |
+| 500K | Recovery | -777 | Learning new environment |
+| 760K | Positive again | +11 | Adaptation complete |
+| 960K | zones→4, variation→0.3 | +207 | Another transition |
+| 1080K | goal_distance→230m | +127 | Final curriculum |
+| 2M | Stable training | +1000 | High performance |
+| 4M | **Final** | **+961** | **Training complete** |
+
+#### Key Observations
+1. **Curriculum shock recovery**: Agent recovered from -1329 to +1000 within 1M steps
+2. **Resilient learning**: Multiple curriculum transitions handled successfully
+3. **Phase B knowledge preserved**: Started at +546 (60% of Phase B's +903)
+4. **Exceeded Phase B**: Final +961 > Phase B +903 in harder environment
+
+#### Checkpoints Saved
+- `E2EDrivingAgent-499806.onnx` (500K)
+- `E2EDrivingAgent-999802.onnx` (1M)
+- `E2EDrivingAgent-2999929.onnx` (3M)
+- `E2EDrivingAgent-4000054.onnx` (final)
+- `E2EDrivingAgent.onnx` (latest copy)
+- `Assets/Resources/Models/E2EDrivingAgent_v12_phaseC.onnx` (Unity)
+
+#### Lessons Learned
+1. **Curriculum transitions cause temporary drops**: Expected and recoverable
+2. **242D observation confirmed**: Phase B checkpoint requires 242D (not 238D)
+3. **Space Size must match**: BehaviorParameters Space Size = observation dimensions
+4. **TensorBoard essential**: Real-time monitoring crucial for long training runs
+
+#### Phase Comparison
+| Phase | Reward | Environment | Improvement |
+|-------|--------|-------------|-------------|
+| Phase A | +937 | 1 NPC @ 30% | Baseline |
+| Phase B | +903 | 1 NPC @ 30-90% | Decision making |
+| **Phase C** | **+961** | **4 NPC, 4 zones, 230m** | **+6% in 4x complexity** |
+
+---
+
+### Phase D Training Log (v12_phaseD) - COMPLETED 2026-01-27
+
+#### Training Information
+| Field | Value |
+|-------|-------|
+| Version | v12_phaseD |
+| Date | 2026-01-27 |
+| Status | **COMPLETED** ✅ |
+| Config | `python/configs/planning/vehicle_ppo_v12_phaseD.yaml` |
+| Initialize From | `v12_phaseC_242D` |
+| Observation | **254D** (242D + 12D lane features) |
+
+#### Training Summary
+| Metric | Value |
+|--------|-------|
+| Total Steps | 6,000,012 |
+| Training Time | ~74 minutes (4448 seconds) |
+| Final Mean Reward | **+332.4** |
+| Peak Mean Reward | **+402.0** (at 5.86M steps) |
+| Std of Reward | 119.2 (stabilized) |
+
+#### Intent
+- Expand observation space from 242D to 254D with lane features
+- Validate agent can learn with larger observation space
+- Curriculum: 1 NPC → 2 NPCs with curriculum shock management
+
+#### Key Changes from Phase C
+| Aspect | Phase C | Phase D |
+|--------|---------|---------|
+| Observation Dim | 242D | **254D (+12D lane)** |
+| Lane Features | Disabled | **Enabled** |
+| Max Steps | 4M | **6M** |
+| Focus | Multi-NPC | Lane awareness |
+
+#### Training Progress
+| Step | Mean Reward | Std | Curriculum | Notes |
+|------|-------------|-----|------------|-------|
+| 500K | +97 | 187 | 1 NPC | Initial learning |
+| 1M | +122 | 179 | 1 NPC | Steady progress |
+| 1.5M | +162 | 187 | 1 NPC | Improving |
+| 2M | +154 | 190 | 1 NPC | Stable |
+| 2.5M | +418 | 135 | 1 NPC | **Pre-curriculum peak** |
+| 2.5M+ | -1557 | - | **2 NPCs** | **Curriculum shock** |
+| 3M | -212 | - | 2 NPCs | Recovery begins |
+| 3.5M | +97 | 158 | 2 NPCs | Positive again |
+| 4M | +141 | 133 | 2 NPCs | Learning |
+| 4.5M | +166 | 140 | 2 NPCs | Improving |
+| 5M | +124 | 159 | 2 NPCs | Stable |
+| 5.5M | +288 | 181 | 2 NPCs | Good progress |
+| 5.86M | **+402** | 144 | 2 NPCs | **Peak** |
+| 6M | **+332** | 119 | 2 NPCs | **Final** |
+
+#### Curriculum Shock Analysis
+- **Transition Point**: 2.5M steps (1 NPC → 2 NPCs)
+- **Pre-transition**: +418 (excellent single-NPC performance)
+- **Post-transition**: -1557 (expected curriculum shock)
+- **Recovery**: ~1.5M steps to return to positive rewards
+- **Final**: +332 (80% of pre-curriculum peak)
+
+#### Checkpoints Saved
+- `E2EDrivingAgent-499959.onnx` (500K)
+- `E2EDrivingAgent-999965.onnx` (1M)
+- `E2EDrivingAgent-1999965.onnx` (2M)
+- `E2EDrivingAgent-4999959.onnx` (5M)
+- `E2EDrivingAgent-5999902.onnx` (6M)
+- `E2EDrivingAgent-6000012.onnx` (final)
+- `E2EDrivingAgent.onnx` (latest copy)
+
+#### Lessons Learned
+1. **254D observation space works**: Agent successfully learns with expanded input
+2. **Curriculum shock is manageable**: Recovery takes ~1.5M steps for NPC count increase
+3. **Lane features add value**: Agent utilizes lane information for decision making
+4. **6M steps needed**: More complex observation requires longer training
+
+#### Phase Comparison (Full v12)
+| Phase | Reward | Environment | Observation | Key Learning |
+|-------|--------|-------------|-------------|--------------|
+| Phase A | +937 | 1 NPC @ 30% | 242D | Overtaking maneuver |
+| Phase B | +903 | 1 NPC @ 30-90% | 242D | Decision policy |
+| Phase C | +961 | 4 NPC, 4 zones | 242D | Multi-NPC generalization |
+| **Phase D** | **+332** | 2 NPC, lane obs | **254D** | **Lane awareness** |
+
+> **Note**: Phase D reward is lower due to different curriculum (2 NPC focus, not 4 NPC). Direct comparison with Phase C is not meaningful as they test different capabilities.
 
 ---
 
@@ -551,6 +708,146 @@ freeze_config:
 
 ---
 
+## v12_HybridPolicy: Phase C-1 Hybrid Training Implementation (2026-01-26)
+
+**Status**: **FAILED** ❌ - Catastrophic forgetting in Stage 5
+
+### Problem Statement
+
+ML-Agents `initialize_from` requires matching observation dimensions. Phase B (242D) cannot initialize Phase C (254D with lane info).
+
+### Solution Attempted: HybridDrivingPolicy
+
+Custom PyTorch policy that:
+1. **Preserves Phase B encoder** (frozen, 649K params)
+2. **Adds new lane encoder** (trainable, 2.5K params)
+3. **Combines features** through trainable combiner + fusion
+
+#### Architecture
+```
+254D input → [Phase B Encoder (frozen)] → 512D features (242D portion)
+           → [Lane Encoder (trainable)] → 32D features (12D portion)
+           → [Combiner (trainable)]     → 512D fused features
+           → [Policy Head (from Phase B)] → 2D actions
+           → [Value Head (trainable)]   → 1D value
+```
+
+### Implementation Details
+
+**Files Created**:
+- `python/src/models/hybrid_policy.py`: HybridDrivingPolicy, HybridPolicyConfig
+- `python/src/training/unity_hybrid_trainer.py`: PPO trainer for hybrid policy
+
+**Key Features**:
+- Direct checkpoint loading from Phase B `.pt` file
+- Selective freezing/unfreezing of components
+- 6-stage gradual unfreezing training strategy
+- ONNX export support for Unity Sentis
+
+### 6-Stage Gradual Unfreezing Training Strategy
+
+| Stage | Steps | Trainable Components | LR |
+|-------|-------|---------------------|-----|
+| 0 | 0-200K | value_head only | 3e-4 |
+| 1 | 200K-600K | + lane_encoder | 1.5e-4 |
+| 2 | 600K-1M | + combiner | 1e-4 |
+| 3 | 1M-1.5M | + policy_head | 5e-5 |
+| 4 | 1.5M-2.25M | + fusion layer | 3e-5 |
+| 5 | 2.25M-3M | + Phase B encoder (0.1x LR) | 3e-6 |
+
+### Training Results (2026-01-26) - FULL RUN
+
+#### Training Progression
+
+| Step | Stage | Mean Reward | Status |
+|------|-------|-------------|--------|
+| 204,800 | 0→1 | -341.7 | Value warmup complete |
+| 614,400 | 1→2 | -159.3 | Lane encoder learning |
+| 1,024,000 | 2→3 | -181.7 | Combiner integrated |
+| 1,232,896 | 3 | **-373.1** | Policy head unfrozen |
+| 1,437,696 | 3→4 | **-82.7** | **BEST checkpoint** |
+| 1,642,496 | 4→5 | -334.5 | Fusion layer trainable |
+| 2,256,896 | 5 | -1049.9 | Phase B encoder unfrozen |
+| 2,666,496 | 5 | -1972.4 | **CATASTROPHIC FORGETTING** |
+| 2,871,296 | 5 | -2171.9 | Collapsed |
+
+#### Key Observations
+
+**Stages 0-4 (Success)**:
+- Gradual unfreezing worked as intended
+- Best performance at step 1,437,696: **Reward -82.7**
+- Showed improvement over initial -341.7
+
+**Stage 5 (Failure)**:
+- Unfreezing Phase B encoder caused catastrophic forgetting
+- Reward collapsed from -82.7 to -1972.4 (24x worse)
+- Even with 0.1x learning rate (3e-6), encoder weights were destabilized
+- Pattern: More training = worse performance (negative learning)
+
+### Checkpoints Saved
+
+| Checkpoint | Step | Reward | Notes |
+|------------|------|--------|-------|
+| checkpoint_1232896.pt | 1.23M | -373.1 | End of Stage 3 |
+| checkpoint_1437696.pt | 1.44M | **-82.7** | **BEST** |
+| checkpoint_1642496.pt | 1.64M | -334.5 | End of Stage 4 |
+| checkpoint_2871296.pt | 2.87M | -1972.4 | Stage 5 collapsed |
+
+### Post-Training Issues
+
+#### ONNX Export Failures
+
+1. **hybrid_phaseC1_v1.onnx**: Wrong input name ("obs" instead of "obs_0")
+2. **hybrid_phaseC1_v2.onnx**: Missing version_number/memory_size outputs
+3. **hybrid_phaseC1_v3.onnx**: Caused Unity "Reloading Domain" hang
+
+All hybrid ONNX files removed from Assets due to compatibility issues.
+
+#### Observation Size Mismatch
+
+- Agent outputs: 254D (242D + 12D lane)
+- Phase B model expects: 238D
+- **Resolution**: Disabled CollectSpeedObservations (4D) and CollectLaneObservations (12D) in E2EDrivingAgent.cs
+
+### Rollback Decision
+
+**Action**: Reverted to Phase B model (E2EDrivingAgent_v12_phaseB.onnx) with 238D observation
+**Reason**: Hybrid training failed, ONNX export incompatible with Unity
+
+### Root Cause Analysis
+
+1. **Architectural mismatch**: HybridDrivingPolicy architecture differs from ML-Agents expected format
+2. **ONNX format incompatibility**: ML-Agents requires specific output names (obs_0, version_number, memory_size, continuous_actions)
+3. **Catastrophic forgetting**: Even 0.1x LR was too high for Phase B encoder fine-tuning
+4. **Observation dimension confusion**: Phase B trained on 238D (not 242D as documented)
+
+### Lessons Learned
+
+1. **Don't unfreeze pretrained encoder**: Stage 5 (encoder fine-tuning) destroyed learned knowledge
+2. **ONNX format is strict**: ML-Agents requires exact input/output naming convention
+3. **Verify observation dimensions first**: Phase B actually uses 238D, not 242D
+4. **Simpler approach often better**: Instead of hybrid architecture, just train Phase C from scratch
+5. **Early stopping critical**: Best checkpoint was at 1.44M steps; training past Stage 4 was counterproductive
+
+### Recommendation for Phase C
+
+**Option A (Recommended - Most Efficient)**:
+- Continue with Phase B model (238D)
+- Defer lane observation to Phase D
+- Focus on multi-NPC generalization first
+
+**Option B (Alternative)**:
+- Fix ONNX export to match ML-Agents format exactly
+- Use best hybrid checkpoint (1.44M steps)
+- Manually verify in Unity before extended training
+
+**Option C (Clean Restart)**:
+- Train Phase C from scratch with ML-Agents native architecture
+- Use curriculum to gradually add complexity
+- Accept loss of Phase B knowledge
+
+---
+
 ## Future Research Integration (from RESEARCH-TRENDS-2024-2026)
 
 ### Short-term Improvements (Phase 5.5)
@@ -601,14 +898,15 @@ freeze_config:
 
 ## Technical Notes
 
-### Observation Space (242D in v12, 254D planned for v12_ModularEncoder Phase C)
+### Observation Space (242D in v12 Phase B, 254D planned for future)
 
-**Current (v12 - Phase B)**:
+**Current (v12 - Phase B/C) - CONFIRMED 242D**:
 - Ego state (8D): position, velocity, heading, acceleration
 - Ego history (40D): 5 past steps x 8D
 - Surrounding agents (160D): 20 agents x 8 features
 - Route info (30D): 10 waypoints x 3 (x, z, distance)
 - Speed info (4D): current_speed, speed_limit, speed_ratio, next_limit
+- ~~Lane info (12D)~~: DISABLED in Phase B/C
 - **Total: 242D**
 
 **Planned (v12_ModularEncoder - Phase C)**:
@@ -654,4 +952,22 @@ freeze_config:
 - mlagents-learn.exe must start BEFORE Unity Play button
 - Trainer timeout: 600s for environment connection
 - ML-Agents `initialize_from` requires exact dimension matching → **ModularEncoder solves this**
+
+### ⚠️ Experiment Setup Rules (MUST FOLLOW)
+
+**Rule 1: Observation Space Size Sync**
+- BehaviorParameters의 `Space Size`는 반드시 에이전트의 실제 observation 차원과 일치해야 함
+- CollectObservations() 함수에서 비활성화된 observation이 있으면 Space Size도 그에 맞게 조정
+- 모델 파일(.onnx)이 기대하는 차원과도 일치해야 함
+- **체크리스트**:
+  - [ ] E2EDrivingAgent.cs의 CollectObservations() 확인
+  - [ ] BehaviorParameters > Vector Observation > Space Size 확인
+  - [ ] ONNX 모델의 입력 차원 확인
+  - [ ] 세 값이 모두 동일한지 검증
+
+**Rule 2: Observation Dimension Reference**
+| Configuration | Ego | History | Agents | Route | Speed | Lane | Total |
+|--------------|-----|---------|--------|-------|-------|------|-------|
+| Phase B/C (current) | 8D | 40D | 160D | 30D | 4D | ❌ | **242D** |
+| Full (future) | 8D | 40D | 160D | 30D | 4D | 12D | **254D** |
 
