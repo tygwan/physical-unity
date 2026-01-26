@@ -172,7 +172,7 @@ taskkill /PID <PID> /F         # 프로세스 종료 (cmd에서 실행)
 
 | ID | Task | Priority | Status | Notes |
 |----|------|----------|--------|-------|
-| P1-01 | ROS2 Humble 설치 | High | ✅ Complete | WSL2 Ubuntu 22.04 |
+| P1-01 | ROS2 Humble 설치 | High | ✅ Complete | WSL2 (초기 설정, 현재 ML-Agents 사용) |
 | P1-02 | Unity Robotics Hub 테스트 | High | ✅ Complete | ROS-TCP-Connector 연동 |
 | P1-03 | ros2-for-unity 테스트 | High | ⏳ Pending | (선택사항) |
 | P1-04 | ROS2-Unity 연결 확인 | High | ✅ Complete | TCP 통신 성공 |
@@ -193,7 +193,7 @@ taskkill /PID <PID> /F         # 프로세스 종료 (cmd에서 실행)
 - [x] **Python mlagents 1.1.0 + PyTorch 2.3.1 설치**
 - [x] **3DBall 학습 테스트 성공 (500K steps, Reward 100)**
 - [x] **ONNX 모델 Export 및 Inference 확인**
-- [x] **WSL2 + ROS2 Humble 설치**
+- [x] **WSL2 + ROS2 Humble 설치** *(초기 설정, 현재 ML-Agents 직접 통신 사용)*
 - [x] **ROS-TCP-Endpoint 빌드**
 - [x] **Unity ROS-TCP-Connector 설치**
 - [x] **ROS2 ↔ Unity 연결 테스트 성공**
@@ -971,9 +971,22 @@ PyTorch (.pt)
 
 ## Notes & Decisions
 
+### Current Environment (2026-01-27)
+| Component | Version | Notes |
+|-----------|---------|-------|
+| OS | Windows 11 | Native (WSL 미사용) |
+| Unity | 6000.3.4f1 (Unity 6) | LTS |
+| ML-Agents | 4.0.1 | Unity Package |
+| Sentis | 2.4.1 | ONNX Inference |
+| Python | 3.10.11 | Windows Native |
+| PyTorch | 2.3.1 | CUDA 12.x |
+| mlagents | 1.2.0 | Python Package |
+
+> **Note**: 초기에 ROS2 (WSL2)를 설정했으나, ML-Agents 직접 통신이 더 효율적이어서 현재는 ML-Agents 기반으로 학습 진행 중
+
 ### Key Decisions
-1. **ROS2 Bridge**: ✅ Unity Robotics Hub (ROS-TCP-Connector) 선택
-2. **ROS2 환경**: ✅ WSL2 Ubuntu 22.04 + ROS2 Humble
+1. **ROS2 Bridge**: ✅ Unity Robotics Hub (ROS-TCP-Connector) 선택 *(초기 설정, 현재 미사용)*
+2. **ROS2 환경**: ✅ WSL2 Ubuntu 22.04 + ROS2 Humble *(초기 설정, 현재 ML-Agents 사용)*
 3. **Architecture**: ✅ **Tesla-style E2E** (modular 대신 unified neural net)
 4. **Sensor**: ✅ **Camera-only** (Vision-only, no LiDAR for planning)
 5. **Learning**: IL (nuPlan) → RL (Unity) → Hybrid (CIMRL)

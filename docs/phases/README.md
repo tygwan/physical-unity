@@ -40,7 +40,7 @@ Legend: ✅ 완료  🔄 진행중  ⏸️ 보류  📋 계획
 
 | Phase | Name | Status | Description |
 |-------|------|--------|-------------|
-| **Phase 1** | Foundation & Architecture | ✅ 완료 | Unity 6, ML-Agents 4.0, ROS2 환경 구축 |
+| **Phase 1** | Foundation & Architecture | ✅ 완료 | Unity 6, ML-Agents 4.0, Windows Native 환경 구축 |
 | **Phase 2** | Data Infrastructure | ✅ 완료 | nuPlan/Waymo 데이터 파이프라인 |
 | **Phase 3** | Perception Models | ⏸️ 보류 | Ground Truth 방식으로 단순화 |
 | **Phase 4** | Prediction Models | ⏸️ 보류 | Constant Velocity 방식으로 단순화 |
@@ -115,7 +115,7 @@ PRD.md                    # 전체 제품 요구사항
 
 | Milestone | Target | Status |
 |-----------|--------|--------|
-| M1 | Unity-ROS2 연동 | ✅ 완료 |
+| M1 | Unity-ML-Agents 연동 | ✅ 완료 |
 | M2 | 데이터셋 파이프라인 | ✅ 완료 |
 | M3 | Perception MVP | ⏸️ 보류 (GT 사용) |
 | M4 | Prediction MVP | ⏸️ 보류 (CV 사용) |
@@ -137,6 +137,30 @@ PRD.md                    # 전체 제품 요구사항
 - [LEARNING-ROADMAP.md](../LEARNING-ROADMAP.md) - RL/IL 학습 로드맵
 - [TRAINING-LOG.md](../TRAINING-LOG.md) - 학습 실험 기록
 - [PROGRESS.md](../PROGRESS.md) - 전체 진행 상황
+
+## Current Environment
+
+| Component | Version | Notes |
+|-----------|---------|-------|
+| OS | Windows 11 | Native (WSL 미사용) |
+| Unity | 6000.x (Unity 6) | LTS |
+| ML-Agents | 4.0.1 | Unity Package |
+| Sentis | 2.4.1 | ONNX Inference |
+| Python | 3.10.11 | Windows Native |
+| PyTorch | 2.1+ | CUDA 12.x |
+| GPU | RTX 4090 | 24GB VRAM |
+
+### Quick Start (Training)
+
+```powershell
+# Windows PowerShell
+cd C:\Users\user\Desktop\dev\physical-unity
+
+# ML-Agents 학습 실행
+mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseD.yaml --run-id=v12_phaseD
+
+# Unity Editor에서 Play 버튼 클릭
+```
 
 ---
 
