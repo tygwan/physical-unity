@@ -11,7 +11,7 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 | **Phase 5** | 🔄 **In Progress** | Planning Models (RL/IL) - PRIMARY FOCUS |
 | Phase 6-7 | 📋 Planned | Integration & Advanced Topics |
 
-**Current Training**: Phase D Complete (Lane Observation 254D)
+**Current Training**: Phase E In Progress (곡선 도로 학습)
 
 ---
 
@@ -20,17 +20,43 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 ### Policy Evolution Summary
 
 ```
-v10g → v11 → v12 Phase A → Phase B → Phase C → Phase D
- │      │        │           │          │          │
- │      │        │           │          │          └─ Lane Observation (254D)
- │      │        │           │          └─ Multi-NPC Generalization (4 NPCs)
- │      │        │           └─ Overtake vs Follow Decision
- │      │        └─ Dense Overtaking (Slow NPC)
- │      └─ Sparse Overtaking Reward
- └─ Lane Keeping + NPC Coexistence
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  Early Experiments (Jan 22-24)                                                   │
+│  3dball_test → driving_ppo_v1 → curriculum_v1~v9                                │
+│       │              │               │                                           │
+│       │              │               └─ Curriculum learning 기초 (reward shaping)│
+│       │              └─ 첫 자율주행 시도 (실패: reward -4.9)                      │
+│       └─ ML-Agents 환경 검증 (3D Ball: +100)                                     │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  Main Training (Jan 24-27)                                                       │
+│  v10g → v11 → v12 Phase A → Phase B → Phase C → Phase D → Phase E              │
+│   │      │        │           │          │          │          │                 │
+│   │      │        │           │          │          │          └─ 곡선 도로      │
+│   │      │        │           │          │          └─ Lane Observation (254D)  │
+│   │      │        │           │          └─ Multi-NPC Generalization (4 NPCs)   │
+│   │      │        │           └─ Overtake vs Follow Decision                    │
+│   │      │        └─ Dense Overtaking (Slow NPC)                                │
+│   │      └─ Sparse Overtaking Reward                                            │
+│   └─ Lane Keeping + NPC Coexistence                                             │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Results by Phase
+### Early Experiments (Pre-v10g)
+
+| Run ID | Date | Steps | Reward | Purpose | Outcome |
+|--------|------|-------|--------|---------|---------|
+| 3dball_test5 | Jan 22 | 500K | **+100** | ML-Agents 환경 검증 | ✅ 튜토리얼 성공 |
+| driving_ppo_v1 | Jan 23 | 87K | -4.9 | 첫 자율주행 시도 | ❌ 기본 주행 불가 |
+| curriculum_v1~v3 | Jan 24 | ~17K | - | Curriculum 구조 테스트 | ⚠️ 설정 조정 |
+| curriculum_v4 | Jan 24 | 25K | - | Reward shaping 개선 | ⚠️ 수렴 불안정 |
+| curriculum_v5 | Jan 24 | 290K | **+275** | 첫 성공적 학습 | ✅ 기본 주행 성공 |
+| curriculum_v6_parallel | Jan 24 | 2M | - | 병렬 환경 테스트 | ⚠️ 속도 향상 확인 |
+| curriculum_v7_speed | Jan 24 | 3.5M | -12 | Speed zone 도입 | ❌ 속도 적응 실패 |
+| curriculum_v8_gradual | Jan 24 | 285K | -3.4 | 점진적 난이도 | ⚠️ 개선 필요 |
+| curriculum_v9_speed | Jan 24 | - | - | Speed policy 개선 | ⚠️ v10 시리즈로 이어짐 |
+| curriculum_v10a~f | Jan 24 | - | - | Traffic + NPC 시리즈 | ⚠️ 반복 개선 |
+
+### Main Training Results
 
 | Phase | Steps | Best Reward | Final Reward | Status | Key Achievement |
 |-------|-------|-------------|--------------|--------|-----------------|
@@ -40,6 +66,7 @@ v10g → v11 → v12 Phase A → Phase B → Phase C → Phase D
 | **v12 Phase B** | 2M | **+994** | +903 | ✅ | Overtake/follow decision |
 | **v12 Phase C** | 4M | **+1086** | +961 | ✅ | 4-NPC generalization |
 | **v12 Phase D** | 6M | **+402** | +332 | ✅ | Lane observation (254D) |
+| **v12 Phase E** | 🔄 | - | - | 🔄 In Progress | 곡선 도로 학습 |
 | v12_HybridPolicy | 3M | -82 | -2172 | ❌ | Catastrophic forgetting |
 
 ### Phase Details
@@ -77,6 +104,15 @@ v10g → v11 → v12 Phase A → Phase B → Phase C → Phase D
 - **Curriculum**: 1→2 NPCs with curriculum shock recovery
 - **Training**: 6M steps, +402 peak, +332 final
 - **Result**: Successfully learned with expanded observation space
+
+#### v12 Phase E: Curved Roads (In Progress)
+- **Goal**: 곡선 도로에서 안정적 주행 학습
+- **New Features**:
+  - WaypointManager에 곡선 생성 로직 추가
+  - `road_curvature` 파라미터 (0.0 → 1.0)
+  - `curve_direction_variation` 파라미터
+- **Curriculum**: Straight → Gentle → Moderate → Sharp curves
+- **Status**: 🔄 Training started, waiting for Unity Play
 
 #### v12_HybridPolicy: Incremental Learning Attempt (FAILED)
 - **Goal**: Preserve Phase B knowledge while adding lane encoder
@@ -172,8 +208,8 @@ physical-unity/
 # Windows PowerShell
 cd C:\Users\user\Desktop\dev\physical-unity
 
-# Phase D 학습 (예시)
-mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseD.yaml --run-id=v12_phaseD
+# Phase E 학습 (현재 진행중)
+mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseE.yaml --run-id=v12_phaseE
 
 # Unity Editor에서 Play 버튼 클릭
 ```
@@ -224,12 +260,22 @@ off_road:             -5.0   # Episode end
 2. **targetSpeed = speedLimit ALWAYS**: Critical for overtaking behavior
 3. **Curriculum Learning**: Gradual complexity increase (NPC count, speed variation)
 4. **Curriculum Shock Recovery**: Temporary drops are normal and recoverable
+5. **Iterative Improvement**: v1 → v10g 과정에서 수십 번의 시행착오가 필수
 
 ### What Failed
 1. **followingBonus**: Discouraged overtaking attempts
 2. **Sparse overtakePassBonus**: Insufficient learning signal
 3. **Hybrid Policy Encoder Fine-tuning**: Catastrophic forgetting at Stage 5
 4. **ONNX Custom Format**: ML-Agents requires specific output names
+5. **급격한 환경 변화**: curriculum_v7에서 speed zone 갑자기 도입 → 학습 붕괴
+
+### Early Phase Insights (Pre-v10g)
+| Problem | Attempted | Result |
+|---------|-----------|--------|
+| "Agent doesn't move" | driving_ppo_v1 | Observation/Action 연결 문제 |
+| "Reward가 수렴 안됨" | curriculum_v1~v4 | Reward shaping 필요 |
+| "학습이 너무 느림" | curriculum_v6_parallel | 병렬 환경으로 3x 속도 향상 |
+| "Speed zone 적응 실패" | curriculum_v7_speed | 점진적 도입 필요 (v10 시리즈로 해결) |
 
 ### Best Practices
 1. **Always verify observation dimensions**: BehaviorParameters Space Size = Agent output = ONNX input
@@ -243,7 +289,7 @@ off_road:             -5.0   # Episode end
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| **E** | 곡선 도로 + 비정형 각도 | 📋 Planned |
+| **E** | 곡선 도로 + 비정형 각도 | 🔄 **In Progress** |
 | **F** | N차선 + 중앙선 규칙 | 📋 Planned |
 | **G** | 교차로 (T자/십자/Y자) | 📋 Planned |
 | **H** | 신호등 + 정지선 | 📋 Planned |
@@ -272,4 +318,4 @@ off_road:             -5.0   # Episode end
 
 ---
 
-**Last Updated**: 2026-01-27 | **Phase D Complete** | Reward: +332
+**Last Updated**: 2026-01-27 | **Phase E In Progress** | Phase D Reward: +332
