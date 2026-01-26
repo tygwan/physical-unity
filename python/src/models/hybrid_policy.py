@@ -277,12 +277,9 @@ class HybridDrivingPolicy(nn.Module):
             output_dim=config.combiner_output_dim
         )
 
-        # Policy head (Actor)
-        self.policy_head = nn.Sequential(
-            nn.Linear(config.combiner_output_dim, 256),
-            nn.SELU(),
-            nn.Linear(256, config.action_dim)
-        )
+        # Policy head (Actor) - Match ML-Agents architecture (single layer 512→2)
+        # This allows loading Phase B policy weights directly
+        self.policy_head = nn.Linear(config.combiner_output_dim, config.action_dim)
 
         # Value head (Critic)
         self.value_head = nn.Sequential(
@@ -300,12 +297,23 @@ class HybridDrivingPolicy(nn.Module):
         lane_obs = obs[..., self.phase_b_input_dim:]
         return phase_b_obs, lane_obs
 
-    def encode(self, obs: torch.Tensor) -> torch.Tensor:
-        """Encode observation into combined features."""
+    def encode(self, obs: torch.Tensor, bypass_combiner: bool = False) -> torch.Tensor:
+        """
+        Encode observation into combined features.
+
+        Args:
+            obs: (batch, 254) observation tensor
+            bypass_combiner: If True, skip combiner and return Phase B features directly.
+                            Use for debugging Phase B behavior.
+        """
         phase_b_obs, lane_obs = self._split_observation(obs)
 
         # Encode Phase B observations (frozen)
         phase_b_features = self.phase_b_encoder(phase_b_obs)
+
+        if bypass_combiner:
+            # Skip combiner - return Phase B features directly
+            return phase_b_features
 
         # Encode lane observations (trainable)
         lane_features = self.lane_encoder(lane_obs)
@@ -317,16 +325,19 @@ class HybridDrivingPolicy(nn.Module):
 
     def forward(self, obs: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Forward pass returning action mean and value."""
-        features = self.encode(obs)
+        features = self.encode(obs, bypass_combiner=self.bypass_combiner)
 
-        action_mean = self.policy_head(features)
+        # Raw action (before tanh) - this is how ML-Agents works
+        raw_action = self.policy_head(features)
         value = self.value_head(features)
 
-        # Bound action output
-        action_mean = torch.tanh(action_mean)
+        # For deterministic action, apply tanh
+        # For stochastic, get_action_and_value will sample then apply tanh
+        action_mean = torch.tanh(raw_action)
 
         return {
             'action': action_mean,
+            'raw_action': raw_action,  # Store raw for proper TanhNormal sampling
             'value': value,
             'features': features
         }
@@ -339,28 +350,34 @@ class HybridDrivingPolicy(nn.Module):
         """
         Get action, log probability, and value.
 
+        Matches ML-Agents behavior:
+        - action_mean = tanh(raw_action) - bounded deterministic action
+        - Sample from Normal(action_mean, std)
+        - Store unclamped sample for consistent log_prob computation
+        - Environment will clamp to [-1, 1]
+
         Returns:
-            action: (batch, action_dim)
+            action: (batch, action_dim) - unclamped sample for training consistency
             log_prob: (batch, 1)
             value: (batch, 1)
         """
         output = self(obs)
-        action_mean = output['action']
+        action_mean = output['action']  # After tanh, in [-1, 1]
         value = output['value']
 
-        # Create normal distribution
+        # Create normal distribution centered at tanh(raw_action)
         action_std = torch.exp(self.log_std).expand_as(action_mean)
         dist = torch.distributions.Normal(action_mean, action_std)
 
         if deterministic:
+            # Deterministic: use the mean directly
             action = action_mean
         else:
+            # Stochastic: sample around the mean
+            # Don't clamp here - store the raw sample for consistent log_prob
             action = dist.rsample()
 
-        # Clamp action to valid range
-        action = torch.clamp(action, -1.0, 1.0)
-
-        # Compute log probability
+        # Simple Gaussian log probability (no Jacobian correction needed)
         log_prob = dist.log_prob(action).sum(dim=-1, keepdim=True)
 
         return action, log_prob, value
@@ -373,18 +390,22 @@ class HybridDrivingPolicy(nn.Module):
         """
         Evaluate actions for PPO training.
 
+        Actions are the unclamped samples stored during rollout.
+        We compute their log_prob under the current policy distribution.
+
         Returns:
             log_prob: (batch, 1)
             entropy: (batch, 1)
             value: (batch, 1)
         """
         output = self(obs)
-        action_mean = output['action']
+        action_mean = output['action']  # After tanh, in [-1, 1]
         value = output['value']
 
         action_std = torch.exp(self.log_std).expand_as(action_mean)
         dist = torch.distributions.Normal(action_mean, action_std)
 
+        # Simple Gaussian log probability
         log_prob = dist.log_prob(actions).sum(dim=-1, keepdim=True)
         entropy = dist.entropy().sum(dim=-1, keepdim=True)
 
@@ -400,24 +421,178 @@ class HybridDrivingPolicy(nn.Module):
         self.phase_b_encoder.unfreeze()
         print(f"Unfrozen Phase B encoder")
 
+    def freeze_policy_head(self):
+        """Freeze policy head and log_std to preserve Phase B behavior during value warmup."""
+        for param in self.policy_head.parameters():
+            param.requires_grad = False
+        self.log_std.requires_grad = False
+        self._policy_head_frozen = True
+        frozen_params = sum(p.numel() for p in self.policy_head.parameters()) + self.log_std.numel()
+        print(f"Frozen policy_head + log_std ({frozen_params} params)")
+
+    def unfreeze_policy_head(self):
+        """Unfreeze policy head and log_std for training."""
+        for param in self.policy_head.parameters():
+            param.requires_grad = True
+        self.log_std.requires_grad = True
+        self._policy_head_frozen = False
+        print(f"Unfrozen policy_head + log_std")
+
+    def freeze_combiner_and_lane(self):
+        """Freeze combiner and lane encoder during value-only warmup."""
+        for param in self.combiner.parameters():
+            param.requires_grad = False
+        for param in self.lane_encoder.parameters():
+            param.requires_grad = False
+        self._combiner_frozen = True
+        self._lane_frozen = True
+        self._combiner_gate_frozen = True
+        frozen_params = sum(p.numel() for p in self.combiner.parameters()) + \
+                        sum(p.numel() for p in self.lane_encoder.parameters())
+        print(f"Frozen combiner + lane_encoder ({frozen_params} params)")
+
+    def unfreeze_combiner_and_lane(self):
+        """Unfreeze combiner and lane encoder."""
+        for param in self.combiner.parameters():
+            param.requires_grad = True
+        for param in self.lane_encoder.parameters():
+            param.requires_grad = True
+        self._combiner_frozen = False
+        self._lane_frozen = False
+        self._combiner_gate_frozen = False
+        print(f"Unfrozen combiner + lane_encoder")
+
+    # ========== Gradual Unfreezing Methods (Fine-grained control) ==========
+
+    def freeze_lane_encoder(self):
+        """Freeze lane encoder only."""
+        for param in self.lane_encoder.parameters():
+            param.requires_grad = False
+        self._lane_frozen = True
+        frozen_params = sum(p.numel() for p in self.lane_encoder.parameters())
+        print(f"Frozen lane_encoder ({frozen_params} params)")
+
+    def unfreeze_lane_encoder(self):
+        """Unfreeze lane encoder only."""
+        for param in self.lane_encoder.parameters():
+            param.requires_grad = True
+        self._lane_frozen = False
+        trainable = sum(p.numel() for p in self.lane_encoder.parameters())
+        print(f"Unfrozen lane_encoder ({trainable} params)")
+
+    def freeze_combiner_gate(self):
+        """Freeze only the combiner gate (not lane_proj)."""
+        for param in self.combiner.gate.parameters():
+            param.requires_grad = False
+        self._combiner_gate_frozen = True
+        frozen_params = sum(p.numel() for p in self.combiner.gate.parameters())
+        print(f"Frozen combiner.gate ({frozen_params} params)")
+
+    def unfreeze_combiner_gate(self):
+        """Unfreeze combiner gate."""
+        for param in self.combiner.gate.parameters():
+            param.requires_grad = True
+        self._combiner_gate_frozen = False
+        trainable = sum(p.numel() for p in self.combiner.gate.parameters())
+        print(f"Unfrozen combiner.gate ({trainable} params)")
+
+    def freeze_combiner_lane_proj(self):
+        """Freeze combiner lane projection."""
+        for param in self.combiner.lane_proj.parameters():
+            param.requires_grad = False
+        self._combiner_lane_proj_frozen = True
+        frozen_params = sum(p.numel() for p in self.combiner.lane_proj.parameters())
+        print(f"Frozen combiner.lane_proj ({frozen_params} params)")
+
+    def unfreeze_combiner_lane_proj(self):
+        """Unfreeze combiner lane projection."""
+        for param in self.combiner.lane_proj.parameters():
+            param.requires_grad = True
+        self._combiner_lane_proj_frozen = False
+        trainable = sum(p.numel() for p in self.combiner.lane_proj.parameters())
+        print(f"Unfrozen combiner.lane_proj ({trainable} params)")
+
+    def freeze_full_combiner(self):
+        """Freeze entire combiner (gate + lane_proj)."""
+        for param in self.combiner.parameters():
+            param.requires_grad = False
+        self._combiner_frozen = True
+        self._combiner_gate_frozen = True
+        self._combiner_lane_proj_frozen = True
+        frozen_params = sum(p.numel() for p in self.combiner.parameters())
+        print(f"Frozen full combiner ({frozen_params} params)")
+
+    def unfreeze_full_combiner(self):
+        """Unfreeze entire combiner."""
+        for param in self.combiner.parameters():
+            param.requires_grad = True
+        self._combiner_frozen = False
+        self._combiner_gate_frozen = False
+        self._combiner_lane_proj_frozen = False
+        trainable = sum(p.numel() for p in self.combiner.parameters())
+        print(f"Unfrozen full combiner ({trainable} params)")
+
+    @property
+    def is_combiner_frozen(self) -> bool:
+        """Check if combiner is frozen."""
+        return getattr(self, '_combiner_frozen', False)
+
+    @property
+    def is_lane_frozen(self) -> bool:
+        """Check if lane encoder is frozen."""
+        return getattr(self, '_lane_frozen', False)
+
+    @property
+    def is_combiner_gate_frozen(self) -> bool:
+        """Check if combiner gate is frozen."""
+        return getattr(self, '_combiner_gate_frozen', False)
+
+    @property
+    def is_combiner_lane_proj_frozen(self) -> bool:
+        """Check if combiner lane projection is frozen."""
+        return getattr(self, '_combiner_lane_proj_frozen', False)
+
+    def set_bypass_combiner(self, bypass: bool = True):
+        """Enable/disable combiner bypass mode for debugging Phase B behavior."""
+        self._bypass_combiner = bypass
+        print(f"Combiner bypass mode: {'ON (pure Phase B)' if bypass else 'OFF (hybrid)'}")
+
+    @property
+    def bypass_combiner(self) -> bool:
+        """Check if combiner bypass is enabled."""
+        return getattr(self, '_bypass_combiner', False)
+
+    @property
+    def is_policy_head_frozen(self) -> bool:
+        """Check if policy head is frozen."""
+        return getattr(self, '_policy_head_frozen', False)
+
     def get_trainable_params(self) -> List[nn.Parameter]:
-        """Get only trainable parameters (excludes frozen Phase B)."""
+        """Get only trainable parameters (excludes frozen components)."""
         params = []
 
-        # Lane encoder (always trainable)
-        params.extend(self.lane_encoder.parameters())
+        # Lane encoder (only if not frozen)
+        if not self.is_lane_frozen:
+            params.extend(self.lane_encoder.parameters())
 
-        # Combiner (always trainable)
-        params.extend(self.combiner.parameters())
+        # Combiner gate (only if not frozen)
+        if not self.is_combiner_gate_frozen:
+            params.extend(self.combiner.gate.parameters())
 
-        # Policy head
-        params.extend(self.policy_head.parameters())
+        # Combiner lane_proj (only if not frozen)
+        if not self.is_combiner_lane_proj_frozen:
+            params.extend(self.combiner.lane_proj.parameters())
 
-        # Value head
+        # Policy head (only if not frozen)
+        if not self.is_policy_head_frozen:
+            params.extend(self.policy_head.parameters())
+
+        # Value head (always trainable)
         params.extend(self.value_head.parameters())
 
-        # Log std
-        params.append(self.log_std)
+        # Log std (only if policy_head not frozen)
+        if not self.is_policy_head_frozen:
+            params.append(self.log_std)
 
         # Phase B encoder (only if not frozen)
         if not self.phase_b_encoder.is_frozen:
@@ -453,7 +628,9 @@ class HybridDrivingPolicy(nn.Module):
         cls,
         checkpoint_path: str,
         config: HybridPolicyConfig = None,
-        freeze_phase_b: bool = True
+        freeze_phase_b: bool = True,
+        freeze_policy_head: bool = True,
+        freeze_combiner: bool = True
     ) -> 'HybridDrivingPolicy':
         """
         Create HybridDrivingPolicy and load Phase B encoder weights.
@@ -492,9 +669,28 @@ class HybridDrivingPolicy(nn.Module):
             policy.log_std.data = log_sigma.squeeze(0)
             print(f"  Loaded log_std: {policy.log_std.data}")
 
+        # Load policy head (action model) weights - CRITICAL for Phase B behavior!
+        mu_weight_key = 'action_model._continuous_distribution.mu.weight'
+        mu_bias_key = 'action_model._continuous_distribution.mu.bias'
+        if mu_weight_key in policy_state_dict and mu_bias_key in policy_state_dict:
+            policy.policy_head.weight.data = policy_state_dict[mu_weight_key].clone()
+            policy.policy_head.bias.data = policy_state_dict[mu_bias_key].clone()
+            print(f"  Loaded policy_head: {policy.policy_head.weight.shape}")
+        else:
+            print("  WARNING: Policy head weights not found in checkpoint!")
+
         # Freeze Phase B encoder if requested
         if freeze_phase_b:
             policy.freeze_phase_b()
+
+        # Freeze policy head if requested (for value warmup phase)
+        if freeze_policy_head:
+            policy.freeze_policy_head()
+
+        # Freeze combiner and lane encoder if requested (for value-only warmup)
+        if freeze_combiner:
+            policy.freeze_lane_encoder()
+            policy.freeze_full_combiner()
 
         # Print parameter summary
         summary = policy.get_param_summary()
@@ -508,6 +704,9 @@ class HybridDrivingPolicy(nn.Module):
         """Export to ONNX for Unity Sentis inference."""
         self.eval()
 
+        # Move to CPU for ONNX export (ONNX export works best on CPU)
+        self_cpu = self.cpu()
+
         # Create wrapper that outputs only action
         class ONNXWrapper(nn.Module):
             def __init__(self, policy):
@@ -518,9 +717,9 @@ class HybridDrivingPolicy(nn.Module):
                 output = self.policy(obs)
                 return output['action']
 
-        wrapper = ONNXWrapper(self)
+        wrapper = ONNXWrapper(self_cpu)
 
-        # Dummy input
+        # Dummy input (on CPU)
         dummy_input = torch.randn(1, self.total_obs_dim)
 
         # Export

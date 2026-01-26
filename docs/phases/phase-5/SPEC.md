@@ -1,5 +1,10 @@
 # Phase 5: Planning Models (PRIMARY FOCUS)
 
+> **학습 로드맵**: 상세 학습 계획은 [LEARNING-ROADMAP.md](../../LEARNING-ROADMAP.md) 참조
+>
+> 이 문서는 Phase 5의 **기술 설계** 및 **아키텍처**를 다룹니다.
+> 실제 학습 진행 (Phase A-L)은 LEARNING-ROADMAP.md에서 관리됩니다.
+
 ## Overview
 
 **프로젝트의 핵심 Phase**. 강화학습(RL)과 모방학습(IL) 기반 모션 플래닝 모델을 개발합니다.
@@ -14,12 +19,35 @@
 ## Strategy
 
 ```
-실험 순서:
-1. Behavioral Cloning (BC) → Baseline 확립
-2. Pure RL (PPO/SAC) → RL 한계 확인
-3. GAIL → 보상 없는 모방 학습
-4. Hybrid (BC → RL) → 최종 모델
-5. Ablation Studies → 분석
+실험 순서 (Revised - 2026-01-24):
+
+Phase 5A: Vector-based RL (벡터 관측 기반 정책 학습)
+  1. ✅ Behavioral Cloning (BC) → Baseline 확립
+  2. ✅ Pure RL (PPO Single Area) → 950K steps, Reward ~700
+  3. ✅ 병렬 Training Areas (16x) → 1.66M steps, Reward ~750 수렴
+  4. 🔄 속도 정책 (v8) → 3.07M/8M, NPC+속도, Best +2.46
+     - Reward 재조정: collision=-5, nearCollision rate-independent, off-road termination
+     - Curriculum 재설계: NPC 0→1→2→4 (점진적), threshold 분리
+     - ★ 완료 후: 32 Areas 확장 적용
+  5. ⏳ Multi-Lane + 차선 정책 → 32 Areas, 5종 마킹
+  6. ⏳ 도로 네트워크 + 교차로 + 경로 추종 ← ★ 핵심
+
+Phase 5B: Vision-based RL (카메라 입력 학습, 8-16 Areas)
+  7. ⏳ Camera 입력 (Level 2) → nature_cnn/resnet encoder, 8-16 Areas
+  8. ⏳ Euro NCAP + 신호등 인식 → ELK/LKA + 카메라 신호체계
+
+Phase 5C: Hybrid & Advanced (모방학습 결합)
+  9. ⏳ Expert 녹화 → GAIL/Hybrid (카메라 기반 시연)
+  10. ⏳ Full E2E (Level 3-4) → BEV + Temporal + Planning
+  11. ⏳ Ablation Studies → 분석
+
+원칙: "벡터 기반에서 정책 검증 → 카메라 추가 → E2E 통합"
+       (디버깅: 비전 문제 vs 정책 문제 분리 가능해야 함)
+
+병렬화 전략:
+  - Vector-only (Stage 4-6): 32 Areas (RTX 4090 VRAM ~8GB)
+  - Camera (Stage 7-8): 8-16 Areas (렌더링 부하로 축소)
+  - Sensor 통합 (Phase 6): 8 Areas (Camera + LiDAR)
 ```
 
 ## Scope
@@ -33,6 +61,14 @@
 - 보상 함수 설계 및 튜닝
 - Observation/Action space 설계
 - 성능 평가 및 비교
+- **병렬 Training Areas (16x)** - GPU 활용 극대화
+- **다차선 도로 환경** - 2차선 + 중앙선 + 갓길
+- **차선 마킹 정책** - 5종 차선 (실선/점선/황색/이중)
+- **속도 제한 정책** - 구간별 제한속도 (30/50/60/80 km/h), 한국 도로교통법 기반
+- **도로 네트워크 + 교차로** - T자/십자 교차로, 경로 그래프 탐색
+- **경로 추종 (Navigation)** - 목적지 설정 → 경로 생성 → 교차로 결정
+- **Camera Visual Observation** - ML-Agents CameraSensor + CNN encoder
+- **Euro NCAP LSS 평가** - ELK/LKA 시나리오 벤치마크
 
 ### Out of Scope
 - 실차 적용 (Sim-to-Real)
@@ -105,8 +141,13 @@
 ## Observation Space Design
 
 ```yaml
-# Total: ~140 dimensions (without BEV) or ~200D (with BEV)
+# 단계별 Observation 확장:
+#   Stage 1-3: 140D (기본)
+#   Stage 4:   160D (+lane 12D, +speed 4D, +navigation 10D 미포함)
+#   Stage 6:   170D (+navigation 10D)
+#   Stage 7:   170D + visual observations (Camera CNN)
 
+# === Base Observation (Stage 1-3): 140D ===
 ego_state: 8D
   - position: [x, y]           # 2D
   - velocity: [vx, vy]         # 2D
@@ -114,14 +155,47 @@ ego_state: 8D
   - acceleration: [ax, ay]     # 2D
 
 route_info: 30D
-  - waypoints: 10 x [x, y]     # 20D
+  - waypoints: 10 x [x, y]     # 20D (경로를 따른 곡선 포함)
   - distances: 10              # 10D
 
 surrounding: 40D
   - vehicles: 8 x [x, y, vx, vy, heading]  # 40D
 
-bev_features: 64D (optional)
+bev_features: 64D (optional, Stage 7+)
   - encoded BEV representation
+
+# === Stage 4 확장: +16D (lane + speed) ===
+lane_info: 12D
+  - left_lane_dist: 1D
+  - right_lane_dist: 1D
+  - left_lane_type: 4D (one-hot)
+  - right_lane_type: 4D (one-hot)
+  - center_offset: 1D
+  - heading_error: 1D
+
+speed_info: 4D
+  - current_speed_norm: 1D
+  - speed_limit_norm: 1D
+  - speed_ratio: 1D
+  - next_speed_limit_norm: 1D
+
+# === Stage 6 확장: +10D (navigation) ===
+navigation_command: 6D
+  - one-hot: [직진, 좌회전, 우회전, 유턴, 좌차선변경, 우차선변경]
+  - 교차로 접근 시 다음 행동 지시
+
+intersection_info: 4D
+  - distance_to_intersection: 1D   # 다음 교차로까지 거리 (정규화)
+  - intersection_type: 1D          # T자=0.33, 십자=0.67, 로터리=1.0
+  - entry_angle: 1D                # 진입 각도 (정규화, -1~1)
+  - exit_angle: 1D                 # 출구 각도 (정규화, -1~1)
+
+# === Stage 7 확장: Visual Observation ===
+camera_observation:
+  - resolution: [84, 84, 3]        # ML-Agents CameraSensor
+  - vis_encode_type: nature_cnn    # or resnet
+  - cameras: 1 (front-facing)      # 확장: 3 (front + left + right)
+  - 별도 CNN encoder → 128D embedding → Policy input에 concat
 ```
 
 ## Action Space Design
@@ -146,28 +220,38 @@ discrete:
 ## Reward Function Design
 
 ```yaml
-# Composite Reward Function
+# Composite Reward Function (v8 - 현재 적용 중)
+#
+# 핵심 원칙 (v7→v8 교훈):
+#   1. 패널티는 episode termination으로 처리 (누적 방지)
+#   2. 연속 패널티는 rate-independent (×deltaTime)
+#   3. 충돌 패널티는 gradient stability 고려하여 적정 수준 유지
+#   4. Curriculum은 한 번에 하나의 차원만 어렵게 변경
 
 # === Base Rewards ===
 progress: +1.0
-  description: "Progress towards goal (normalized)"
-  formula: "dot(velocity, goal_direction) / max_speed"
+  description: "Progress towards goal (normalized, capped at speed_limit)"
+  formula: "dot(velocity, goal_direction) / min(max_speed, speed_limit)"
+  note: "Stage 4에서 max_speed 대신 speed_limit으로 정규화 (초과 속도에 보상 제거)"
 
 goal_reached: +10.0
   description: "Bonus for reaching goal"
   condition: "distance_to_goal < 2.0m"
 
-# === Safety Penalties ===
-collision: -10.0
+# === Safety Penalties (v8 조정) ===
+collision: -5.0                    # v8: -10→-5 (PPO gradient 안정화)
   description: "Collision with any object"
-  terminates: true
+  terminates: true                 # EndEpisode() 즉시 종료
 
-near_collision: -0.5
+near_collision: -1.5 * deltaTime   # v8: rate-independent (초당 -1.5)
   description: "Time-to-Collision < threshold"
-  formula: "-0.5 * (2.0 - TTC) / 2.0 if TTC < 2.0"
+  formula: "-1.5 * Time.fixedDeltaTime if TTC < 2.0"
+  note: "프레임율에 무관한 일정 패널티/초"
 
-off_road: -5.0
+off_road: -5.0                     # v8: 누적 → 즉시 종료
   description: "Vehicle leaves drivable area"
+  terminates: true                 # EndEpisode() 즉시 종료 (누적 방지)
+  note: "v7에서 -5/sec 누적 → -200까지 도달하여 policy collapse 발생"
 
 # === Comfort Rewards ===
 jerk: -0.1
@@ -187,41 +271,866 @@ lane_keeping: +0.5
   description: "Bonus for staying in lane"
   condition: "center_offset < 0.5m"
 
-speed_limit: -0.5
-  description: "Penalty for exceeding speed limit"
-  condition: "speed > speed_limit"
+speed_compliance: +0.3
+  description: "Reward for maintaining optimal speed (80-100% of limit)"
+  formula: "+0.3 if 0.8*speed_limit <= speed <= speed_limit"
+
+speed_over_limit: -0.5 ~ -3.0
+  description: "Progressive penalty for exceeding speed limit"
+  formula: |
+    over_ratio = (speed - speed_limit) / speed_limit
+    if over_ratio > 0:    penalty = -0.5 * min(over_ratio * 10, 6.0)
+    # 10% 초과: -0.5, 20% 초과: -1.0, 50%+초과: -3.0
+
+speed_under_limit: -0.1
+  description: "Mild penalty for driving too slowly (obstructing traffic)"
+  condition: "speed < 0.5 * speed_limit AND no obstacle ahead"
 
 traffic_light: -5.0
-  description: "Penalty for running red light"
+  description: "Penalty for running red light (Phase 6 구현 예정)"
+```
+
+### Reward 설계 교훈 (v7→v8)
+
+```yaml
+# === Policy Collapse 원인 분석 ===
+#
+# 문제 1: collision=-10 → Std of Reward 40+ → PPO gradient explosion
+#   해결: -5로 완화. 충돌 시 EndEpisode로 충분한 학습 신호 전달.
+#   근거: PPO clip ratio(ε=0.2)로는 reward 범위가 넓을 때 불안정.
+#
+# 문제 2: nearCollision=-0.5/frame (50fps에서 2초간 -50 누적)
+#   해결: ×Time.fixedDeltaTime → -1.5/초 (frame rate 무관)
+#   공식: reward += nearCollisionPenalty * Time.fixedDeltaTime
+#
+# 문제 3: offRoad=-5/sec (40초 off-road → -200 누적)
+#   해결: EndEpisode() 즉시 종료. 자율주행 RL 표준 접근법.
+#   참고: 충돌과 동일하게 치명적 실패로 분류.
+#
+# 문제 4: NPC 0→2 + goal 50→120m 동시 curriculum 진행
+#   해결: 임계값 분리 (NPC: -1.5, goal: -2.5)
+#   원칙: 한 번에 하나의 차원만 난이도 증가.
+#
+# === Curriculum 설계 원칙 ===
+#
+# 1. 점진적 도입: 0→1→2→4 (한 번에 2배 이하 증가)
+# 2. 임계값 분리: 각 환경 변수의 threshold를 다르게 설정
+# 3. min_lesson_length: 300+ (충분한 학습 시간 보장)
+# 4. signal_smoothing: true (노이즈 방지)
 ```
 
 ## Task Breakdown
 
-| ID | Task | Priority | Est. Time |
-|----|------|----------|-----------|
+| ID | Task | Priority | Status | Est. Time |
+|----|------|----------|--------|-----------|
 | **Stage 1: Behavioral Cloning** |
-| P5-01 | BC 데이터 로더 구현 | High | 2일 |
-| P5-02 | BC 네트워크 구현 | High | 2일 |
-| P5-03 | BC 학습 파이프라인 | High | 3일 |
-| P5-04 | BC 평가 및 튜닝 | High | 3일 |
-| **Stage 2: Pure RL** |
-| P5-05 | PPO 구현 | High | 3일 |
-| P5-06 | SAC 구현 | High | 3일 |
-| P5-07 | 보상 함수 구현 | High | 2일 |
-| P5-08 | Unity 환경 연동 | High | 3일 |
-| P5-09 | RL 학습 및 튜닝 | High | 5일 |
-| **Stage 3: GAIL** |
-| P5-10 | Discriminator 구현 | Medium | 2일 |
-| P5-11 | GAIL 학습 파이프라인 | Medium | 3일 |
-| P5-12 | GAIL 평가 | Medium | 2일 |
-| **Stage 4: Hybrid** |
-| P5-13 | BC → RL Fine-tuning | High | 3일 |
-| P5-14 | CIMRL 구현 | High | 3일 |
-| P5-15 | Hybrid 평가 | High | 2일 |
-| **Stage 5: Ablation** |
-| P5-16 | 보상 요소별 분석 | Medium | 3일 |
-| P5-17 | 아키텍처 분석 | Medium | 2일 |
-| P5-18 | 하이퍼파라미터 분석 | Medium | 2일 |
+| P5-01 | BC 데이터 로더 구현 | High | ✅ | 2일 |
+| P5-02 | BC 네트워크 구현 | High | ✅ | 2일 |
+| P5-03 | BC 학습 파이프라인 | High | ✅ | 3일 |
+| P5-04 | BC 평가 및 튜닝 | High | ✅ | 3일 |
+| **Stage 2: Pure RL (Single Area)** |
+| P5-05 | PPO Curriculum 학습 | High | ✅ | 3일 |
+| P5-06 | 보상 함수 구현 | High | ✅ | 2일 |
+| P5-07 | Unity 환경 연동 (PhysX 해결) | High | ✅ | 3일 |
+| P5-08 | PPO 950K+ steps 학습 | High | ✅ | 5일 |
+| **Stage 3: 병렬 Training Areas** |
+| P5-09 | TrainingArea 프리팹 구성 | High | ✅ | 1일 |
+| P5-10 | 16 Areas 배치 및 테스트 | High | ✅ | 1일 |
+| P5-11 | PPO 병렬 학습 (1.66M steps, Reward ~750 수렴) | High | ✅ | 1일 |
+| P5-12 | SAC 병렬 학습 비교 | High | ⏳ | 1일 |
+| **Stage 4: 속도 정책 (도로교통법)** |
+| P5-13 | 속도 구간 시스템 구현 (WaypointManager) | High | ✅ | 1일 |
+| P5-14 | 속도 위반 Reward 구현 (점진적 패널티) | High | ✅ | 1일 |
+| P5-15 | Reward 재조정 (v7→v8: collision, nearCollision, off-road) | High | ✅ | 1일 |
+| P5-16 | Observation 확장 (+4D speed_info, 총 242D) | High | ✅ | 1일 |
+| P5-17 | Curriculum 재설계 (NPC 점진적, threshold 분리) | High | ✅ | 1일 |
+| P5-18 | 속도 정책 통합 학습 (v8, 3.07M/8M 진행 중) | High | 🔄 | 진행중 |
+| P5-19 | 32 Areas 확장 적용 (Stage 4 완료 후) | Medium | ⏳ | 1일 |
+| **Stage 5: Multi-Lane + 차선 정책** |
+| P5-20 | 다차선 도로 환경 구축 | High | ⏳ | 2일 |
+| P5-21 | 차선 마킹 시스템 (5종) | High | ⏳ | 2일 |
+| P5-22 | Raycast 차선 감지 | High | ⏳ | 1일 |
+| P5-23 | Observation 확장 (+12D lane_info) | High | ⏳ | 1일 |
+| P5-24 | 차선 위반 Reward 구현 | High | ⏳ | 1일 |
+| P5-25 | 차선+속도 정책 통합 학습 (32 Areas) | High | ⏳ | 2일 |
+| **Stage 6: 도로 네트워크 + 경로 추종 (Navigation)** |
+| P5-26 | 도로 그래프 시스템 (Node/Edge) | High | ⏳ | 2일 |
+| P5-27 | 교차로 프리팹 (T자/십자) | High | ⏳ | 2일 |
+| P5-28 | Route Planner (A*/Dijkstra 경로 생성) | High | ⏳ | 2일 |
+| P5-29 | Navigation Command 시스템 | High | ⏳ | 1일 |
+| P5-30 | Observation 확장 (+10D navigation) | High | ⏳ | 1일 |
+| P5-31 | 경로 추종 Reward (route_following, wrong_turn) | High | ⏳ | 1일 |
+| P5-32 | Curriculum (직선→T자→십자→복합) | High | ⏳ | 2일 |
+| P5-33 | 도로 네트워크 통합 학습 (32 Areas) | High | ⏳ | 2일 |
+| **Stage 7: Camera Visual Observation (8-16 Areas)** |
+| P5-34 | CameraSensorComponent 추가 | High | ⏳ | 1일 |
+| P5-35 | ML-Agents Visual Encoder 설정 | High | ⏳ | 1일 |
+| P5-36 | Vector+Visual 복합 학습 (16 Areas) | High | ⏳ | 2일 |
+| P5-37 | Camera-only 학습 (Level 2 검증) | Medium | ⏳ | 2일 |
+| **Stage 8: Euro NCAP + 신호등 인식** |
+| P5-38 | ELK 시나리오 구현 (5종) | Medium | ⏳ | 2일 |
+| P5-39 | LKA 시나리오 구현 (2종) | Medium | ⏳ | 1일 |
+| P5-40 | 신호등 인식 학습 (Camera → 적/녹/황 분류) | Medium | ⏳ | 2일 |
+| P5-41 | DTLE 메트릭 + 평가 스크립트 | Medium | ⏳ | 1일 |
+| P5-42 | 벤치마크 결과 리포트 | Medium | ⏳ | 1일 |
+| **Stage 9: GAIL + Hybrid** |
+| P5-43 | Expert 시연 녹화 (Camera 포함) | Medium | ⏳ | 1일 |
+| P5-44 | GAIL 학습 (8-16 Areas) | Medium | ⏳ | 2일 |
+| P5-45 | Hybrid BC→RL (CIMRL) | High | ⏳ | 2일 |
+| **Stage 10: Full E2E + Ablation** |
+| P5-46 | BEV + Occupancy Network (Level 3) | Medium | ⏳ | 3일 |
+| P5-47 | Temporal Fusion (Level 4) | Medium | ⏳ | 2일 |
+| P5-48 | 보상 요소별 분석 | Medium | ⏳ | 2일 |
+| P5-49 | 아키텍처/하이퍼파라미터 분석 | Medium | ⏳ | 2일 |
+
+## Parallel Training Architecture (Stage 3)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    16x PARALLEL TRAINING AREAS                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │  Unity Scene (Single Instance)                                          ││
+│  │                                                                         ││
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐                  ││
+│  │  │ Area 0   │ │ Area 1   │ │ Area 2   │ │ Area 3   │   ...x16        ││
+│  │  │ Vehicle  │ │ Vehicle  │ │ Vehicle  │ │ Vehicle  │                  ││
+│  │  │ Road     │ │ Road     │ │ Road     │ │ Road     │                  ││
+│  │  │ 6 NPCs   │ │ 6 NPCs   │ │ 6 NPCs   │ │ 6 NPCs   │                  ││
+│  │  │ Lanes    │ │ Lanes    │ │ Lanes    │ │ Lanes    │                  ││
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘                  ││
+│  │                                                                         ││
+│  │  각 Area는 100m 간격으로 배치 (물리 간섭 방지)                           ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                            │ 16 agents 동시 수집                             │
+│                            ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │  ML-Agents Trainer (PPO/SAC)                                            ││
+│  │  batch_size: 4096 (16 areas × 256 time_horizon)                         ││
+│  │  buffer_size: 40960                                                     ││
+│  │  GPU: RTX 4090 (24GB VRAM) - 활용률 60-80%                              ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                              │
+│  성능 비교:                                                                   │
+│  ┌──────────────────┬───────────┬────────────┬───────────────┐              │
+│  │ Config           │ Areas     │ 1M Steps   │ VRAM          │              │
+│  ├──────────────────┼───────────┼────────────┼───────────────┤              │
+│  │ Stage 3 (Single) │ 1         │ ~50분      │ ~2 GB         │              │
+│  │ Stage 3 (16x)    │ 16        │ ~3분       │ ~3.6 GB       │              │
+│  │ Stage 4 현재     │ 16        │ ~10분      │ ~3.6 GB       │              │
+│  │ Stage 4 후 확장  │ 32        │ ~6분       │ ~8 GB         │              │
+│  │ Stage 7 Camera   │ 8-16      │ ~17-30분   │ ~6-10 GB      │              │
+│  │ Phase 6 Sensor   │ 8         │ ~40분      │ ~14 GB        │              │
+│  └──────────────────┴───────────┴────────────┴───────────────┘              │
+│                                                                              │
+│  ★ Stage 4 완료 후: 32 Areas 확장 (Vector-only)                              │
+│  ★ Camera 추가 시: 8-16 Areas로 축소 (렌더링 부하)                           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### TrainingArea 구성 (Prefab)
+```yaml
+TrainingArea (Empty GameObject):
+  - E2EDrivingAgent (Vehicle + Agent)
+  - Road (다차선 도로)
+  - DrivingSceneManager (NPC 스폰/목표점 관리)
+  - LaneMarkings (차선 마킹 시스템)
+  - NPCVehicles (상대 차량)
+  - GoalPoint (목표 지점)
+```
+
+### 병렬 학습 Config (v8 현재)
+```yaml
+# vehicle_ppo_curriculum_parallel.yaml (curriculum_v8_gradual)
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 4096         # 16 areas × 256 time_horizon
+      buffer_size: 40960
+      learning_rate: 3.0e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+    max_steps: 8000000         # v8: 5M→8M (수렴 시간 확보)
+    time_horizon: 256
+    summary_freq: 10000
+    threaded: false
+
+# Curriculum (v8 재설계: 점진적 + 분리된 임계값)
+environment_parameters:
+  num_active_npcs:            # 0→1→2→4 (점진적 NPC 도입)
+    curriculum:
+      - {name: Lesson0, threshold: -1.5, value: 0.0}  # 무교통
+      - {name: Lesson1, threshold: -1.0, value: 1.0}  # NPC 1대
+      - {name: Lesson2, threshold: 0.0, value: 2.0}   # NPC 2대
+      - {name: Lesson3, value: 4.0}                    # NPC 4대
+  goal_distance:              # 50→100→160→230 (중간 단계 추가)
+    curriculum:
+      - {name: Short, threshold: -2.5, value: 50.0}
+      - {name: Medium, threshold: -1.5, value: 100.0}
+      - {name: Long, threshold: -0.5, value: 160.0}
+      - {name: Full, value: 230.0}
+  speed_zone_count:           # 1→2→3→4 (속도 구간 점진 추가)
+    curriculum:
+      - {name: Single, threshold: 0.0, value: 1.0}
+      - {name: Two, threshold: 1.0, value: 2.0}
+      - {name: Three, threshold: 2.0, value: 3.0}
+      - {name: Four, value: 4.0}
+
+env_settings:
+  timeout_wait: 600            # v8: 300→600 (Unity 응답 대기)
+
+# ★ Stage 4 완료 후 32 Areas 확장 시:
+#   batch_size: 8192
+#   buffer_size: 81920
+#   num_areas: 32 (Unity Scene에서 복제)
+```
+
+---
+
+## Multi-Lane & Lane Policy Design (Stage 4)
+
+### 도로 구조
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        MULTI-LANE ROAD                           │
+│                                                                   │
+│  ←← 반대편 차로 (NPC 역주행)                                      │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ (이중 황색 실선) │
+│  → 1차로 (주행 차로)  ← Ego Vehicle                               │
+│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ (백색 점선)    │
+│  → 2차로 (추월 차로)                                               │
+│  ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ (백색 실선)    │
+│  [갓길/도로 경계]                                                  │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 차선 마킹 시스템 (Unity 구현)
+```yaml
+LaneMarking Types:
+  WHITE_DASHED:        # 백색 점선 - 차선 변경 허용
+    material: white, dashed pattern
+    layer: "LaneDashed"
+    penalty: 0 (허용)
+
+  WHITE_SOLID:         # 백색 실선 - 차선 변경 금지
+    material: white, solid
+    layer: "LaneSolid"
+    penalty: -2.0
+
+  YELLOW_DASHED:       # 황색 점선 - 중앙선 (추월 가능)
+    material: yellow, dashed pattern
+    layer: "CenterDashed"
+    penalty: -3.0
+
+  YELLOW_SOLID:        # 황색 실선 - 중앙선 (추월 금지)
+    material: yellow, solid
+    layer: "CenterSolid"
+    penalty: -5.0
+
+  DOUBLE_YELLOW_SOLID: # 이중 황색 실선 - 절대 금지
+    material: yellow, double solid
+    layer: "CenterDouble"
+    penalty: -10.0 (collision-level)
+
+Detection Method:
+  - 차량 하단 좌/우에서 수직 Raycast
+  - Raycast Hit의 Layer/Tag로 차선 유형 판별
+  - 차선 중앙 offset 계산
+```
+
+### 확장된 Observation Space (Lane + Speed aware)
+```yaml
+# Total: ~156 dimensions (기존 140D + lane_info 12D + speed_info 4D)
+
+ego_state: 8D            # (기존)
+route_info: 30D           # (기존)
+surrounding: 40D          # (기존)
+bev_features: 64D         # (기존, optional)
+
+lane_info: 12D            # ← NEW (Stage 4)
+  - left_lane_dist: 1D         # 좌측 차선 경계까지 거리 (m)
+  - right_lane_dist: 1D        # 우측 차선 경계까지 거리 (m)
+  - left_lane_type: 4D         # one-hot [점선, 백실선, 황점선, 황실선]
+  - right_lane_type: 4D        # one-hot
+  - center_offset: 1D          # 현재 차선 중앙 대비 offset (m)
+  - heading_error: 1D          # 차선 방향 대비 heading 오차 (rad)
+
+speed_info: 4D            # ← NEW (Stage 4)
+  - current_speed_norm: 1D     # 현재 속도 / max_speed (정규화)
+  - speed_limit_norm: 1D       # 구간 제한속도 / max_speed (정규화)
+  - speed_ratio: 1D            # current_speed / speed_limit (1.0이 적정)
+  - next_speed_limit_norm: 1D  # 다음 구간 제한속도 (사전 감속 유도)
+```
+
+### 확장된 Reward Function (Lane-aware)
+```yaml
+# === 기존 Reward (유지) ===
+progress: +1.0
+goal_reached: +10.0
+collision: -10.0
+near_collision: -0.5
+off_road: -5.0
+jerk: -0.1
+
+# === NEW: 차선 정책 Reward ===
+lane_keeping: +0.3
+  description: "차선 중앙 유지 보너스"
+  formula: "+0.3 * max(0, 1 - |center_offset| / lane_width)"
+
+lane_violation_white_solid: -2.0
+  description: "백색 실선 위반"
+  condition: "crossed WHITE_SOLID marking"
+
+lane_violation_yellow_dashed: -3.0
+  description: "황색 점선 중앙선 침범"
+  condition: "crossed YELLOW_DASHED center line"
+
+lane_violation_yellow_solid: -5.0
+  description: "황색 실선 중앙선 침범"
+  condition: "crossed YELLOW_SOLID center line"
+
+lane_violation_double_yellow: -10.0
+  description: "이중 황색 실선 침범 (치명적)"
+  condition: "crossed DOUBLE_YELLOW marking"
+  terminates: true
+
+lane_change_signal: +0.5
+  description: "적절한 차선 변경 (점선에서만)"
+  condition: "changed lane through WHITE_DASHED"
+
+# === NEW: 속도 정책 Reward ===
+speed_compliance: +0.3
+  description: "적정 속도 유지 보상 (제한속도의 80-100%)"
+  formula: "+0.3 if 0.8*speed_limit <= speed <= speed_limit"
+
+speed_over_limit: -0.5 ~ -3.0
+  description: "제한속도 초과 점진적 패널티"
+  formula: |
+    over_ratio = (speed - speed_limit) / speed_limit
+    penalty = -0.5 * min(over_ratio * 10, 6.0)
+    # 10% 초과 → -0.5, 20% → -1.0, 50%+ → -3.0 (cap)
+
+speed_zone_transition: +0.2
+  description: "속도 구간 진입 시 적절한 감속/가속"
+  condition: "smooth speed change within 5s of zone boundary"
+  formula: "+0.2 * (1 - |target_speed - actual_speed| / target_speed)"
+
+speed_under_limit: -0.1
+  description: "지나치게 느린 주행 (교통 방해)"
+  condition: "speed < 0.5 * speed_limit AND no obstacle ahead"
+```
+
+---
+
+## Speed Limit Policy Design (Stage 4 확장)
+
+### 속도 구간 설계
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        SPEED ZONE LAYOUT                                      │
+│                                                                               │
+│  Z=-200          Z=-100           Z=0             Z=100           Z=230       │
+│  ├────────────────┼────────────────┼────────────────┼────────────────┤        │
+│  │   30 km/h      │   50 km/h      │   60 km/h      │   80 km/h     │        │
+│  │  (주거구간)    │  (시가지구간)   │  (일반도로)    │  (자동차전용)  │        │
+│  │                │                │                │               │        │
+│  ├─ 감속표지 ─────┼─ 속도변경 ─────┼─ 속도변경 ─────┼─ 가속허용 ────┤        │
+│                                                                               │
+│  ← Ego 출발 (Z=-200)                                    Goal (Z=230) →       │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 한국 도로교통법 기반 속도 규정
+
+```yaml
+SpeedZone Types:
+  RESIDENTIAL:          # 주거지역/어린이보호구역
+    limit: 30 km/h (8.3 m/s)
+    tolerance: +10 km/h (한국 과속 단속 여유)
+    penalty_start: 40 km/h
+
+  URBAN_NARROW:         # 시가지 이면도로
+    limit: 50 km/h (13.9 m/s)
+    tolerance: +10 km/h
+    penalty_start: 60 km/h
+
+  URBAN_GENERAL:        # 일반도로 (도시부)
+    limit: 60 km/h (16.7 m/s)
+    tolerance: +10 km/h
+    penalty_start: 70 km/h
+
+  EXPRESSWAY:           # 자동차전용도로
+    limit: 80 km/h (22.2 m/s)
+    tolerance: +10 km/h
+    penalty_start: 90 km/h
+
+  HIGHWAY:              # 고속도로
+    limit: 100-110 km/h (27.8-30.6 m/s)
+    tolerance: +10 km/h
+    penalty_start: 120 km/h
+
+  VARIABLE:             # 가변속도 구간 (공사/사고)
+    limit: dynamic (표지판 기반)
+    tolerance: 0 km/h
+```
+
+### WaypointManager 속도 태그 시스템
+
+```yaml
+# 각 웨이포인트에 속도 구간 정보 태그
+Waypoint:
+  position: [x, y, z]
+  speed_limit: float (m/s)        # 해당 구간 제한속도
+  zone_type: enum                  # RESIDENTIAL / URBAN / EXPRESSWAY / etc.
+  is_zone_boundary: bool           # 속도 변경 구간 시작점 여부
+  deceleration_warning: float      # 감속 필요 거리 (m) - 사전 경고
+
+# Curriculum 연동:
+#   Lesson 0-1: 단일 속도 구간 (60 km/h)
+#   Lesson 2:   2개 구간 (60 → 80 km/h)
+#   Lesson 3:   4개 구간 (30 → 50 → 60 → 80 km/h)
+```
+
+### 속도 위반 패널티 구조 (한국법 기준)
+
+```yaml
+# 한국 도로교통법 제17조 기반 패널티 스케일링
+penalty_scale:
+  over_10kmh:   -0.5    # 경미한 위반 (범칙금 3만원)
+  over_20kmh:   -1.0    # 일반 위반 (범칙금 6만원)
+  over_40kmh:   -2.0    # 중대 위반 (범칙금 9만원 + 벌점)
+  over_60kmh:   -3.0    # 위험 운전 (범칙금 12만원 + 면허정지)
+  over_80kmh:   -5.0    # 극심한 위반 (형사처벌 가능)
+
+# 최저속도 위반 (고속도로):
+#   limit: 50 km/h 이상 유지 의무
+#   under_minimum: -0.5 (교통 방해)
+
+# 가감속 구간:
+#   zone_boundary 접근 시:
+#   - 감속 구간: 100m 전 감속 시작 시 보상
+#   - 급감속: jerk > 3 m/s³ 시 추가 패널티
+```
+
+### Observation 인코딩
+
+```yaml
+# Agent가 속도 제한을 인식하는 방법:
+speed_info (4D):
+  current_speed_norm:     # ego_speed / max_speed → [0, 1]
+  speed_limit_norm:       # zone_limit / max_speed → [0, 1]
+  speed_ratio:            # ego_speed / zone_limit → 0.8~1.0이 적정
+  next_speed_limit_norm:  # 다음 구간 제한속도 (감속 유도)
+
+# 속도 표지판 인식 (visual cue):
+#   - 실제 Vision 기반: Perception 모델 출력 사용 (Phase 3)
+#   - 현재 단계: WaypointManager에서 직접 제공 (ground truth)
+```
+
+### 구현 우선순위
+
+```
+Priority 1: 단일 제한속도 (60 km/h) + over/under penalty
+Priority 2: 구간별 속도 변경 (2-4 zones)
+Priority 3: 감속 구간 smooth transition reward
+Priority 4: 커리큘럼 연동 (점진적 구간 추가)
+```
+
+---
+
+## Road Network & Route Following Design (Stage 6)
+
+### 실제 자율주행 Navigation 구조
+
+```
+실제 자율주행 시스템:
+┌────────────────────────────────────────────────────────────────┐
+│  1. 목적지 설정 (사용자 입력)                                    │
+│     ↓                                                          │
+│  2. Global Planning (A*/Dijkstra)                               │
+│     도로 네트워크 그래프에서 최단/최적 경로 탐색                   │
+│     ↓                                                          │
+│  3. Route = [Edge1, Edge2, Edge3, ...] (통과할 도로 구간 리스트)  │
+│     ↓                                                          │
+│  4. Local Planning (RL/IL Agent)                                │
+│     경로를 따라 주행 + 장애물 회피 + 교통 규칙 준수                │
+│     교차로에서 navigation command에 따라 좌/우회전/직진            │
+│     ↓                                                          │
+│  5. 목적지 도착                                                  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### 현재 구현 vs 목표
+
+```
+현재 (Stage 3):
+  - 직선 도로 1개 (500m)
+  - 웨이포인트: Z축 일직선 배치 (laneX=1.75 고정)
+  - 교차로 없음, 회전 없음
+  - 에이전트: "앞으로 가면서 장애물 피하기"
+
+목표 (Stage 6):
+  - T자/십자 교차로 포함 도로 네트워크
+  - 그래프 기반 경로 생성 (Node=교차로, Edge=도로구간)
+  - 에이전트: navigation command를 따라 목적지까지 주행
+  - Curriculum: 직선 → T자 1개 → 십자 1개 → 복합 (3-4교차로)
+```
+
+### 도로 네트워크 그래프
+
+```
+                    [Node 2]
+                       │
+                    Edge_N (50m)
+                       │
+[Node 0] ──Edge_W(100m)──[Node 1]──Edge_E(100m)──[Node 3]
+                       │
+                    Edge_S (50m)
+                       │
+                    [Node 4]
+
+Node = 교차로 (Intersection)
+  - position: Vector3
+  - type: T자 / 십자 / 로터리
+  - connected_edges: List<Edge>
+  - traffic_light: optional
+
+Edge = 도로 구간 (RoadSegment)
+  - start_node, end_node: Node
+  - length: float (m)
+  - speed_limit: float (m/s)
+  - num_lanes: int
+  - lane_markings: LaneMarkingType[]
+  - waypoints: List<Vector3> (중간 경유점, 곡선 도로 지원)
+  - direction: bidirectional / one-way
+```
+
+### Route Planner (경로 생성)
+
+```csharp
+// RoadNetworkManager.cs
+public class RoadNetworkManager : MonoBehaviour
+{
+    public List<IntersectionNode> nodes;
+    public List<RoadEdge> edges;
+
+    /// <summary>
+    /// A* 기반 최단 경로 탐색
+    /// </summary>
+    public List<RoadEdge> FindRoute(IntersectionNode start, IntersectionNode goal)
+    {
+        // A* with distance heuristic
+        // Returns ordered list of edges to traverse
+    }
+
+    /// <summary>
+    /// 경로를 따라 웨이포인트 생성 (곡선 포함)
+    /// </summary>
+    public List<Vector3> GenerateRouteWaypoints(List<RoadEdge> route)
+    {
+        // 각 Edge의 waypoints를 연결
+        // 교차로에서는 turning path 추가 (Bezier curve)
+    }
+}
+```
+
+### Navigation Command 시스템
+
+```yaml
+NavigationCommand (6D one-hot):
+  GO_STRAIGHT: [1,0,0,0,0,0]    # 직진 (기본)
+  TURN_LEFT:   [0,1,0,0,0,0]    # 좌회전
+  TURN_RIGHT:  [0,0,1,0,0,0]    # 우회전
+  U_TURN:      [0,0,0,1,0,0]    # 유턴
+  LANE_LEFT:   [0,0,0,0,1,0]    # 좌차선 변경
+  LANE_RIGHT:  [0,0,0,0,0,1]    # 우차선 변경
+
+Command 발행 규칙:
+  - 교차로 50m 전: 다음 방향 command 발행
+  - 직선 구간: GO_STRAIGHT 유지
+  - 차선 변경 필요 시: 100m 전 LANE_LEFT/RIGHT 발행
+  - 교차로 통과 후: GO_STRAIGHT로 복귀
+
+IntersectionInfo (4D):
+  - distance_to_intersection:  # 0~1 (50m 기준 정규화)
+  - intersection_type:         # T=0.33, Cross=0.67, Rotary=1.0
+  - entry_angle:               # 진입 방향 (-1~1, normalized)
+  - exit_angle:                # 출구 방향 (-1~1, normalized)
+```
+
+### 교차로 물리 환경
+
+```yaml
+IntersectionPrefab:
+  Components:
+    - IntersectionNode: 그래프 노드 정보
+    - TriggerZone: 교차로 진입/출구 감지 (BoxCollider, trigger)
+    - TrafficLight: 신호등 (선택적, Stage 6+)
+    - TurnGuide: 회전 경로 가이드 (Bezier 곡선 waypoints)
+
+  Layout (십자 교차로):
+    ┌───────────────────────────────────────┐
+    │              │ ↑ │ ↓ │                │
+    │              │   │   │                │
+    │──────────────┤       ├────────────────│
+    │   ← ←       │       │       → →      │
+    │──────────────┤       ├────────────────│
+    │              │   │   │                │
+    │              │ ↑ │ ↓ │                │
+    └───────────────────────────────────────┘
+
+  TurnPath (좌회전 예시):
+    - 진입: 직진 → 교차로 중심 접근
+    - 회전: Bezier curve (control points로 부드러운 곡선)
+    - 출구: 회전 완료 → 새 도로 직진
+```
+
+### Reward 확장 (Navigation)
+
+```yaml
+# === Route Following Rewards ===
+route_following: +0.5
+  description: "경로 위 주행 보너스"
+  formula: "+0.5 * max(0, 1 - route_deviation / max_deviation)"
+  note: "경로에서 벗어날수록 보상 감소"
+
+correct_turn: +5.0
+  description: "교차로에서 올바른 방향 진입"
+  condition: "entered correct exit edge per navigation command"
+
+wrong_turn: -5.0
+  description: "교차로에서 잘못된 방향 진입"
+  condition: "entered wrong exit edge"
+  note: "에피소드 종료하지 않음 (재탐색 가능성)"
+
+missed_turn: -3.0
+  description: "교차로를 그냥 통과 (회전 실패)"
+  condition: "passed through intersection without turning when commanded"
+
+destination_reached: +20.0
+  description: "최종 목적지 도달"
+  condition: "distance_to_final_goal < 5.0m"
+  terminates: true
+
+intersection_speed: +0.2
+  description: "교차로 진입 시 적정 감속"
+  condition: "speed <= intersection_speed_limit at trigger zone"
+  note: "교차로 내 제한속도 30km/h"
+```
+
+### Curriculum Learning (Navigation)
+
+```yaml
+environment_parameters:
+  road_complexity:
+    curriculum:
+      - name: Lesson0_Straight
+        completion_criteria:
+          measure: reward
+          threshold: 0.0
+          min_lesson_length: 200
+        value: 0.0       # 직선 도로만
+
+      - name: Lesson1_TSingle
+        completion_criteria:
+          measure: reward
+          threshold: 3.0
+          min_lesson_length: 200
+        value: 1.0       # T자 교차로 1개 (좌/우회전)
+
+      - name: Lesson2_CrossSingle
+        completion_criteria:
+          measure: reward
+          threshold: 5.0
+          min_lesson_length: 200
+        value: 2.0       # 십자 교차로 1개 (4방향)
+
+      - name: Lesson3_Network
+        value: 3.0       # 복합 네트워크 (3-4개 교차로)
+
+  num_route_choices:
+    curriculum:
+      - name: SingleRoute
+        completion_criteria:
+          measure: reward
+          threshold: 0.0
+        value: 1.0       # 경로 1개 (무조건 따라가기)
+
+      - name: MultiRoute
+        value: 3.0       # 동일 출발/도착, 3개 경로 중 랜덤 선택
+```
+
+### 구현 우선순위
+
+```
+Priority 1: 직선 + T자 교차로 1개 (좌/우회전만)
+  - IntersectionNode, RoadEdge 클래스 정의
+  - NavigationCommand observation 추가
+  - correct_turn / wrong_turn reward
+  - Curriculum Lesson0-1
+
+Priority 2: 십자 교차로 (4방향)
+  - 4 exit edges
+  - TurnGuide (Bezier curve paths)
+  - Lesson2
+
+Priority 3: 복합 네트워크 (3-4 교차로)
+  - A* Route Planner
+  - 다수 경로 중 선택
+  - Lesson3
+
+Priority 4: 신호등 + 대기
+  - TrafficLight 컴포넌트
+  - 적색 대기, 녹색 출발 reward
+  - intersection_wait: -0.05/step (불필요 대기 시 패널티)
+```
+
+---
+
+## Camera Visual Observation Design (Stage 7)
+
+### ML-Agents CameraSensor 통합
+
+```yaml
+# Agent에 CameraSensorComponent 추가
+CameraSensor:
+  camera: Front-facing camera (84x84 RGB)
+  sensor_name: "FrontCamera"
+  compression_type: PNG
+  observation_stacks: 3    # 3 프레임 스택 (temporal info)
+
+# ML-Agents Config 확장
+network_settings:
+  normalize: false
+  hidden_units: 512
+  num_layers: 3
+  vis_encode_type: nature_cnn    # or resnet
+  # nature_cnn: 3 conv layers → 512D → concat with vector obs
+  # resnet: ResNet-18 encoder → 512D
+
+# VRAM 예상:
+#   Vector only: ~3.6 GB
+#   + Camera (84x84, 16 agents): ~8-12 GB
+#   RTX 4090 24GB: 충분
+```
+
+### Level 2 학습 전략
+
+```
+Phase 1: Vector + Camera 복합 입력
+  - 기존 vector obs (170D) 유지
+  - Camera 84x84 추가 (CNN → 128D embedding)
+  - 총 입력: 170D vector + 128D visual = 298D
+  - 목적: Camera가 vector obs를 보조하는지 확인
+
+Phase 2: Camera 비중 증가
+  - vector obs에서 surrounding(40D) 제거
+  - Camera로 주변 차량 인식하도록 유도
+  - 총: 130D vector + 128D visual
+
+Phase 3: Camera-dominant
+  - vector obs: ego_state(8D) + navigation(10D) + speed(4D) = 22D
+  - Camera: 128D (주변 환경 전체 인식)
+  - 목적: Vision 기반 주행 검증
+```
+
+### 학습 설정 변경
+
+```yaml
+# vehicle_ppo_camera.yaml
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 2048       # camera 때문에 줄임 (VRAM)
+      buffer_size: 20480
+      learning_rate: 1.0e-4  # visual encoder는 lr 낮게
+      num_epoch: 3           # overfitting 방지
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+      vis_encode_type: nature_cnn
+    max_steps: 10000000      # vision은 수렴 느림
+    time_horizon: 128        # 메모리 절약
+    summary_freq: 50000
+```
+
+---
+
+## Euro NCAP Evaluation Scenarios (Stage 8)
+
+### ELK (Emergency Lane Keeping) 시나리오
+```yaml
+ELK_SolidLine_Left:
+  description: "좌측 실선으로 이탈 시 자동 교정"
+  setup: ego drifts left toward solid line
+  pass_criteria: DTLE ≤ -0.3m (실선 안쪽 0.3m 이내)
+  speed: 72 km/h
+
+ELK_SolidLine_Right:
+  description: "우측 실선으로 이탈 시 자동 교정"
+  setup: ego drifts right toward solid line
+  pass_criteria: DTLE ≤ -0.3m
+
+ELK_RoadEdge:
+  description: "도로 경계로 이탈 시 교정"
+  setup: ego drifts toward road edge (no marking)
+  pass_criteria: vehicle stays on road
+
+ELK_Oncoming:
+  description: "중앙선 침범 → 역주행 충돌 방지"
+  setup: ego drifts into oncoming lane, target approaching at 80 km/h
+  pass_criteria: no collision, return to own lane
+
+ELK_Overtaking:
+  description: "비의도적 추월 시 충돌 방지"
+  setup: ego changes lane unintentionally, target in adjacent lane
+  lateral_velocity: 0.2-0.6 m/s (unintentional)
+  pass_criteria: no collision
+```
+
+### LKA (Lane Keeping Assist) 시나리오
+```yaml
+LKA_DashedLine:
+  description: "점선 이탈 시 경고 + 교정"
+  setup: ego drifts toward dashed line
+  pass_criteria: warning issued, correction applied
+
+LKA_SolidLine:
+  description: "실선 이탈 시 교정"
+  setup: ego drifts toward solid line
+  pass_criteria: DTLE ≤ -0.3m
+```
+
+### 평가 메트릭
+```yaml
+metrics:
+  DTLE: "Distance To Lane Edge (m) - 차선 경계까지 최대 침범 거리"
+  correction_time: "교정에 소요된 시간 (s)"
+  collision_avoided: "충돌 회피 성공 여부 (bool)"
+  lane_return_time: "원래 차선으로 복귀 시간 (s)"
+  max_lateral_deviation: "최대 횡방향 이탈 (m)"
+
+scoring:
+  ELK_score: "sum(scenario_scores) / max_possible"
+  LKA_score: "sum(scenario_scores) / max_possible"
+  LSS_total: "HMI + LKA + ELK"
+```
+
+---
 
 ## Algorithm Comparison
 
@@ -270,13 +1179,25 @@ epochs: 100
 
 ## Success Criteria
 
-| Metric | Target | Notes |
-|--------|--------|-------|
-| Collision Rate | < 5% | Safety-critical |
-| Progress Score | > 80% | Route following |
-| Comfort Score | > 70% | jerk < 2 m/s³ |
-| nuPlan Score | > 60 | Closed-loop benchmark |
-| Inference Time | < 50ms | Real-time capable |
+| Metric | Target | Stage | Notes |
+|--------|--------|-------|-------|
+| Collision Rate | < 5% | 3+ | Safety-critical |
+| Progress Score | > 80% | 3+ | 목표 방향 진행률 |
+| Comfort Score | > 70% | 3+ | jerk < 2 m/s³ |
+| Inference Time | < 50ms | All | Real-time capable |
+| **Speed Compliance** | > 90% | 4+ | 제한속도 준수율 (10km/h 이내) |
+| **Speed Over 20km/h** | < 3% | 4+ | 20km/h 이상 초과 비율 |
+| **Zone Transition** | jerk < 2 m/s³ | 4+ | 구간 전환 시 급가감속 방지 |
+| **Lane Keeping** | DTLE ≤ -0.3m | 5+ | Euro NCAP ELK 기준 |
+| **Center Line Violation** | 0% | 5+ | 이중 황색 실선 절대 금지 |
+| **Route Completion** | > 85% | 6+ | 목적지 도달 성공률 |
+| **Correct Turn Rate** | > 90% | 6+ | 교차로 올바른 방향 진입 |
+| **Wrong Turn Rate** | < 5% | 6+ | 잘못된 방향 진입 비율 |
+| **Navigation Efficiency** | > 80% | 6+ | 최단 경로 대비 실제 경로 효율 |
+| **Camera Driving Score** | > 70% | 7+ | Vision-only 주행 성능 |
+| **ELK Score** | > 70% | 8+ | Euro NCAP ELK 시나리오 통과율 |
+| **LKA Score** | > 80% | 8+ | Euro NCAP LKA 시나리오 통과율 |
+| **Min Speed (Highway)** | > 50 km/h | 4+ | 최저속도 위반율 < 5% |
 
 ## Timeline
 
@@ -319,11 +1240,187 @@ artifacts:
 
 ## Deliverables
 
-1. **BC Model**: Expert 데이터로 학습된 baseline
-2. **PPO/SAC Models**: RL로 학습된 정책
-3. **GAIL Model**: 보상 없이 모방 학습된 정책
-4. **Hybrid Model**: BC + RL fine-tuning 최종 모델
-5. **Reward Function**: 검증된 보상 함수 구현
-6. **Evaluation Scripts**: 벤치마크 평가 스크립트
-7. **Ablation Report**: 실험 분석 보고서
-8. **ONNX Models**: Unity 추론용 모델
+| # | Deliverable | Stage | Description |
+|---|-------------|-------|-------------|
+| 1 | **BC Model** | 1 | Expert 데이터로 학습된 baseline |
+| 2 | **PPO/SAC Models** | 2-3 | RL로 학습된 정책 (병렬 16 Areas, Reward ~750) |
+| 3 | **Speed Policy** | 4 | 도로교통법 기반 속도 제한 시스템 |
+| 4 | **Multi-Lane Environment** | 5 | 다차선 도로 + 차선 마킹 시스템 |
+| 5 | **Lane Policy** | 5 | 5종 차선 인식 + 위반 패널티 |
+| 6 | **Road Network** | 6 | T자/십자 교차로 + 도로 그래프 시스템 |
+| 7 | **Route Planner** | 6 | A* 경로 탐색 + Navigation Command |
+| 8 | **Navigation Agent** | 6 | 경로 추종 + 교차로 판단 에이전트 |
+| 9 | **Camera Agent** | 7 | Vision-based driving (nature_cnn/resnet) |
+| 10 | **Euro NCAP Benchmark** | 8 | ELK/LKA 시나리오 평가 결과 |
+| 11 | **GAIL Model** | 9 | 보상 없이 모방 학습된 정책 |
+| 12 | **Hybrid Model** | 9 | BC + RL fine-tuning 최종 모델 |
+| 13 | **Full E2E Model** | 10 | BEV + Temporal + Planning 통합 |
+| 14 | **Ablation Report** | 10 | 실험 분석 보고서 |
+| 15 | **ONNX Models** | All | Unity Sentis 추론용 모델 |
+
+---
+
+## 🔧 Troubleshooting & Lessons Learned (v12 Training)
+
+### Issue 1: ML-Agents `initialize_from` Path Format
+
+**상황**: Phase B 학습 시 Phase A 체크포인트에서 초기화 시도
+
+**오류 메시지**:
+```
+UnityTrainerException: Could not initialize from results\results/v12_phaseA_fixed/E2EDrivingAgent.
+Make sure models have already been saved with that run ID.
+```
+
+**원인 분석**:
+- ML-Agents는 `initialize_from`에 지정된 값 앞에 자동으로 `results/`를 붙임
+- 또한 behavior name (`E2EDrivingAgent`)도 자동으로 경로에 추가함
+- YAML에 `results/v12_phaseA_fixed/E2EDrivingAgent` 처럼 전체 경로를 쓰면 중복 발생
+
+**잘못된 설정**:
+```yaml
+# ❌ WRONG - 경로 중복 발생
+checkpoint_settings:
+  initialize_from: results/v12_phaseA_fixed/E2EDrivingAgent
+  # 결과: results/results/v12_phaseA_fixed/E2EDrivingAgent/E2EDrivingAgent/checkpoint.pt
+```
+
+**올바른 설정**:
+```yaml
+# ✅ CORRECT - run_id만 지정
+checkpoint_settings:
+  initialize_from: v12_phaseA_fixed
+  # 결과: results/v12_phaseA_fixed/E2EDrivingAgent/checkpoint.pt
+```
+
+**핵심 원칙**:
+> `initialize_from`에는 **run_id만** 지정. ML-Agents가 `results/` prefix와 behavior name을 자동 추가함.
+
+---
+
+### Issue 2: BehaviorParameters BehaviorType 불일치
+
+**상황**: 학습 시작 후 16개 Training Area 중 첫 번째 에이전트만 매우 느린 속도로 주행 (0.84 m/s vs 15.5 m/s)
+
+**증상**:
+- 첫 번째 에이전트: 속도 0.84 m/s, BehaviorParameters 활성화
+- 나머지 에이전트: 속도 15.5 m/s, BehaviorParameters 비활성화 (ML-Agents 트레이너에서 제어)
+
+**원인 분석**:
+- BehaviorParameters 컴포넌트의 `BehaviorType` 값 차이:
+  - `BehaviorType = 0` (Default): ML-Agents 트레이너와 연결되어 학습 참여
+  - `BehaviorType = 2` (InferenceOnly): 로컬 .onnx 모델로 추론만 수행 (학습 불참)
+- 첫 번째 에이전트가 InferenceOnly 모드로 설정되어 있어 이전 체크포인트 모델로 추론만 실행
+
+**문제가 되는 설정**:
+```
+Agent 1 (문제): BehaviorType = 2 (InferenceOnly), Model = "E2EDrivingAgent_v12_phaseB.onnx"
+Agent 2-16 (정상): BehaviorType = 0 (Default), Model = null (트레이너 제어)
+```
+
+**해결 방법**:
+1. Unity Inspector에서 해당 에이전트의 BehaviorParameters 컴포넌트 확인
+2. `Behavior Type`을 `Default`로 변경
+3. `Model` 필드를 비워둠 (트레이너가 정책을 제공)
+
+**확인 명령 (Unity MCP)**:
+```
+manage_components → search_method: by_id → component_type: BehaviorParameters
+→ Properties: m_BehaviorType, m_Model 확인
+```
+
+**핵심 원칙**:
+> 병렬 학습 시 **모든 에이전트**의 `BehaviorType = 0 (Default)` 필수. InferenceOnly(2)는 평가/데모용으로만 사용.
+
+---
+
+### Issue 3: 속도 패널티 조건 허점 (v12 Phase A에서 발견)
+
+**상황**: 에이전트가 속도 0-1 m/s로 정지하여 패널티를 회피
+
+**원인 분석**:
+```csharp
+// ❌ WRONG - speed > 1f 조건이 허점 생성
+else if (speedRatio < 0.5f && speed > 1f)
+{
+    reward += speedUnderPenalty;
+}
+// 에이전트가 0-1 m/s 유지하면 패널티 없이 episode 진행
+```
+
+**해결책**:
+```csharp
+// ✅ CORRECT - 무조건 패널티 + 점진적 스케일링
+else if (speedRatio < 0.5f)
+{
+    float progressivePenalty = speedUnderPenalty * (2f - speedRatio * 2f);
+    reward += progressivePenalty;
+}
+// speedRatio 0%: 2x 패널티, speedRatio 50%: 0x 패널티 (점진적)
+```
+
+**핵심 원칙**:
+> 패널티 조건에 허점이 없어야 함. 조건부 패널티는 에이전트가 exploit할 수 있는 loophole을 만듦.
+
+---
+
+### Checklist: 학습 시작 전 확인사항
+
+```yaml
+# 1. Checkpoint 초기화 경로 확인
+checkpoint_settings:
+  initialize_from: [run_id만, results/ prefix 없이]
+
+# 2. Unity Inspector 확인
+All Agents:
+  - BehaviorParameters.BehaviorType: Default (0)
+  - BehaviorParameters.Model: None/Empty (트레이너 사용 시)
+
+# 3. 학습 시작 순서
+1. Unity Editor에서 Play 버튼 누르지 않음
+2. mlagents-learn 명령 실행
+3. "Listening on port 500X" 메시지 확인
+4. Unity Editor Play 버튼 클릭
+
+# 4. 학습 중 모니터링
+- 첫 1분: 모든 에이전트 속도 유사한지 확인
+- 속도 편차 큼: BehaviorType 확인
+- 에러 발생: read_console로 Unity 콘솔 확인
+```
+
+---
+
+## 📚 Phase 완료 시: Obsidian 지식화
+
+### 지식화 대상
+Phase 5 완료 후 다음 내용을 Obsidian vault에 정리합니다:
+
+| 카테고리 | 내용 |
+|----------|------|
+| **RL 알고리즘** | PPO/SAC 구현 세부사항, 하이퍼파라미터 튜닝 |
+| **IL 알고리즘** | BC/GAIL 구현, 학습 전략 |
+| **보상 함수** | 보상 설계 철학, 각 요소별 효과 분석 |
+| **Observation/Action** | 상태/행동 공간 설계, 정규화 기법 |
+| **Hybrid 학습** | BC→RL 전이 학습, CIMRL 적용 |
+| **실험 분석** | Ablation study 결과, 모델 비교 |
+
+### 실행 방법
+```bash
+/obsidian sync --phase=5
+```
+
+### 생성될 노트 구조
+```
+Obsidian Vault/
+├── Projects/
+│   └── AD-ML-Platform/
+│       ├── Phase-5-Planning/
+│       │   ├── PPO-구현-가이드.md
+│       │   ├── SAC-구현-가이드.md
+│       │   ├── Behavioral-Cloning.md
+│       │   ├── GAIL-학습-전략.md
+│       │   ├── 보상-함수-설계.md
+│       │   ├── Hybrid-RL-IL.md
+│       │   ├── Ablation-Study-결과.md
+│       │   └── 트러블슈팅-로그.md
+│       └── ...

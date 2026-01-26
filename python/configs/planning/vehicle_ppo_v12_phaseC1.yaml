@@ -1,0 +1,151 @@
+# E2EDrivingAgent PPO v12 Phase C-1: Lane Policy Learning
+# Strategy: Learn lane marking rules with 1 NPC - build on overtaking skills
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseC1.yaml --run-id=v12_phaseC1 --initialize-from=v12_phaseB
+#
+# v12 Phase C-1 Design:
+# - Observation space: 254D (242D + 12D lane info)
+# - 1 NPC (same as Phase B)
+# - Lane marking curriculum:
+#   1. WhiteDashed only (allowed - baseline)
+#   2. Add WhiteSolid (prohibited - mild penalty)
+#   3. Add YellowDashed (center - moderate penalty)
+#   4. Add YellowSolid/DoubleYellow (fatal - episode termination)
+# - Agent learns: WHEN lane change is allowed vs prohibited
+# - Goal: Overtake correctly while respecting lane markings
+# - Expected: 2M steps
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4  # Slightly lower for fine-tuning
+      beta: 3.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: linear
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 2000000
+    time_horizon: 256
+    summary_freq: 5000
+    threaded: false
+
+environment_parameters:
+  # Fixed 1 NPC (same as Phase B)
+  num_active_npcs:
+    curriculum:
+      - name: SingleNPC
+        value: 1.0
+
+  # NPC speed: varied (continue Phase B decision learning)
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 45.0
+          signal_smoothing: true
+        value: 0.5
+      - name: MediumNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 40.0
+          signal_smoothing: true
+        value: 0.7
+      - name: FastNPC
+        value: 0.85
+
+  # Lane marking curriculum (NEW for Phase C-1)
+  # Controls which lane marking types are active in the scene
+  lane_marking_difficulty:
+    curriculum:
+      # Lesson 1: Only white dashed (allowed) - baseline
+      - name: DashedOnly
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 600
+          threshold: 50.0
+          signal_smoothing: true
+        value: 1.0
+      # Lesson 2: Add white solid (prohibited)
+      - name: AddSolid
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 600
+          threshold: 45.0
+          signal_smoothing: true
+        value: 2.0
+      # Lesson 3: Add yellow dashed (center line)
+      - name: AddYellowDashed
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 600
+          threshold: 40.0
+          signal_smoothing: true
+        value: 3.0
+      # Lesson 4: Full lane marking set (including fatal)
+      - name: FullLaneRules
+        value: 4.0
+
+  # Medium goal distance
+  goal_distance:
+    curriculum:
+      - name: Medium
+        value: 150.0
+
+  # Fixed 1 speed zone
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        value: 1.0
+
+  # NPC speed variation
+  npc_speed_variation:
+    curriculum:
+      - name: SlightVariation
+        value: 0.1
+
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+checkpoint_settings:
+  run_id: v12_phaseC1
+  # Note: Cannot initialize from v12_phaseB due to observation space change (242D -> 254D)
+  # initialize_from: v12_phaseB
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda

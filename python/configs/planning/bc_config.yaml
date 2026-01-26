@@ -1,0 +1,52 @@
+# Behavioral Cloning Training Configuration
+# Usage: python -m src.training.train_il --config configs/planning/bc_config.yaml
+
+model:
+  level: 1  # MLP Planner (Level 1)
+  hidden_dims: [512, 512, 256]
+  activation: relu
+  dropout: 0.1
+  predict_trajectory: false
+
+  # Observation space (238D)
+  ego_dim: 8
+  ego_history_dim: 40
+  agent_dim: 160
+  route_dim: 30
+
+  # Action space
+  action_dim: 2
+  steering_range: [-0.5, 0.5]
+  accel_range: [-4.0, 2.0]
+
+training:
+  batch_size: 256
+  epochs: 100
+  lr: 3.0e-4
+  lr_min: 1.0e-6
+  weight_decay: 1.0e-4
+  gradient_clip: 1.0
+  early_stopping_patience: 15
+  save_every: 10
+  log_every: 5
+
+  # Loss weights
+  steering_weight: 0.5
+  acceleration_weight: 0.5
+  trajectory_weight: 0.2
+
+data:
+  dataset: nuplan
+  split_ratio: [0.8, 0.1, 0.1]  # train/val/test
+  num_workers: 4
+  augmentation: true
+  augmentation_config:
+    trajectory_noise: 0.5
+    mirror_flip: 0.3
+    agent_dropout: 0.2
+    speed_scaling: 0.3
+
+output:
+  dir: experiments/bc/level1
+  tensorboard: true
+  save_best: true

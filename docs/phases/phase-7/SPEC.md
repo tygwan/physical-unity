@@ -192,3 +192,41 @@
 
 실제 구현보다는 연구와 탐색에 초점을 맞추며,
 유망한 기술이 발견되면 별도 Phase로 분리하여 진행할 수 있습니다.
+
+---
+
+## 📚 지속적 지식화: Obsidian 연동
+
+### 지식화 대상
+Phase 7은 지속적 연구 단계로, 다음 내용을 Obsidian vault에 정리합니다:
+
+| 카테고리 | 내용 |
+|----------|------|
+| **논문 서베이** | World Model, LLM Planning, VLA 논문 정리 |
+| **기술 동향** | 자율주행 AI 최신 트렌드 |
+| **PoC 결과** | 실험 결과, 인사이트, 한계점 |
+| **Sim-to-Real** | Domain Randomization 기법, Gap 분석 |
+| **미래 로드맵** | 장기 기술 방향, 연구 우선순위 |
+
+### 실행 방법
+```bash
+/obsidian sync --phase=7 --incremental
+```
+
+### 생성될 노트 구조
+```
+Obsidian Vault/
+├── Projects/
+│   └── AD-ML-Platform/
+│       ├── Phase-7-Advanced/
+│       │   ├── Research/
+│       │   │   ├── World-Model-서베이.md
+│       │   │   ├── LLM-Planning-서베이.md
+│       │   │   ├── VLA-Framework-서베이.md
+│       │   │   └── Sim-to-Real-서베이.md
+│       │   ├── PoC/
+│       │   │   ├── World-Model-PoC.md
+│       │   │   ├── LLM-Planner-PoC.md
+│       │   │   └── Domain-Randomization.md
+│       │   └── 기술-로드맵.md
+│       └── ...

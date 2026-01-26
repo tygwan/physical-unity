@@ -194,3 +194,37 @@ Perception → Prediction → Planning 파이프라인을 통합하고, 벤치�
 5. **Visualization Tools**: 결과 시각화 도구
 6. **Optimized Models**: 최적화된 모델 파일
 7. **Deployment Package**: 배포 패키지
+
+---
+
+## 📚 Phase 완료 시: Obsidian 지식화
+
+### 지식화 대상
+Phase 6 완료 후 다음 내용을 Obsidian vault에 정리합니다:
+
+| 카테고리 | 내용 |
+|----------|------|
+| **통합 아키텍처** | E2E 파이프라인 구조, 데이터 흐름 |
+| **성능 최적화** | 레이턴시 감소 기법, 병목 해결 |
+| **벤치마크** | nuPlan closed-loop 평가 결과, 해석 |
+| **시나리오 분석** | 시나리오별 성공/실패 패턴 |
+| **배포 가이드** | 모델 최적화(TensorRT/INT8), 배포 절차 |
+
+### 실행 방법
+```bash
+/obsidian sync --phase=6
+```
+
+### 생성될 노트 구조
+```
+Obsidian Vault/
+├── Projects/
+│   └── AD-ML-Platform/
+│       ├── Phase-6-Integration/
+│       │   ├── E2E-파이프라인-아키텍처.md
+│       │   ├── 성능-최적화-가이드.md
+│       │   ├── nuPlan-벤치마크-결과.md
+│       │   ├── 시나리오별-분석.md
+│       │   ├── 모델-배포-가이드.md
+│       │   └── 트러블슈팅-로그.md
+│       └── ...

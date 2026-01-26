@@ -1,0 +1,64 @@
+# E2EDrivingAgent SAC Training Configuration
+# Usage: mlagents-learn python/configs/planning/vehicle_sac.yaml --run-id=driving_sac_v1
+#
+# SAC (Soft Actor-Critic): Off-policy, sample-efficient, entropy-regularized
+# Better sample efficiency than PPO, continuous action spaces
+# Observation: 238D vector (ego 8D + history 40D + agents 160D + route 30D)
+# Action: 2 continuous (steering [-1,1], acceleration [-1,1])
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: sac
+
+    hyperparameters:
+      batch_size: 256
+      buffer_size: 500000          # Large replay buffer for off-policy
+      buffer_init_steps: 5000      # Random exploration before training
+      learning_rate: 3.0e-4
+      learning_rate_schedule: constant
+      tau: 0.005                   # Soft target update rate
+      init_entcoef: 0.5            # Initial entropy coefficient
+      steps_per_update: 10.0       # Gradient steps per env step
+
+    network_settings:
+      normalize: false             # Obs already normalized in agent code
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    # Training settings
+    max_steps: 1000000             # SAC needs fewer steps (more sample efficient)
+    time_horizon: 256
+    summary_freq: 5000
+    threaded: false
+
+# Environment settings
+env_settings:
+  env_path: null                   # null = Unity Editor
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 300
+
+# Checkpoint settings
+checkpoint_settings:
+  run_id: driving_sac_v1
+  resume: false
+  force: false
+
+# Engine configuration
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20                   # 20x speed for training
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+# TensorBoard settings
+torch_settings:
+  device: null

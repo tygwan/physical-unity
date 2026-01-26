@@ -1,0 +1,70 @@
+# E2EDrivingAgent Hybrid (BC + RL) Training Configuration
+# Usage: mlagents-learn python/configs/planning/vehicle_hybrid.yaml --run-id=driving_hybrid_v1
+#
+# CIMRL Strategy (Waymo-style):
+#   Phase 1: Initialize policy from BC demonstrations (behavioral_cloning)
+#   Phase 2: Fine-tune with PPO reinforcement learning
+#   The BC loss decays over time, allowing RL to take over.
+#
+# Requires: recorded expert demonstrations (.demo file)
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 2048
+      buffer_size: 20480
+      learning_rate: 1.0e-4        # Lower LR to preserve BC initialization
+      beta: 5.0e-3
+      epsilon: 0.1                 # Tighter clipping for stability
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    # Behavioral Cloning auxiliary loss (decays over training)
+    behavioral_cloning:
+      demo_path: Assets/Demonstrations/expert_driving.demo
+      strength: 0.5               # BC loss weight (decays to 0)
+      steps: 200000               # Anneal BC over this many steps
+      batch_size: 512
+      num_epoch: 3
+
+    max_steps: 2000000
+    time_horizon: 256
+    summary_freq: 5000
+    threaded: false
+
+# Environment settings
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 300
+
+checkpoint_settings:
+  run_id: driving_hybrid_v1
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: null

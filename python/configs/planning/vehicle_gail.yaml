@@ -1,0 +1,78 @@
+# E2EDrivingAgent GAIL Training Configuration
+# Usage: mlagents-learn python/configs/planning/vehicle_gail.yaml --run-id=driving_gail_v1
+#
+# GAIL (Generative Adversarial Imitation Learning):
+#   Uses a discriminator to distinguish agent behavior from expert demonstrations.
+#   No explicit reward function needed - learns from demonstrations.
+#   Requires: recorded expert demonstrations (.demo file from Unity Recorder)
+#
+# To record demonstrations:
+#   1. Set BehaviorParameters to "Heuristic Only" mode
+#   2. Add DemonstrationRecorder component to Vehicle
+#   3. Drive manually or use waypoint follower
+#   4. Save .demo file to Assets/Demonstrations/
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 2048
+      buffer_size: 20480
+      learning_rate: 3.0e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: linear
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      # GAIL reward signal (learns from demonstrations)
+      gail:
+        gamma: 0.99
+        strength: 1.0
+        network_settings:
+          hidden_units: 128
+          num_layers: 2
+        demo_path: Assets/Demonstrations/expert_driving.demo
+        use_actions: true          # Use action matching (not just state)
+        use_vail: false            # Set true for more stable training
+
+      # Small extrinsic reward to guide exploration
+      extrinsic:
+        gamma: 0.99
+        strength: 0.1             # Low weight - GAIL is primary
+
+    max_steps: 1500000
+    time_horizon: 256
+    summary_freq: 5000
+    threaded: false
+
+# Environment settings
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 300
+
+checkpoint_settings:
+  run_id: driving_gail_v1
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: null
