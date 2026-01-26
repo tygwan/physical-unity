@@ -63,12 +63,14 @@
 
 ## Success Criteria
 
-- [ ] ROS2 Humble Windows에서 정상 작동
-- [ ] Unity-ROS2 토픽 송수신 확인
-- [ ] ML-Agents로 간단한 RL 학습 가능
-- [ ] 차량이 도로에서 주행하는 기본 Scene
-- [ ] LiDAR/Camera 센서 데이터 수집
-- [ ] MLflow에서 실험 추적 가능
+- [x] ROS2 Humble Windows에서 정상 작동
+- [x] Unity-ROS2 토픽 송수신 확인
+- [x] ML-Agents로 간단한 RL 학습 가능
+- [x] 차량이 도로에서 주행하는 기본 Scene
+- [x] LiDAR/Camera 센서 데이터 수집
+- [x] MLflow에서 실험 추적 가능
+
+**Status: ✅ 완료** (2026-01-22)
 
 ## Timeline
 
@@ -122,3 +124,37 @@
 3. **Basic Driving Scene**: 차량, 도로, 센서 포함
 4. **RL Training Pipeline**: ML-Agents 기반 학습 환경
 5. **Experiment Tracking Setup**: MLflow 구성
+
+---
+
+## 📚 Phase 완료 시: Obsidian 지식화
+
+### 지식화 대상
+Phase 1 완료 후 다음 내용을 Obsidian vault에 정리합니다:
+
+| 카테고리 | 내용 |
+|----------|------|
+| **환경 설정** | Unity 6 + ML-Agents 4.0 설치 과정, 트러블슈팅 |
+| **기술 결정** | ROS2 Bridge 선택 근거 (ros2-for-unity vs Robotics Hub) |
+| **학습 내용** | ML-Agents PPO/SAC 학습 파이프라인, Sentis 추론 |
+| **문제 해결** | 발생한 이슈와 해결 방법 (CRLF, Sentis API 등) |
+| **아키텍처** | Unity-ROS2 통신 구조, 센서 데이터 흐름 |
+
+### 실행 방법
+```bash
+/obsidian sync --phase=1
+```
+
+### 생성될 노트 구조
+```
+Obsidian Vault/
+├── Projects/
+│   └── AD-ML-Platform/
+│       ├── Phase-1-Foundation/
+│       │   ├── 환경설정-가이드.md
+│       │   ├── ROS2-Bridge-비교분석.md
+│       │   ├── ML-Agents-학습-파이프라인.md
+│       │   ├── 트러블슈팅-로그.md
+│       │   └── 아키텍처-다이어그램.md
+│       └── ...
+```

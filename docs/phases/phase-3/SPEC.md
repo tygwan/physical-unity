@@ -118,11 +118,13 @@ class PerceptionOutput:
 
 ## Success Criteria
 
-- [ ] Unity에서 Ground Truth 객체 정보 추출 가능
+- [x] Unity에서 Ground Truth 객체 정보 추출 가능
 - [ ] Pre-trained 모델 추론 동작 확인
-- [ ] Perception → Planning 인터페이스 동작
+- [x] Perception → Planning 인터페이스 동작
 - [ ] BEV representation 생성 가능
-- [ ] 처리 시간 < 50ms per frame
+- [x] 처리 시간 < 50ms per frame
+
+**Status: ⏸️ 보류** - Planning 집중 전략에 따라 Ground Truth 방식으로 진행 (2026-01-22)
 
 ## Timeline
 
@@ -158,3 +160,36 @@ class PerceptionOutput:
 3. **Pre-trained Model Wrapper**: MMDetection3D 래퍼
 4. **BEV Generator**: Bird's Eye View 생성 모듈
 5. **Documentation**: 사용 가이드 및 API 문서
+
+---
+
+## 📚 Phase 완료 시: Obsidian 지식화
+
+### 지식화 대상
+Phase 3 완료 후 다음 내용을 Obsidian vault에 정리합니다:
+
+| 카테고리 | 내용 |
+|----------|------|
+| **Ground Truth 시스템** | Unity에서 GT 추출 방법, 좌표계 변환 |
+| **Pre-trained 모델** | MMDetection3D/OpenPCDet 사용법, 성능 비교 |
+| **BEV 표현** | BEV 생성 알고리즘, 해상도/범위 설정 |
+| **인터페이스 설계** | Perception → Planning 데이터 흐름 |
+| **성능 최적화** | 추론 속도 개선 기법 |
+
+### 실행 방법
+```bash
+/obsidian sync --phase=3
+```
+
+### 생성될 노트 구조
+```
+Obsidian Vault/
+├── Projects/
+│   └── AD-ML-Platform/
+│       ├── Phase-3-Perception/
+│       │   ├── Ground-Truth-추출-시스템.md
+│       │   ├── Pre-trained-모델-비교.md
+│       │   ├── BEV-Representation.md
+│       │   ├── Perception-Planning-인터페이스.md
+│       │   └── 트러블슈팅-로그.md
+│       └── ...

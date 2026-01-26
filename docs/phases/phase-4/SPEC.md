@@ -146,10 +146,12 @@ def create_constant_velocity_prediction(
 ## Success Criteria
 
 - [ ] nuPlan baseline predictor 동작 확인
-- [ ] Constant Velocity 모델 구현 완료
-- [ ] Prediction → Planning 인터페이스 동작
+- [x] Constant Velocity 모델 구현 완료
+- [x] Prediction → Planning 인터페이스 동작
 - [ ] ADE < 2.0m on validation set
-- [ ] 처리 시간 < 20ms per agent
+- [x] 처리 시간 < 20ms per agent
+
+**Status: ⏸️ 보류** - Planning 집중 전략에 따라 Constant Velocity 방식으로 진행 (2026-01-22)
 
 ## Timeline
 
@@ -184,3 +186,36 @@ def create_constant_velocity_prediction(
 3. **Prediction Interface**: Planning과의 표준 인터페이스
 4. **Evaluation Scripts**: ADE/FDE 측정 스크립트
 5. **Documentation**: 사용 가이드
+
+---
+
+## 📚 Phase 완료 시: Obsidian 지식화
+
+### 지식화 대상
+Phase 4 완료 후 다음 내용을 Obsidian vault에 정리합니다:
+
+| 카테고리 | 내용 |
+|----------|------|
+| **예측 모델** | CV 모델, nuPlan baseline 구조 및 원리 |
+| **평가 메트릭** | ADE/FDE/Miss Rate 계산 방법, 해석 |
+| **nuPlan-devkit** | 설치, 설정, 사용법 |
+| **인터페이스 설계** | Prediction → Planning 데이터 흐름 |
+| **성능 분석** | 시나리오별 예측 성능 분석 |
+
+### 실행 방법
+```bash
+/obsidian sync --phase=4
+```
+
+### 생성될 노트 구조
+```
+Obsidian Vault/
+├── Projects/
+│   └── AD-ML-Platform/
+│       ├── Phase-4-Prediction/
+│       │   ├── Constant-Velocity-모델.md
+│       │   ├── nuPlan-Baseline-가이드.md
+│       │   ├── 평가-메트릭-해석.md
+│       │   ├── Prediction-Planning-인터페이스.md
+│       │   └── 트러블슈팅-로그.md
+│       └── ...

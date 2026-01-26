@@ -162,10 +162,12 @@ SO THAT End-to-end 자율주행 시스템을 테스트할 수 있다
 - 다중 시나리오 동시 학습 가능
 
 ### 6.3 Compatibility
-- Unity 2023.2+
+- Unity 6 (6000.x)
+- ML-Agents 4.0+
+- Unity Sentis 2.4+
 - ROS2 Humble
 - Python 3.10+
-- PyTorch 2.0+
+- PyTorch 2.1+
 - ONNX Runtime
 
 ### 6.4 Reproducibility
@@ -186,7 +188,9 @@ SO THAT End-to-end 자율주행 시스템을 테스트할 수 있다
 
 ### 7.2 Software Dependencies
 - Windows 10/11 (Native development)
-- Unity 2023.2+ (LTS preferred)
+- Unity 6 (6000.x)
+- ML-Agents 4.0.1
+- Unity Sentis 2.4.1
 - ROS2 Humble (Windows build)
 - CUDA 12.x / cuDNN 8.x
 
@@ -229,17 +233,51 @@ SO THAT End-to-end 자율주행 시스템을 테스트할 수 있다
 
 ## 11. Timeline Overview
 
-| Phase | Duration | Key Deliverable |
-|-------|----------|-----------------|
-| Phase 1: Foundation | 2-3주 | Unity-ROS2 연동 |
-| Phase 2: Data | 3-4주 | 데이터 파이프라인 |
-| Phase 3: Perception | 2-3주 | Pre-trained 모델 연동 |
-| Phase 4: Prediction | 3-4주 | Baseline Predictor |
-| Phase 5: Planning | 6-8주 | RL/IL Motion Planner |
-| Phase 6: Integration | 4-6주 | E2E 시스템 |
-| Phase 7: Advanced | Ongoing | 최신 기술 연구 |
+> **참고**: 상세 학습 로드맵은 [LEARNING-ROADMAP.md](./LEARNING-ROADMAP.md) 참조
 
-**Total Estimated Duration**: 20-28주 (5-7개월)
+### 11.1 기존 Phase (인프라)
+
+| Phase | Duration | Key Deliverable | Status |
+|-------|----------|-----------------|--------|
+| Phase 1: Foundation | 2-3주 | Unity-ROS2 연동 | ✅ 완료 |
+| Phase 2: Data | 3-4주 | 데이터 파이프라인 | ✅ 완료 |
+| Phase 3: Perception | 2-3주 | Pre-trained 모델 연동 | ⏸️ 보류 |
+| Phase 4: Prediction | 3-4주 | Baseline Predictor | ⏸️ 보류 |
+| Phase 5: Planning | 6-8주 | RL/IL Motion Planner | 🔄 진행중 |
+| Phase 6: Integration | 4-6주 | E2E 시스템 | 📋 계획 |
+| Phase 7: Advanced | Ongoing | 최신 기술 연구 | 📋 계획 |
+
+### 11.2 Planning 세부 Phase (RL/IL 학습)
+
+| Sub-Phase | Focus | Steps | Best Reward | Status |
+|-----------|-------|-------|-------------|--------|
+| **Foundation (v10-v11)** | 기본 주행 + 추월 시도 | 16M | +51 | ✅ 완료 |
+| **Phase A** | Dense Overtaking (느린 NPC) | 2M | **+937** | ✅ 완료 |
+| **Phase B** | Overtake vs Follow 판단 | 2M | **+903** | ✅ 완료 |
+| **Phase C** | Multi-NPC 일반화 (4대) | 4M | **+961** | ✅ 완료 |
+| **Phase D** | Lane Observation (254D) | 6M | -41 (진행중) | 🔄 진행중 |
+| **Phase E** | 곡선 도로 + 비정형 각도 | 4-6M | - | 📋 계획 |
+| **Phase F** | N차선 + 중앙선 규칙 | 4-6M | - | 📋 계획 |
+| **Phase G** | 교차로 (T자/십자/Y자) | 6-8M | - | 📋 계획 |
+| **Phase H** | 신호등 + 정지선 | 4-6M | - | 📋 계획 |
+| **Phase I** | U턴 + 특수 기동 | 4-6M | - | 📋 계획 |
+| **Phase J** | 횡단보도 + 보행자 | 6-8M | - | 📋 계획 |
+| **Phase K** | 장애물 + 긴급 상황 | 6-8M | - | 📋 계획 |
+| **Phase L** | 복합 시나리오 통합 | 10-15M | - | 📋 계획 |
+
+### 11.3 주요 마일스톤 달성 현황
+
+| Milestone | Target | Actual | Status |
+|-----------|--------|--------|--------|
+| Unity-ML-Agents 연동 | Week 1 | Week 1 | ✅ |
+| 16 Training Areas 병렬화 | Week 2 | Week 2 | ✅ |
+| 기본 주행 학습 (v10) | Week 3 | Week 3 | ✅ |
+| 추월 학습 (v12 Phase A) | Week 4 | Week 4 | ✅ |
+| 판단력 학습 (Phase B) | Week 4 | Week 4 | ✅ |
+| Multi-NPC 일반화 (Phase C) | Week 5 | Week 5 | ✅ |
+| Lane Observation (Phase D) | Week 6 | 진행중 | 🔄 |
+
+**Total Estimated Duration**: 20-28주 (5-7개월) → **확장: 28-36주** (복합 시나리오 포함)
 
 ---
 

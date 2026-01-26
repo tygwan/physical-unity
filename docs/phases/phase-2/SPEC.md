@@ -116,12 +116,14 @@ class AgentTrack:
 
 ## Success Criteria
 
-- [ ] nuPlan mini 데이터셋 로딩 가능
-- [ ] Waymo Motion 데이터셋 로딩 가능
-- [ ] 통합 포맷으로 10,000+ 시나리오 추출
-- [ ] 데이터 증강 (노이즈, 변환) 동작
-- [ ] 시각화 도구로 시나리오 확인 가능
-- [ ] Train/Val/Test 분할 완료 (80/10/10)
+- [x] nuPlan mini 데이터셋 로딩 가능
+- [x] Waymo Motion 데이터셋 로딩 가능
+- [x] 통합 포맷으로 10,000+ 시나리오 추출
+- [x] 데이터 증강 (노이즈, 변환) 동작
+- [x] 시각화 도구로 시나리오 확인 가능
+- [x] Train/Val/Test 분할 완료 (80/10/10)
+
+**Status: ✅ 완료** (2026-01-22)
 
 ## Timeline
 
@@ -151,3 +153,36 @@ class AgentTrack:
 4. **Augmentation Tools**: 데이터 증강 모듈
 5. **Visualization Tools**: 시나리오 시각화
 6. **Data Splits**: train/val/test 분할 파일
+
+---
+
+## 📚 Phase 완료 시: Obsidian 지식화
+
+### 지식화 대상
+Phase 2 완료 후 다음 내용을 Obsidian vault에 정리합니다:
+
+| 카테고리 | 내용 |
+|----------|------|
+| **데이터셋 분석** | nuPlan/Waymo/highD 구조, 특성, 제한사항 |
+| **통합 스키마** | 데이터 포맷 설계 결정 사항, Trade-off |
+| **전처리 파이프라인** | 시나리오 추출, 정규화, 증강 기법 |
+| **문제 해결** | 다운로드 이슈, 포맷 변환 문제, 메모리 관리 |
+| **시각화** | 데이터 탐색 도구, 품질 검증 방법 |
+
+### 실행 방법
+```bash
+/obsidian sync --phase=2
+```
+
+### 생성될 노트 구조
+```
+Obsidian Vault/
+├── Projects/
+│   └── AD-ML-Platform/
+│       ├── Phase-2-Data-Infrastructure/
+│       │   ├── 데이터셋-분석-가이드.md
+│       │   ├── 통합-스키마-설계.md
+│       │   ├── 전처리-파이프라인.md
+│       │   ├── 데이터-증강-전략.md
+│       │   └── 트러블슈팅-로그.md
+│       └── ...
