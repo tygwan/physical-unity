@@ -10,13 +10,19 @@ namespace ADPlatform.Agents
     /// <summary>
     /// End-to-End Driving Agent for RL training.
     ///
-    /// Observation Space (254D):
+    /// Observation Space (Phase-dependent):
+    ///   Phase A/B/C (242D):
     ///   - Ego state (8D): x, y, vx, vy, cos_h, sin_h, ax, ay
     ///   - Ego history (40D): 5 past steps x 8D
     ///   - Surrounding agents (160D): 20 agents x 8 features
     ///   - Route info (30D): 10 waypoints x 3 (x, y, dist)
     ///   - Speed info (4D): current_speed_norm, speed_limit_norm, speed_ratio, next_limit_norm
-    ///   - Lane info (12D): left_type(4), right_type(4), left_dist, right_dist, left_crossing, right_crossing
+    ///
+    ///   Phase D/E/F (254D = 242D + 12D):
+    ///   - + Lane info (12D): left_type(4), right_type(4), left_dist, right_dist, left_crossing, right_crossing
+    ///
+    ///   Phase G (260D = 254D + 6D):
+    ///   - + Intersection info (6D): type(4), distance(1), turn_direction(1)
     ///
     /// Action Space (2D continuous):
     ///   - Steering: [-0.5, 0.5] rad
@@ -49,6 +55,12 @@ namespace ADPlatform.Agents
         public int numWaypoints = 10;           // Route waypoints
         public float waypointSpacing = 10f;     // meters between waypoints
 
+        [Header("Observation Space Control")]
+        [Tooltip("Phase A/B/C: false (242D), Phase D/E/F: true (254D)")]
+        public bool enableLaneObservation = false;      // +12D when enabled
+        [Tooltip("Phase G+: true (260D)")]
+        public bool enableIntersectionObservation = false;  // +6D when enabled
+
         [Header("Reward Weights")]
         public float progressWeight = 1.0f;
         public float collisionPenalty = -5f;
@@ -74,9 +86,27 @@ namespace ADPlatform.Agents
         public float wrongWayPenalty = -5f;             // Penalty for crossing center line (same as off-road)
         public float centerLineCrossingPenalty = -0.5f; // Per-step penalty when on wrong side
 
+        public enum TrainingVersion { v10g, v11, v12 }
+
+        [Header("Training Version")]
+        [Tooltip("v10g: Lane keeping + following, v11: Sparse overtake, v12: Dense overtake")]
+        public TrainingVersion trainingVersion = TrainingVersion.v12;
+
         [Header("Following Behavior")]
         public float leadVehicleDetectRange = 40f;    // meters ahead to check
         public float safeFollowingDistance = 15f;      // meters (safe gap)
+
+        [Header("Following Reward (v10g/v11 only)")]
+        [Tooltip("v10g/v11: Reward for maintaining safe following distance")]
+        public float followingBonus = 0.3f;           // v10g/v11: per-step when safely following
+        [Tooltip("v11: Only apply followingBonus when NPC > this ratio of speedLimit")]
+        public float followingBonusSpeedThreshold = 0.7f;  // v11: gated following bonus
+
+        [Header("Overtaking (v11 - Sparse Reward)")]
+        [Tooltip("v11: One-time bonus when overtake fully completed")]
+        public float overtakePassBonus = 3.0f;        // v11: sparse, one-time
+        [Tooltip("v11: Per-step bonus when beside NPC during overtake")]
+        public float overtakeSpeedBonus = 0.15f;      // v11: per-step beside NPC
 
         [Header("Overtaking (v12 - Dense Reward Strategy)")]
         public float overtakeInitiateBonus = 0.5f;    // One-time: lane change started
@@ -359,8 +389,18 @@ namespace ADPlatform.Agents
             // === SPEED INFO (4D) ===
             CollectSpeedObservations(sensor);
 
-            // === LANE INFO (12D) === [ENABLED - Phase D uses 254D]
-            CollectLaneObservations(sensor);
+            // === LANE INFO (12D) === [Phase D/E/F: enabled]
+            if (enableLaneObservation)
+            {
+                CollectLaneObservations(sensor);
+            }
+
+            // === INTERSECTION INFO (6D) === [Phase G+: enabled]
+            // Note: Called independently of enableLaneObservation
+            if (enableIntersectionObservation)
+            {
+                AddIntersectionObservations(sensor);
+            }
         }
 
         private void CollectSpeedObservations(VectorSensor sensor)
@@ -417,9 +457,6 @@ namespace ADPlatform.Agents
             // Crossing flags (1D each)
             sensor.AddObservation(leftLaneCrossing ? 1f : 0f);
             sensor.AddObservation(rightLaneCrossing ? 1f : 0f);
-
-            // Intersection observations (Phase G) - 6D
-            AddIntersectionObservations(sensor);
         }
 
         /// <summary>
@@ -837,6 +874,35 @@ namespace ADPlatform.Agents
 
             episodeReward += reward;
             AddReward(reward);
+
+            // === v11: TensorBoard StatsRecorder Logging ===
+            // Log every debugLogInterval steps (100 by default)
+            if (episodeSteps % debugLogInterval == 0)
+            {
+                var stats = Academy.Instance.StatsRecorder;
+
+                // Reward components (accumulated since last log)
+                stats.Add("Reward/Progress", dbgProgressReward);
+                stats.Add("Reward/Speed", dbgSpeedReward);
+                stats.Add("Reward/LaneKeeping", dbgLaneKeepReward);
+                stats.Add("Reward/Overtaking", dbgOvertakeReward);
+                stats.Add("Reward/LaneViolation", dbgLaneViolationPenalty);
+                stats.Add("Reward/Jerk", (Mathf.Abs(steering - prevSteering) + Mathf.Abs(acceleration - prevAcceleration)) * jerkPenalty);
+                stats.Add("Reward/Time", timePenalty * debugLogInterval);
+
+                // Behavior statistics (instantaneous)
+                stats.Add("Stats/Speed", currentSpeed);
+                stats.Add("Stats/SpeedLimit", currentSpeedLimit);
+                stats.Add("Stats/SpeedRatio", currentSpeedLimit > 0.1f ? currentSpeed / currentSpeedLimit : 0f);
+                stats.Add("Stats/Acceleration", acceleration);
+                stats.Add("Stats/Steering", Mathf.Abs(steering));
+                stats.Add("Stats/DistanceTraveled", totalDistance);
+                stats.Add("Stats/StuckTimer", stuckBehindTimer);
+
+                // Overtaking state (one-hot encoded for visualization)
+                stats.Add("Stats/OvertakePhase_None", overtakingPhase == OvertakingPhase.None ? 1f : 0f);
+                stats.Add("Stats/OvertakePhase_Active", overtakingPhase != OvertakingPhase.None ? 1f : 0f);
+            }
         }
 
         private void LogEpisodeSummary()
@@ -847,6 +913,33 @@ namespace ADPlatform.Agents
                       $"Components: Progress={dbgProgressReward:F1} Speed={dbgSpeedReward:F1} " +
                       $"LaneKeep={dbgLaneKeepReward:F1} Overtake={dbgOvertakeReward:F1} StuckPen={dbgStuckPenalty:F1} " +
                       $"LaneViol={dbgLaneViolationPenalty:F1}");
+
+            // === v11: TensorBoard Episode Summary ===
+            var stats = Academy.Instance.StatsRecorder;
+
+            // Episode-level statistics
+            stats.Add("Episode/Length", episodeSteps);
+            stats.Add("Episode/TotalReward", episodeReward);
+            stats.Add("Episode/OvertakeCount", overtakeCount);
+            stats.Add("Episode/CollisionCount", episodeCollisions);
+            stats.Add("Episode/DistanceTraveled", totalDistance);
+
+            // End reason breakdown (one-hot for ratio tracking)
+            stats.Add("Episode/EndReason_Goal", dbgEpisodeEndReason == "GOAL_REACHED" ? 1f : 0f);
+            stats.Add("Episode/EndReason_Collision", dbgEpisodeEndReason == "MAX_COLLISIONS" ? 1f : 0f);
+            stats.Add("Episode/EndReason_OffRoad", dbgEpisodeEndReason == "OFF_ROAD" ? 1f : 0f);
+            stats.Add("Episode/EndReason_WrongWay", dbgEpisodeEndReason == "WRONG_WAY" ? 1f : 0f);
+            stats.Add("Episode/EndReason_MaxDistance", dbgEpisodeEndReason == "MAX_DISTANCE" ? 1f : 0f);
+            stats.Add("Episode/EndReason_Stuck", dbgEpisodeEndReason == "STUCK_LOW_SPEED" ? 1f : 0f);
+            stats.Add("Episode/EndReason_LaneViolation", dbgEpisodeEndReason == "DOUBLE_YELLOW_VIOLATION" ? 1f : 0f);
+
+            // Cumulative reward components (episode totals)
+            stats.Add("Episode/TotalProgress", dbgProgressReward);
+            stats.Add("Episode/TotalSpeedReward", dbgSpeedReward);
+            stats.Add("Episode/TotalLaneKeep", dbgLaneKeepReward);
+            stats.Add("Episode/TotalOvertake", dbgOvertakeReward);
+            stats.Add("Episode/TotalStuckPenalty", dbgStuckPenalty);
+            stats.Add("Episode/TotalLaneViolation", dbgLaneViolationPenalty);
         }
 
         private bool IsOffRoad()
@@ -920,24 +1013,29 @@ namespace ADPlatform.Agents
             float targetSpeed = Mathf.Max(speedLimit, 1f);
             float speedRatio = speed / targetSpeed;
 
-            // === Stuck Behind Slow NPC Timer ===
-            bool stuckBehindSlowNPC = isBlocked &&
-                leadSpeed < speedLimit * overtakeSlowLeadThreshold &&
-                leadDist < safeFollowingDistance * 1.5f &&
-                speed < leadSpeed * 1.2f &&  // Agent is matching NPC speed
-                !isOvertaking;
+            // === Stuck Behind Slow NPC Timer (v12 only) ===
+            // v10g/v11: No stuck penalty (following is rewarded instead)
+            // v12: Stuck penalty encourages overtaking
+            if (trainingVersion == TrainingVersion.v12)
+            {
+                bool stuckBehindSlowNPC = isBlocked &&
+                    leadSpeed < speedLimit * overtakeSlowLeadThreshold &&
+                    leadDist < safeFollowingDistance * 1.5f &&
+                    speed < leadSpeed * 1.2f &&  // Agent is matching NPC speed
+                    !isOvertaking;
 
-            if (stuckBehindSlowNPC)
-            {
-                stuckBehindTimer += Time.fixedDeltaTime;
-                if (stuckBehindTimer > stuckBehindTimeout)
+                if (stuckBehindSlowNPC)
                 {
-                    reward += stuckBehindPenalty;  // -0.1/step after 3 seconds
+                    stuckBehindTimer += Time.fixedDeltaTime;
+                    if (stuckBehindTimer > stuckBehindTimeout)
+                    {
+                        reward += stuckBehindPenalty;  // -0.1/step after 3 seconds
+                    }
                 }
-            }
-            else
-            {
-                stuckBehindTimer = 0f;
+                else
+                {
+                    stuckBehindTimer = 0f;
+                }
             }
 
             // === Speed Compliance: +0.3 for 80-100% of limit ===
@@ -1086,6 +1184,26 @@ namespace ADPlatform.Agents
                 }
             }
 
+            // ============================================================
+            // v10g MODE: Following reward only, no overtaking
+            // ============================================================
+            if (trainingVersion == TrainingVersion.v10g)
+            {
+                return CalculateFollowingReward_v10g(closestNPC, closestNPCSpeed, closestNPCAhead);
+            }
+
+            // ============================================================
+            // v11 MODE: Following reward (gated) + Sparse overtaking
+            // ============================================================
+            if (trainingVersion == TrainingVersion.v11)
+            {
+                return CalculateOvertakingReward_v11(closestNPC, closestNPCSpeed, closestNPCAhead);
+            }
+
+            // ============================================================
+            // v12 MODE: Dense 5-phase overtaking (original logic)
+            // ============================================================
+
             // Use tracked target during active overtaking, otherwise use closest NPC
             Transform activeTarget = (overtakingPhase != OvertakingPhase.None && overtakeTarget != null)
                 ? overtakeTarget : closestNPC;
@@ -1220,6 +1338,110 @@ namespace ADPlatform.Agents
                     break;
             }
 
+            return reward;
+        }
+
+        /// <summary>
+        /// v10g: Following reward only, no overtaking.
+        /// Rewards maintaining safe following distance behind NPCs.
+        /// </summary>
+        private float CalculateFollowingReward_v10g(Transform closestNPC, float npcSpeed, float npcAhead)
+        {
+            if (closestNPC == null)
+                return 0f;
+
+            // Check if NPC is ahead and within safe following distance
+            if (npcAhead > 0 && npcAhead < safeFollowingDistance * 2f)
+            {
+                // Maintaining safe distance? Reward!
+                if (npcAhead >= safeFollowingDistance * 0.5f)
+                {
+                    dbgOvertakeReward += followingBonus;
+                    return followingBonus;  // +0.3 per step for safe following
+                }
+            }
+            return 0f;
+        }
+
+        /// <summary>
+        /// v11: Following reward (gated) + Sparse overtaking.
+        /// Following bonus only when NPC > 70% speedLimit.
+        /// Sparse overtaking: overtakePassBonus when complete, overtakeSpeedBonus per-step beside NPC.
+        /// </summary>
+        private float CalculateOvertakingReward_v11(Transform closestNPC, float npcSpeed, float npcAhead)
+        {
+            float reward = 0f;
+
+            if (closestNPC == null)
+            {
+                if (overtakingPhase != OvertakingPhase.None)
+                {
+                    overtakingPhase = OvertakingPhase.None;
+                    isOvertaking = false;
+                }
+                return 0f;
+            }
+
+            Vector3 relNPC = transform.InverseTransformPoint(closestNPC.position);
+            float npcLateral = relNPC.x;
+            bool isSlowNPC = npcSpeed < currentSpeedLimit * overtakeSlowLeadThreshold;
+            bool isFastNPC = npcSpeed >= currentSpeedLimit * followingBonusSpeedThreshold;
+
+            // GATED Following bonus: only when NPC is fast (>70% speedLimit)
+            if (isFastNPC && npcAhead > 0 && npcAhead < safeFollowingDistance * 2f)
+            {
+                if (npcAhead >= safeFollowingDistance * 0.5f)
+                {
+                    reward += followingBonus;
+                }
+            }
+
+            // SPARSE Overtaking rewards
+            switch (overtakingPhase)
+            {
+                case OvertakingPhase.None:
+                    if (isSlowNPC && npcAhead > 5f && npcAhead < leadVehicleDetectRange)
+                    {
+                        overtakingPhase = OvertakingPhase.Approaching;
+                        overtakeTarget = closestNPC;
+                        isOvertaking = true;
+                    }
+                    break;
+
+                case OvertakingPhase.Approaching:
+                    if (!isSlowNPC)
+                    {
+                        overtakingPhase = OvertakingPhase.None;
+                        isOvertaking = false;
+                        break;
+                    }
+                    // Transition to Beside
+                    if (Mathf.Abs(npcLateral) > 1.5f && npcAhead < 12f && npcAhead > -3f)
+                    {
+                        overtakingPhase = OvertakingPhase.Beside;
+                        // v11: No initiate bonus (sparse)
+                    }
+                    break;
+
+                case OvertakingPhase.Beside:
+                    // v11: Per-step bonus for speed beside NPC
+                    if (currentSpeed > npcSpeed * 0.9f)
+                    {
+                        reward += overtakeSpeedBonus;  // +0.15/step (v11 sparse)
+                    }
+                    // Transition to Completed
+                    if (npcAhead < -3f)
+                    {
+                        overtakingPhase = OvertakingPhase.None;
+                        isOvertaking = false;
+                        reward += overtakePassBonus;  // +3.0 (v11 sparse, one-time)
+                        overtakeCount++;
+                        Debug.Log($"[v11 Overtake] COMPLETE! Pass #{overtakeCount}. Sparse bonus +{overtakePassBonus}");
+                    }
+                    break;
+            }
+
+            dbgOvertakeReward += reward;
             return reward;
         }
 

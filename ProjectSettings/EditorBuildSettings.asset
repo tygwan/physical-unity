@@ -4,7 +4,26 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/PhaseA_DenseOvertaking.unity
+    guid: 0bed998a04e919349b785bdda524a7f6
+  - enabled: 1
+    path: Assets/Scenes/PhaseB_DecisionLearning.unity
+    guid: bab8ba07cbda2774c80f28d17cd94f90
+  - enabled: 1
+    path: Assets/Scenes/PhaseC_MultiNPC.unity
+    guid: 34d65e70423cb9b439ebc6a6ec1ac7e5
+  - enabled: 1
+    path: Assets/Scenes/PhaseE_CurvedRoads.unity
+    guid: 5026bde9f7432b34db5116f57b056af1
+  - enabled: 1
+    path: Assets/Scenes/PhaseF_MultiLane.unity
+    guid: 4e7293329ed22054faf6805917d2feac
+  - enabled: 1
+    path: Assets/Scenes/PhaseG_Intersection.unity
+    guid: 0d0bbc9b59358f94693803c523974802
   m_configObjects:
+    com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 289c1b55c9541489481df5cc06664110, type: 3}
   m_UseUCBPForAssetBundles: 0

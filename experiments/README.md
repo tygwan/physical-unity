@@ -18,6 +18,36 @@ experiments/
 └── failed_experiments/     # Archived failed experiments
 ```
 
+## Parallel Training Environment
+
+모든 Phase에서 **16개의 병렬 Training Area**를 사용하여 학습 효율을 극대화합니다.
+
+### 병렬 환경 구성
+
+| 항목 | 값 |
+|------|-----|
+| Training Areas | 16개 (일렬 배치) |
+| Unity Instances | 1개 |
+| Batch Size | 4096 |
+| Buffer Size | 40960 |
+| Time Scale | 20x |
+
+### Scene 구성
+
+각 Phase Scene에는 16개의 독립적인 도로 환경이 X축을 따라 일렬로 설치됩니다:
+- 각 Training Area는 독립적인 도로, NPC, 에이전트를 포함
+- Area 간격: 100m (X축 방향)
+- 모든 Area가 동시에 학습 데이터 수집
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                           Phase Scene Layout (1x16)                               │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│  [Area 0] - [Area 1] - [Area 2] - ... - [Area 14] - [Area 15]                    │
+│     0m       100m       200m              1400m       1500m                       │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Training Flow
 
 ```

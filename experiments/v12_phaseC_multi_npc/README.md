@@ -15,6 +15,15 @@
 
 Handle complex multi-vehicle scenarios with varying NPC behaviors and traffic densities.
 
+## Parallel Training Environment
+
+| 항목 | 값 |
+|------|-----|
+| Training Areas | **16개** (일렬 배치) |
+| 각 Area | 독립적 도로 + 3-5 NPC |
+| Area 간격 | 100m |
+| 동시 학습 | 16 에이전트 |
+
 ## Config File
 
 `config/vehicle_ppo_v12_phaseC.yaml`
@@ -22,10 +31,12 @@ Handle complex multi-vehicle scenarios with varying NPC behaviors and traffic de
 ## Key Parameters
 
 - **max_steps**: 4,000,000
-- **batch_size**: 2048
-- **buffer_size**: 20480
+- **batch_size**: 4096
+- **buffer_size**: 40960
 - **learning_rate**: 3e-4
 - **NPC count**: 3-5 vehicles
+- **parallel_envs**: 16 Training Areas
+- **time_scale**: 20x
 
 ## Checkpoints
 

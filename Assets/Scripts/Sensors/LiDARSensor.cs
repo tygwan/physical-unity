@@ -1,3 +1,6 @@
+// ROS2 기능은 Unity Robotics 패키지가 설치된 경우에만 활성화됩니다.
+
+#if UNITY_ROBOTICS_ROS_TCP_CONNECTOR
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Sensor;
@@ -14,28 +17,17 @@ namespace ADPlatform.Sensors
     public class LiDARSensor : MonoBehaviour
     {
         [Header("LiDAR Settings")]
-        [Tooltip("Number of vertical layers (channels)")]
         public int verticalRays = 16;
-
-        [Tooltip("Number of horizontal rays per layer")]
         public int horizontalRays = 360;
-
-        [Tooltip("Vertical FOV range (degrees)")]
         public float verticalFOVMin = -15f;
         public float verticalFOVMax = 15f;
-
-        [Tooltip("Horizontal FOV (360 for full rotation)")]
         public float horizontalFOV = 360f;
-
-        [Tooltip("Maximum detection range (meters)")]
         public float maxRange = 100f;
-
-        [Tooltip("Minimum detection range (meters)")]
         public float minRange = 0.5f;
 
         [Header("ROS Settings")]
         public string pointCloudTopic = "/vehicle/lidar/points";
-        public float publishRate = 10f;  // Hz
+        public float publishRate = 10f;
         public string frameId = "lidar_link";
 
         [Header("Debug")]
@@ -49,8 +41,7 @@ namespace ADPlatform.Sensors
         private List<Vector3> pointBuffer;
         private List<float> intensityBuffer;
 
-        // PointCloud2 field offsets
-        private const int POINT_STEP = 16;  // x(4) + y(4) + z(4) + intensity(4)
+        private const int POINT_STEP = 16;
 
         void Start()
         {
@@ -83,7 +74,6 @@ namespace ADPlatform.Sensors
             float verticalStep = (verticalFOVMax - verticalFOVMin) / Mathf.Max(1, verticalRays - 1);
             float horizontalStep = horizontalFOV / horizontalRays;
 
-            // Perform raycasting
             for (int v = 0; v < verticalRays; v++)
             {
                 float verticalAngle = verticalFOVMin + v * verticalStep;
@@ -92,7 +82,6 @@ namespace ADPlatform.Sensors
                 {
                     float horizontalAngle = -horizontalFOV / 2 + h * horizontalStep;
 
-                    // Calculate ray direction
                     Quaternion rotation = Quaternion.Euler(verticalAngle, horizontalAngle, 0);
                     Vector3 direction = transform.rotation * rotation * Vector3.forward;
 
@@ -101,11 +90,9 @@ namespace ADPlatform.Sensors
                     {
                         if (hit.distance >= minRange)
                         {
-                            // Convert hit point to local coordinates
                             Vector3 localPoint = transform.InverseTransformPoint(hit.point);
                             pointBuffer.Add(localPoint);
 
-                            // Intensity based on distance and surface angle
                             float intensity = CalculateIntensity(hit);
                             intensityBuffer.Add(intensity);
 
@@ -122,7 +109,6 @@ namespace ADPlatform.Sensors
                 }
             }
 
-            // Publish point cloud
             if (pointBuffer.Count > 0)
             {
                 PublishPointCloud();
@@ -131,7 +117,6 @@ namespace ADPlatform.Sensors
 
         float CalculateIntensity(RaycastHit hit)
         {
-            // Simple intensity model based on distance and angle
             float distanceFactor = 1f - (hit.distance / maxRange);
             float angleFactor = Mathf.Abs(Vector3.Dot(hit.normal, -transform.forward));
             return Mathf.Clamp01(distanceFactor * angleFactor) * 255f;
@@ -149,20 +134,16 @@ namespace ADPlatform.Sensors
 
                 int offset = i * POINT_STEP;
 
-                // Convert Unity coordinates to ROS (x=forward, y=left, z=up)
-                // Unity: x=right, y=up, z=forward
-                float rosX = point.z;   // Unity z -> ROS x
-                float rosY = -point.x;  // Unity x -> ROS -y
-                float rosZ = point.y;   // Unity y -> ROS z
+                float rosX = point.z;
+                float rosY = -point.x;
+                float rosZ = point.y;
 
-                // Write point data (little-endian float)
                 WriteFloat(data, offset + 0, rosX);
                 WriteFloat(data, offset + 4, rosY);
                 WriteFloat(data, offset + 8, rosZ);
                 WriteFloat(data, offset + 12, intensity);
             }
 
-            // Create PointCloud2 message
             var timestamp = GetROSTimestamp();
 
             PointCloud2Msg msg = new PointCloud2Msg
@@ -176,7 +157,7 @@ namespace ADPlatform.Sensors
                 width = (uint)pointCount,
                 fields = new PointFieldMsg[]
                 {
-                    new PointFieldMsg { name = "x", offset = 0, datatype = 7, count = 1 },      // FLOAT32
+                    new PointFieldMsg { name = "x", offset = 0, datatype = 7, count = 1 },
                     new PointFieldMsg { name = "y", offset = 4, datatype = 7, count = 1 },
                     new PointFieldMsg { name = "z", offset = 8, datatype = 7, count = 1 },
                     new PointFieldMsg { name = "intensity", offset = 12, datatype = 7, count = 1 }
@@ -209,3 +190,22 @@ namespace ADPlatform.Sensors
         }
     }
 }
+#else
+// Stub implementation when ROS TCP Connector is not installed
+namespace ADPlatform.Sensors
+{
+    public class LiDARSensor : UnityEngine.MonoBehaviour
+    {
+        public int verticalRays = 16;
+        public int horizontalRays = 360;
+        public string pointCloudTopic = "/vehicle/lidar/points";
+        public bool showDebugRays = false;
+
+        void Start()
+        {
+            UnityEngine.Debug.LogWarning("[LiDARSensor] ROS TCP Connector not installed. ROS features disabled.");
+            enabled = false;
+        }
+    }
+}
+#endif

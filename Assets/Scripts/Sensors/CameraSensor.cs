@@ -1,3 +1,6 @@
+// ROS2 기능은 Unity Robotics 패키지가 설치된 경우에만 활성화됩니다.
+
+#if UNITY_ROBOTICS_ROS_TCP_CONNECTOR
 using UnityEngine;
 using UnityEngine.Rendering;
 using Unity.Robotics.ROSTCPConnector;
@@ -28,7 +31,7 @@ namespace ADPlatform.Sensors
         public string frameId = "camera_link";
 
         [Header("Debug")]
-        public bool showPreview = false;  // Disabled - use SensorDebugHUD instead
+        public bool showPreview = false;
         public RenderTexture previewTexture;
 
         private Camera sensorCamera;
@@ -53,31 +56,23 @@ namespace ADPlatform.Sensors
 
         void InitializeCamera()
         {
-            // Create or get camera component
             sensorCamera = GetComponent<Camera>();
             if (sensorCamera == null)
             {
                 sensorCamera = gameObject.AddComponent<Camera>();
             }
 
-            // Configure camera
             sensorCamera.fieldOfView = fieldOfView;
             sensorCamera.nearClipPlane = nearClip;
             sensorCamera.farClipPlane = farClip;
-            sensorCamera.enabled = false;  // We render manually
+            sensorCamera.enabled = false;
 
-            // Create render texture
             renderTexture = new RenderTexture(imageWidth, imageHeight, 24, RenderTextureFormat.ARGB32);
             renderTexture.Create();
             sensorCamera.targetTexture = renderTexture;
 
-            // Create texture for reading pixels
             texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
-
-            // Allocate image data buffer
             imageData = new byte[imageWidth * imageHeight * 3];
-
-            // Preview texture (always set for external access like SensorDebugHUD)
             previewTexture = renderTexture;
 
             isInitialized = true;
@@ -103,19 +98,16 @@ namespace ADPlatform.Sensors
 
         void CaptureAndPublish()
         {
-            // Render the camera
             sensorCamera.Render();
 
-            // Read pixels from render texture
             RenderTexture.active = renderTexture;
             texture2D.ReadPixels(new Rect(0, 0, imageWidth, imageHeight), 0, 0);
             texture2D.Apply();
             RenderTexture.active = null;
 
-            // Convert to byte array (RGB format, flip vertically)
             Color32[] pixels = texture2D.GetPixels32();
             int idx = 0;
-            for (int y = imageHeight - 1; y >= 0; y--)  // Flip Y
+            for (int y = imageHeight - 1; y >= 0; y--)
             {
                 for (int x = 0; x < imageWidth; x++)
                 {
@@ -126,7 +118,6 @@ namespace ADPlatform.Sensors
                 }
             }
 
-            // Create and publish Image message
             var timestamp = GetROSTimestamp();
 
             ImageMsg imageMsg = new ImageMsg
@@ -145,14 +136,11 @@ namespace ADPlatform.Sensors
             };
 
             ros.Publish(imageTopic, imageMsg);
-
-            // Publish camera info
             PublishCameraInfo(timestamp);
         }
 
         void PublishCameraInfo(TimeMsg timestamp)
         {
-            // Simple pinhole camera model
             double fx = imageWidth / (2.0 * Math.Tan(fieldOfView * Math.PI / 360.0));
             double fy = fx;
             double cx = imageWidth / 2.0;
@@ -168,7 +156,7 @@ namespace ADPlatform.Sensors
                 height = (uint)imageHeight,
                 width = (uint)imageWidth,
                 distortion_model = "plumb_bob",
-                d = new double[] { 0, 0, 0, 0, 0 },  // No distortion
+                d = new double[] { 0, 0, 0, 0, 0 },
                 k = new double[] { fx, 0, cx, 0, fy, cy, 0, 0, 1 },
                 r = new double[] { 1, 0, 0, 0, 1, 0, 0, 0, 1 },
                 p = new double[] { fx, 0, cx, 0, 0, fy, cy, 0, 0, 0, 1, 0 }
@@ -198,7 +186,6 @@ namespace ADPlatform.Sensors
             }
         }
 
-        // For preview in editor
         void OnGUI()
         {
             if (showPreview && previewTexture != null)
@@ -208,3 +195,23 @@ namespace ADPlatform.Sensors
         }
     }
 }
+#else
+// Stub implementation when ROS TCP Connector is not installed
+namespace ADPlatform.Sensors
+{
+    public class CameraSensor : UnityEngine.MonoBehaviour
+    {
+        public int imageWidth = 640;
+        public int imageHeight = 480;
+        public float publishRate = 10f;
+        public string imageTopic = "/vehicle/camera/image_raw";
+        public UnityEngine.RenderTexture previewTexture;
+
+        void Start()
+        {
+            UnityEngine.Debug.LogWarning("[CameraSensor] ROS TCP Connector not installed. ROS features disabled.");
+            enabled = false;
+        }
+    }
+}
+#endif

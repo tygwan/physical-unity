@@ -1,3 +1,8 @@
+// ROS2 기능은 Unity Robotics 패키지가 설치된 경우에만 활성화됩니다.
+// 패키지 설치: Window > Package Manager > + > Add package from git URL
+// URL: https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector
+
+#if UNITY_ROBOTICS_ROS_TCP_CONNECTOR
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Geometry;
@@ -153,3 +158,22 @@ namespace ADPlatform.ROS2
         }
     }
 }
+#else
+// Stub implementation when ROS TCP Connector is not installed
+namespace ADPlatform.ROS2
+{
+    public class VehicleROSBridge : UnityEngine.MonoBehaviour
+    {
+        void Start()
+        {
+            UnityEngine.Debug.LogWarning("[VehicleROSBridge] ROS TCP Connector not installed. ROS features disabled.");
+            enabled = false;
+        }
+
+        public bool IsConnected()
+        {
+            return false;
+        }
+    }
+}
+#endif

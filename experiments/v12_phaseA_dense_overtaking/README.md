@@ -13,7 +13,16 @@
 
 ## Objective
 
-Train the agent to navigate dense traffic scenarios with multiple NPC vehicles, learning basic overtaking maneuvers.
+Train the agent to navigate dense traffic scenarios with slow NPC vehicles, learning basic overtaking maneuvers.
+
+## Parallel Training Environment
+
+| 항목 | 값 |
+|------|-----|
+| Training Areas | **16개** (일렬 배치) |
+| 각 Area | 독립적 도로 + 1 NPC |
+| Area 간격 | 100m (X축) |
+| 동시 학습 | 16 에이전트 |
 
 ## Config File
 
@@ -22,10 +31,11 @@ Train the agent to navigate dense traffic scenarios with multiple NPC vehicles, 
 ## Key Parameters
 
 - **max_steps**: 2,000,000
-- **batch_size**: 2048
-- **buffer_size**: 20480
+- **batch_size**: 4096
+- **buffer_size**: 40960
 - **learning_rate**: 3e-4
-- **num_envs**: 36 (6x6 training areas)
+- **parallel_envs**: 16 Training Areas
+- **time_scale**: 20x
 
 ## Checkpoints
 

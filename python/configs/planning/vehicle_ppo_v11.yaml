@@ -1,0 +1,205 @@
+# E2EDrivingAgent PPO v11: Sparse Overtaking + TensorBoard Logging Enhancement
+# Initialize from v10g checkpoint
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_v11.yaml --run-id=v11_sparse_overtake --initialize-from=results/v10g_lane_keeping/E2EDrivingAgent
+#
+# v11 Design (from TRAINING-LOG.md):
+# - Builds on v10g lane keeping foundation
+# - Adds sparse overtaking rewards:
+#   * overtakePassBonus = 3.0 (one-time when overtake complete)
+#   * overtakeSpeedBonus = 0.15 (per-step when beside NPC)
+# - SphereCast (radius 3m) for wider lead detection
+# - Lane keeping penalty suspended during overtaking (isOvertaking flag)
+# - Following bonus gated: only when NPC > 70% speedLimit
+#
+# v11 TensorBoard Enhancement:
+# - StatsRecorder integration for detailed metrics
+# - summary_freq: 5000 (was 10000) - more frequent logging
+#
+# New TensorBoard Metrics:
+#   Reward/*: Progress, Speed, LaneKeeping, Overtaking, LaneViolation, Jerk, Time
+#   Stats/*: Speed, SpeedLimit, SpeedRatio, Acceleration, Steering, DistanceTraveled, StuckTimer
+#   Episode/*: Length, TotalReward, OvertakeCount, CollisionCount, EndReason_*
+#
+# Analysis Scenarios:
+#   - Progress up + Collision up -> collision penalty too weak
+#   - Speed ≈ 0 -> progress reward too weak
+#   - Overtaking = 0 -> overtake bonus too weak
+#   - LaneViolation high -> lane penalty working
+#
+# Observation: 242D (Phase A/B/C compatible)
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 3.0e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: linear
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 8000000
+    time_horizon: 256
+    summary_freq: 5000  # v11: More frequent logging (was 10000)
+    threaded: false
+
+# v11 Curriculum: Same as v10g but with slower NPCs for overtaking practice
+environment_parameters:
+  # NPC count curriculum: 0 -> 1 -> 2 -> 4
+  num_active_npcs:
+    curriculum:
+      - name: NoNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 60.0
+          signal_smoothing: true
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 40.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 30.0
+          signal_smoothing: true
+        value: 2.0
+      - name: FourNPCs
+        value: 4.0
+
+  # Goal distance curriculum: 50 -> 100 -> 160 -> 230
+  goal_distance:
+    curriculum:
+      - name: VeryShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 60.0
+          signal_smoothing: true
+        value: 50.0
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 40.0
+          signal_smoothing: true
+        value: 100.0
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 30.0
+          signal_smoothing: true
+        value: 160.0
+      - name: LongGoal
+        value: 230.0
+
+  # Speed zone curriculum: 1 -> 2 -> 3 -> 4
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 60.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoZones
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 40.0
+          signal_smoothing: true
+        value: 2.0
+      - name: ThreeZones
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 30.0
+          signal_smoothing: true
+        value: 3.0
+      - name: FourZones
+        value: 4.0
+
+  # NPC speed: varies for overtaking scenarios
+  # Some NPCs are slow (70% threshold for "slow" detection)
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 50.0
+          signal_smoothing: true
+        value: 0.7
+      - name: MixedNPCs
+        value: 0.85
+
+  # Introduce NPC speed variation (curriculum: 0 -> 0.15)
+  npc_speed_variation:
+    curriculum:
+      - name: Uniform
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 40.0
+          signal_smoothing: true
+        value: 0.0
+      - name: LightVariation
+        value: 0.15
+
+# Environment settings (16 Training Areas)
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+# Checkpoint settings
+checkpoint_settings:
+  run_id: v11_sparse_overtake
+  resume: false
+  force: false
+
+# Engine configuration
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda
