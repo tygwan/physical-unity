@@ -1268,29 +1268,29 @@ artifacts:
 
 **오류 메시지**:
 ```
-UnityTrainerException: Could not initialize from results\results/v12_phaseA_fixed/E2EDrivingAgent.
+UnityTrainerException: Could not initialize from results\results/phase-A_fixed/E2EDrivingAgent.
 Make sure models have already been saved with that run ID.
 ```
 
 **원인 분석**:
 - ML-Agents는 `initialize_from`에 지정된 값 앞에 자동으로 `results/`를 붙임
 - 또한 behavior name (`E2EDrivingAgent`)도 자동으로 경로에 추가함
-- YAML에 `results/v12_phaseA_fixed/E2EDrivingAgent` 처럼 전체 경로를 쓰면 중복 발생
+- YAML에 `results/phase-A_fixed/E2EDrivingAgent` 처럼 전체 경로를 쓰면 중복 발생
 
 **잘못된 설정**:
 ```yaml
 # ❌ WRONG - 경로 중복 발생
 checkpoint_settings:
-  initialize_from: results/v12_phaseA_fixed/E2EDrivingAgent
-  # 결과: results/results/v12_phaseA_fixed/E2EDrivingAgent/E2EDrivingAgent/checkpoint.pt
+  initialize_from: results/phase-A_fixed/E2EDrivingAgent
+  # 결과: results/results/phase-A_fixed/E2EDrivingAgent/E2EDrivingAgent/checkpoint.pt
 ```
 
 **올바른 설정**:
 ```yaml
 # ✅ CORRECT - run_id만 지정
 checkpoint_settings:
-  initialize_from: v12_phaseA_fixed
-  # 결과: results/v12_phaseA_fixed/E2EDrivingAgent/checkpoint.pt
+  initialize_from: phase-A_fixed
+  # 결과: results/phase-A_fixed/E2EDrivingAgent/checkpoint.pt
 ```
 
 **핵심 원칙**:
@@ -1314,7 +1314,7 @@ checkpoint_settings:
 
 **문제가 되는 설정**:
 ```
-Agent 1 (문제): BehaviorType = 2 (InferenceOnly), Model = "E2EDrivingAgent_v12_phaseB.onnx"
+Agent 1 (문제): BehaviorType = 2 (InferenceOnly), Model = "E2EDrivingAgent_phase-B.onnx"
 Agent 2-16 (정상): BehaviorType = 0 (Default), Model = null (트레이너 제어)
 ```
 

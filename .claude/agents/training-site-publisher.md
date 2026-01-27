@@ -333,7 +333,7 @@ Codex Delegation Approach:
 
 # Agent executes (total ~350 tokens):
 codex exec "Task: Publish Phase G complete update
-Input: docs/TRAINING-LOG.md, experiments/v12_phaseG/README.md, LEARNING-ROADMAP.md
+Input: docs/TRAINING-LOG.md, experiments/phase-G/README.md, LEARNING-ROADMAP.md
 Output: Update phases/phase-g.md, phases/index.md, index.md, lessons-learned.md
 Git: Commit and push to gh-pages
 Return: Status + commit" 2>/dev/null

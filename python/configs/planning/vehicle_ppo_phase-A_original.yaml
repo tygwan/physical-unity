@@ -1,0 +1,114 @@
+# E2EDrivingAgent PPO v12 Phase A: Overtaking Skill Acquisition
+# Strategy: Dense reward for overtaking sub-phases + very slow NPC
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-A.yaml --run-id=phase-A --initialize-from=curriculum_v11_overtake
+#
+# v12 Phase A Design:
+# - 1 NPC only, very slow (30% of speed limit)
+# - targetSpeed = speedLimit ALWAYS (never reduced for lead vehicle)
+# - followingBonus REMOVED
+# - Dense overtaking rewards:
+#   * Initiate (lane change): +0.5
+#   * Beside (per-step): +0.2
+#   * Ahead (passed NPC): +1.0
+#   * Lane Return (complete): +2.0
+# - Stuck-behind penalty: -0.1/step after 3 seconds
+# - Goal: Agent MUST learn overtaking as the only way to maintain speed reward
+# - Expected: 1-2M steps to learn basic overtaking maneuver
+#
+# Curriculum: minimal - just goal distance progression
+# NPC: fixed 1, very slow (npc_speed_ratio=0.3)
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 3.0e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: linear
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 2000000
+    time_horizon: 256
+    summary_freq: 5000
+    threaded: false
+
+# Phase A: Fixed simple environment for skill acquisition
+environment_parameters:
+  # Fixed 1 NPC (no curriculum - always 1)
+  num_active_npcs:
+    curriculum:
+      - name: SingleNPC
+        value: 1.0
+
+  # NPC speed ratio: 30% of speed limit (very slow, forces overtaking)
+  npc_speed_ratio:
+    curriculum:
+      - name: VerySlow
+        value: 0.3
+
+  # Short-to-medium goal distance (no curriculum, fixed)
+  goal_distance:
+    curriculum:
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 40.0
+          signal_smoothing: true
+        value: 80.0
+      - name: MediumGoal
+        value: 150.0
+
+  # Fixed 1 speed zone
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        value: 1.0
+
+  # No NPC speed variation (all NPCs uniformly slow)
+  npc_speed_variation:
+    curriculum:
+      - name: Uniform
+        value: 0.0
+
+# Environment settings (single Unity instance with 16 Training Areas)
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+# Checkpoint settings
+checkpoint_settings:
+  run_id: phase-A
+  resume: false
+  force: false
+
+# Engine configuration
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda

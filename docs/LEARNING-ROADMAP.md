@@ -25,7 +25,7 @@ Autonomous Driving ML Learning Comprehensive Roadmap
 
 | Metric | Value |
 |--------|-------|
-| Run ID | v10g_foundation |
+| Run ID | phase-0-foundation |
 | Period | 2026-01-20 ~ 2026-01-27 |
 | Total Steps | 8,000,047 |
 | Final Reward | +1018.43 |
@@ -88,7 +88,7 @@ Limitations:
 
 #### Model Artifacts
 
-Location: experiments/v10g_foundation/
+Location: experiments/phase-0-foundation/
 
 - Final PyTorch Model: results/E2EDrivingAgent/E2EDrivingAgent-8000047.pt
 - ONNX Export: results/E2EDrivingAgent/E2EDrivingAgent-8000047.onnx

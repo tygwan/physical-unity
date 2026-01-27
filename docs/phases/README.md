@@ -157,7 +157,7 @@ PRD.md                    # 전체 제품 요구사항
 cd C:\Users\user\Desktop\dev\physical-unity
 
 # ML-Agents 학습 실행 (Phase F 예정)
-mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseF.yaml --run-id=v12_phaseF
+mlagents-learn python/configs/planning/vehicle_ppo_phase-F.yaml --run-id=phase-F
 
 # Unity Editor에서 Play 버튼 클릭
 ```

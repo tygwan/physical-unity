@@ -7,7 +7,7 @@
 | Version | Focus | Steps | Best Reward | Status |
 |---------|-------|-------|-------------|--------|
 | **v10g** | Lane Keeping + NPC Coexistence | 8M | **1018.43** | **✅ COMPLETED** |
-| v12_phaseA | Dense Overtaking (Single NPC) | 2M | +937 | Completed |
+| phase-A | Dense Overtaking (Single NPC) | 2M | +937 | Completed |
 
 ---
 
@@ -69,7 +69,7 @@ The agent successfully learned robust lane-keeping and NPC coexistence behavior 
 
 ### Model Artifacts
 
-All artifacts available at: `experiments/v10g_foundation/`
+All artifacts available at: `experiments/phase-0-foundation/`
 
 - **Final PyTorch Model**: `results/E2EDrivingAgent/E2EDrivingAgent-8000047.pt`
 - **ONNX Export**: `results/E2EDrivingAgent/E2EDrivingAgent-8000047.onnx`

@@ -13,7 +13,7 @@ NPC 속도에 따른 추월/따라가기 판단 학습
 
 | Item | Value |
 |------|-------|
-| **Run ID** | v12_phaseB |
+| **Run ID** | phase-B |
 | **Status** | ✅ Completed |
 | **Date** | 2026-01-25 |
 | **Total Steps** | 2,000,150 |
@@ -21,7 +21,7 @@ NPC 속도에 따른 추월/따라가기 판단 학습
 | **Final Reward** | **+903.3** |
 | **Peak Reward** | **+994.5** (at 1.64M steps) |
 | **Observation** | 242D |
-| **Initialize From** | Phase A (v12_phaseA_fixed) |
+| **Initialize From** | Phase A (phase-A_fixed) |
 
 ---
 

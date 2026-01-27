@@ -13,7 +13,7 @@ title: Phase C - Multi-NPC Generalization
 
 | Item | Value |
 |------|-------|
-| **Run ID** | v12_phaseC_242D |
+| **Run ID** | phase-C_242D |
 | **Status** | Completed |
 | **Date** | 2026-01-27 |
 | **Total Steps** | 4,000,000 |
@@ -21,7 +21,7 @@ title: Phase C - Multi-NPC Generalization
 | **Final Reward** | **+961.8** |
 | **Peak Reward** | **+1086.0** (at 3.85M steps) |
 | **Observation** | 242D |
-| **Initialize From** | Phase B (v12_phaseB) |
+| **Initialize From** | Phase B (phase-B) |
 
 ---
 

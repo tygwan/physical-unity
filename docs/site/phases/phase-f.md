@@ -13,7 +13,7 @@ title: Phase F - Multi-Lane Roads
 
 | Item | Value |
 |------|-------|
-| **Run ID** | v12_phaseF |
+| **Run ID** | phase-F |
 | **Status** | Completed |
 | **Date** | 2026-01-27 |
 | **Total Steps** | 6,000,000 |
@@ -21,7 +21,7 @@ title: Phase F - Multi-Lane Roads
 | **Final Reward** | **+988** |
 | **Peak Reward** | **+988** (at 6M steps) |
 | **Observation** | 254D |
-| **Initialize From** | Phase E (v12_phaseE) |
+| **Initialize From** | Phase E (phase-E) |
 
 ---
 

@@ -211,9 +211,9 @@ physical-unity/
 │       ├── models/            # PyTorch 모델
 │       └── training/          # 학습 스크립트
 ├── results/                   # 학습 결과 (TensorBoard)
-│   ├── v12_phaseA/
-│   ├── v12_phaseB/
-│   ├── v12_phaseC/
+│   ├── phase-A/
+│   ├── phase-B/
+│   ├── phase-C/
 │   └── v12_phaseD/
 └── models/planning/           # 최종 ONNX 모델
 ```
@@ -229,7 +229,7 @@ physical-unity/
 cd C:\Users\user\Desktop\dev\physical-unity
 
 # Phase E 학습 (현재 진행중)
-mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseE.yaml --run-id=v12_phaseE
+mlagents-learn python/configs/planning/vehicle_ppo_phase-E.yaml --run-id=phase-E
 
 # Unity Editor에서 Play 버튼 클릭
 ```

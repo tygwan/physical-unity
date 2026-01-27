@@ -40,7 +40,7 @@ modular_encoder:
 
   # Checkpoint from Phase B training
   checkpoint:
-    path: "results/v12_phaseB/E2EDrivingAgent-best.pt"
+    path: "results/phase-B/E2EDrivingAgent-best.pt"
     load_encoders: true   # Load encoder weights
     load_fusion: true     # Load fusion layer weights
     load_heads: false     # Don't load heads (will adapt to new fusion output)

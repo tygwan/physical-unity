@@ -112,7 +112,7 @@ Status: Ready to start
 
 All v10g artifacts available at:
 ```
-experiments/v10g_foundation/
+experiments/phase-0-foundation/
 ├── ANALYSIS.md (comprehensive analysis)
 ├── README.md (experiment overview)
 ├── config/vehicle_ppo_v10g.yaml (training config)
@@ -129,10 +129,10 @@ experiments/v10g_foundation/
 | Milestone | Phase | Status |
 |-----------|-------|--------|
 | Foundation Ready | v10g | ✅ Complete |
-| Phase A Dense Overtaking | v12_phaseA | 🔄 Next |
-| Phase B Decision Learning | v12_phaseB | 📋 Planned |
-| Phase C Multi-NPC | v12_phaseC | 📋 Planned |
-| Phase E Curved Roads | v12_phaseE | 📋 Planned |
+| Phase A Dense Overtaking | phase-A | 🔄 Next |
+| Phase B Decision Learning | phase-B | 📋 Planned |
+| Phase C Multi-NPC | phase-C | 📋 Planned |
+| Phase E Curved Roads | phase-E | 📋 Planned |
 
 ---
 
@@ -143,7 +143,7 @@ experiments/v10g_foundation/
 | [TRAINING-LOG.md](./TRAINING-LOG.md) | Detailed training data and metrics |
 | [LEARNING-ROADMAP.md](./LEARNING-ROADMAP.md) | Strategy, analysis, and future plans |
 | [README.md](../README.md) | Project overview |
-| [v10g Analysis](../experiments/v10g_foundation/ANALYSIS.md) | Comprehensive analysis |
+| [v10g Analysis](../experiments/phase-0-foundation/ANALYSIS.md) | Comprehensive analysis |
 
 ---
 
@@ -151,7 +151,7 @@ experiments/v10g_foundation/
 
 - v10g Foundation established perfect baseline for autonomous driving
 - Focus shifts to overtaking and multi-agent decision-making in Phase A
-- All models and configs archived in experiments/v10g_foundation/
+- All models and configs archived in experiments/phase-0-foundation/
 - Ready to initialize Phase A with v10g checkpoint
 
 ---

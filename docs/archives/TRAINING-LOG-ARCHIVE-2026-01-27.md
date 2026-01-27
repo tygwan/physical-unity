@@ -124,7 +124,7 @@ overtakeDetectWidth = 3.0    # SphereCast 반경
    - Ahead -> LaneReturn: 원래 차선 복귀 (+2.0)
 5. **Lane return detection**: 웨이포인트 X좌표 기반 복귀 판정
 
-### Phase A Results (v12_phaseA_fixed) - COMPLETED 2026-01-25
+### Phase A Results (phase-A_fixed) - COMPLETED 2026-01-25
 
 #### Training Summary
 | Metric | Value |
@@ -134,7 +134,7 @@ overtakeDetectWidth = 3.0    # SphereCast 반경
 | Final Mean Reward | **+714** (peak: +935) |
 | Std of Reward | 234 (stabilized) |
 
-### Phase B Training Log (v12_phaseB) - COMPLETED 2026-01-25
+### Phase B Training Log (phase-B) - COMPLETED 2026-01-25
 
 #### Training Summary
 | Metric | Value |
@@ -144,7 +144,7 @@ overtakeDetectWidth = 3.0    # SphereCast 반경
 | Final Mean Reward | **+903.3** |
 | Peak Mean Reward | **+994.5** (at 1.64M steps) |
 
-### Phase C Training Log (v12_phaseC_242D) - COMPLETED 2026-01-27
+### Phase C Training Log (phase-C_242D) - COMPLETED 2026-01-27
 
 #### Training Summary
 | Metric | Value |
@@ -164,7 +164,7 @@ overtakeDetectWidth = 3.0    # SphereCast 반경
 | Final Mean Reward | **+332.4** |
 | Peak Mean Reward | **+402.0** (at 5.86M steps) |
 
-### Phase E Training Log (v12_phaseE_v2) - COMPLETED 2026-01-27
+### Phase E Training Log (phase-E_v2) - COMPLETED 2026-01-27
 
 #### Training Summary
 | Metric | Value |
@@ -174,7 +174,7 @@ overtakeDetectWidth = 3.0    # SphereCast 반경
 | Final Mean Reward | **+931.1** |
 | Peak Mean Reward | **+931.1** (at 6M steps) |
 
-### Phase F Training Log (v12_phaseF) - COMPLETED 2026-01-27
+### Phase F Training Log (phase-F) - COMPLETED 2026-01-27
 
 #### Training Summary
 | Metric | Value |
@@ -184,7 +184,7 @@ overtakeDetectWidth = 3.0    # SphereCast 반경
 | Final Mean Reward | **+988** |
 | Peak Mean Reward | **+988** (at 6M steps) |
 
-### Phase G Training Log (v12_phaseG) - IN PROGRESS
+### Phase G Training Log (phase-G) - IN PROGRESS
 
 #### Training Summary (Current)
 | Metric | Value |

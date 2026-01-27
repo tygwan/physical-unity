@@ -13,7 +13,7 @@ title: Phase A - Dense Overtaking
 
 | Item | Value |
 |------|-------|
-| **Run ID** | v12_phaseA_fixed |
+| **Run ID** | phase-A_fixed |
 | **Status** | ✅ Completed |
 | **Date** | 2026-01-24 ~ 2026-01-25 |
 | **Total Steps** | 2,000,209 |

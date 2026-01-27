@@ -1,0 +1,177 @@
+# E2EDrivingAgent PPO v10g: Lane Keeping + NPC Coexistence
+# Foundation training for overtaking curriculum
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-0.yaml --run-id=v10g_lane_keeping
+#
+# v10g Design (from TRAINING-LOG.md):
+# - Lane keeping with heading alignment reward (0.02)
+# - Lateral deviation penalty (-0.02)
+# - Following bonus (0.3) for safe distance maintenance
+# - 3-strike collision rule (episode ends after 3 collisions)
+# - Curriculum: NPC count 0->1->2->4, goal distance 50->100->160->230
+#
+# Expected Results:
+# - NPC 0: reward ~90-95
+# - NPC 4: reward ~35-40 (plateau)
+# - Agent learns collision avoidance and lane keeping
+# - Problem: Agent follows slow NPCs indefinitely (no overtaking)
+#
+# Observation: 242D (Phase A/B/C compatible)
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 3.0e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: linear
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 8000000
+    time_horizon: 256
+    summary_freq: 10000
+    threaded: false
+
+# v10g Curriculum: Gradually increase NPC count and goal distance
+environment_parameters:
+  # NPC count curriculum: 0 -> 1 -> 2 -> 4
+  num_active_npcs:
+    curriculum:
+      - name: NoNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 50.0
+          signal_smoothing: true
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 30.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 20.0
+          signal_smoothing: true
+        value: 2.0
+      - name: FourNPCs
+        value: 4.0
+
+  # Goal distance curriculum: 50 -> 100 -> 160 -> 230
+  goal_distance:
+    curriculum:
+      - name: VeryShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 50.0
+          signal_smoothing: true
+        value: 50.0
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 30.0
+          signal_smoothing: true
+        value: 100.0
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 20.0
+          signal_smoothing: true
+        value: 160.0
+      - name: LongGoal
+        value: 230.0
+
+  # Speed zone curriculum: 1 -> 2 -> 3 -> 4
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 50.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoZones
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 30.0
+          signal_smoothing: true
+        value: 2.0
+      - name: ThreeZones
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 20.0
+          signal_smoothing: true
+        value: 3.0
+      - name: FourZones
+        value: 4.0
+
+  # NPC speed: normal (100% of speed limit)
+  npc_speed_ratio:
+    curriculum:
+      - name: NormalSpeed
+        value: 1.0
+
+  # No NPC speed variation initially
+  npc_speed_variation:
+    curriculum:
+      - name: Uniform
+        value: 0.0
+
+# Environment settings (16 Training Areas)
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+# Checkpoint settings
+checkpoint_settings:
+  run_id: v10g_lane_keeping
+  resume: false
+  force: false
+
+# Engine configuration
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda

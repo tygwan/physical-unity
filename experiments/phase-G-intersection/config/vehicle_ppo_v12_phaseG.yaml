@@ -1,0 +1,238 @@
+# E2EDrivingAgent PPO v12 Phase G: Intersection Navigation
+# Strategy: Initialize from Phase F, add intersection handling curriculum
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-G.yaml --run-id=phase-G
+#
+# v12 Phase G Design:
+# - 260D observation (254D + 6D intersection info)
+# - Intersection type curriculum: None -> T-junction -> Cross -> Y-junction
+# - Turn direction curriculum: Straight -> Left -> Right -> Random
+# - Maintain all previous capabilities (lanes, curves, NPCs)
+# - Initialize from Phase F checkpoint
+# - Expected: 6-8M steps
+#
+# Unity Environment Requirements:
+# - WaypointManager: Support intersection generation via 'intersection_type' parameter
+# - WaypointManager: Generate turn waypoints based on 'turn_direction' parameter
+# - E2EDrivingAgent: Intersection-aware observations (260D with intersection info)
+# - DrivingSceneManager: Read 'intersection_type', 'turn_direction' from environment_parameters
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # Initialize from Phase F checkpoint
+    init_path: results/phase-F/E2EDrivingAgent/checkpoint.pt
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: linear
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 8000000
+    time_horizon: 256
+    summary_freq: 10000
+    threaded: false
+
+environment_parameters:
+  # Intersection type: 0=None, 1=T-junction, 2=Cross, 3=Y-junction
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 800.0
+          signal_smoothing: true
+        value: 0.0
+      - name: TJunction
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 600.0
+          signal_smoothing: true
+        value: 1.0
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 500.0
+          signal_smoothing: true
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  # Turn direction: 0=Straight, 1=Left, 2=Right
+  turn_direction:
+    curriculum:
+      - name: StraightOnly
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 700.0
+          signal_smoothing: true
+        value: 0.0
+      - name: LeftTurn
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 500.0
+          signal_smoothing: true
+        value: 1.0
+      - name: RightTurn
+        value: 2.0
+
+  # Maintain Phase F capabilities
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 600.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 600.0
+          signal_smoothing: true
+        value: 0.0
+      - name: CenterLineEnforced
+        value: 1.0
+
+  # Disable curvature for intersection training (simplify)
+  road_curvature:
+    curriculum:
+      - name: Straight
+        value: 0.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: SingleDirection
+        value: 0.0
+
+  # NPC count (reduced for intersection complexity)
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 700.0
+          signal_smoothing: true
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 500.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoNPCs
+        value: 2.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 500.0
+          signal_smoothing: true
+        value: 0.5
+      - name: MediumNPCs
+        value: 0.7
+
+  # Shorter goal distance for intersection training
+  goal_distance:
+    curriculum:
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 600.0
+          signal_smoothing: true
+        value: 120.0
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 500.0
+          signal_smoothing: true
+        value: 150.0
+      - name: LongGoal
+        value: 200.0
+
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        value: 1.0
+
+  npc_speed_variation:
+    curriculum:
+      - name: Uniform
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 500.0
+          signal_smoothing: true
+        value: 0.0
+      - name: Varied
+        value: 0.15
+
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+checkpoint_settings:
+  run_id: phase-G
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda
