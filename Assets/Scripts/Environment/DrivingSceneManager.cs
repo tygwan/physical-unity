@@ -181,6 +181,14 @@ namespace ADPlatform.Environment
                 waypointManager.SetCenterLineEnabled(centerLineEnabled);
             }
 
+            // Intersection support (Phase G)
+            int intersectionType = Mathf.RoundToInt(envParams.GetWithDefault("intersection_type", 0f));
+            int turnDirection = Mathf.RoundToInt(envParams.GetWithDefault("turn_direction", 0f));
+            if (waypointManager != null && intersectionType > 0)
+            {
+                waypointManager.SetIntersection(intersectionType, turnDirection);
+            }
+
             // NPC speed variation range (curriculum: 0.0 -> 0.3)
             float speedVariation = envParams.GetWithDefault("npc_speed_variation", 0.0f);
 

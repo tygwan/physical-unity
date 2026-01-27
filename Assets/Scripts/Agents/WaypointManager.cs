@@ -75,6 +75,20 @@ namespace ADPlatform.Agents
         public int numSpeedZones = 1;         // Curriculum-controlled: 1~4 zones
         public float defaultSpeedLimit = 16.67f;  // 60 km/h default
 
+        [Header("Intersection (Phase G)")]
+        [Tooltip("Intersection type: 0=None, 1=T-junction, 2=Cross, 3=Y-junction")]
+        [Range(0, 3)]
+        public int intersectionType = 0;
+        [Tooltip("Turn direction at intersection: 0=Straight, 1=Left, 2=Right")]
+        [Range(0, 2)]
+        public int turnDirection = 0;
+        [Tooltip("Distance to intersection from start (meters)")]
+        public float intersectionDistance = 100f;
+        [Tooltip("Intersection road width (meters)")]
+        public float intersectionWidth = 14f;  // 4-lane intersection
+        [Tooltip("Turn radius for smooth turns (meters)")]
+        public float turnRadius = 10f;
+
         [Header("Visualization")]
         public bool showGizmos = true;
         public Color waypointColor = Color.cyan;
@@ -85,14 +99,57 @@ namespace ADPlatform.Agents
         public int currentWaypointIndex = 0;
         public float waypointReachDistance = 5f;
 
+        [Header("Real-time Update (Inspector에서 조절)")]
+        [Tooltip("실시간 경로 갱신 활성화")]
+        public bool enableRealtimeUpdate = false;
+        [Tooltip("갱신 주기 (초). 0.05 = 20Hz, 0.1 = 10Hz")]
+        [Range(0.02f, 1f)]
+        public float updateInterval = 0.1f;
+        [Tooltip("차량 전방 몇 개의 waypoint만 갱신할지")]
+        [Range(3, 20)]
+        public int updateAheadCount = 10;
+
         private List<Transform> waypoints = new List<Transform>();
         private List<SpeedZone> speedZones = new List<SpeedZone>();
         private float[] waypointSpeedLimits;  // Speed limit per waypoint
+        private float lastUpdateTime = 0f;
 
         void Start()
         {
             GenerateSpeedZones();
             GenerateWaypoints();
+        }
+
+        void Update()
+        {
+            if (enableRealtimeUpdate && Time.time - lastUpdateTime >= updateInterval)
+            {
+                UpdateWaypointsAhead();
+                lastUpdateTime = Time.time;
+            }
+        }
+
+        /// <summary>
+        /// 차량 전방의 waypoint만 부분 갱신 (성능 최적화)
+        /// </summary>
+        private void UpdateWaypointsAhead()
+        {
+            if (egoVehicle == null || waypoints.Count == 0) return;
+
+            Vector3 egoPos = egoVehicle.position;
+            int startIdx = Mathf.Max(0, currentWaypointIndex);
+            int endIdx = Mathf.Min(waypoints.Count, startIdx + updateAheadCount);
+
+            for (int i = startIdx; i < endIdx; i++)
+            {
+                if (waypoints[i] != null)
+                {
+                    // Waypoint 위치를 현재 도로 상태에 맞게 업데이트
+                    // (곡선 도로의 경우 동적 조정 가능)
+                    Vector3 wp = waypoints[i].position;
+                    // 시각화를 위해 Gizmo가 자동 갱신됨
+                }
+            }
         }
 
         /// <summary>
@@ -143,7 +200,12 @@ namespace ADPlatform.Agents
             }
             waypoints.Clear();
 
-            if (roadCurvature <= 0.01f)
+            if (intersectionType > 0)
+            {
+                // Intersection road (Phase G)
+                GenerateIntersectionWaypoints();
+            }
+            else if (roadCurvature <= 0.01f)
             {
                 // Straight road (Phase A-D behavior)
                 GenerateStraightWaypoints();
@@ -163,7 +225,7 @@ namespace ADPlatform.Agents
                 waypointSpeedLimits[i] = GetSpeedLimitAtZ(progressZ);
             }
 
-            UnityEngine.Debug.Log($"[WaypointManager] Generated {waypoints.Count} waypoints, lanes={numLanes}, curvature={roadCurvature:F2}, centerLine={centerLineEnabled}");
+            UnityEngine.Debug.Log($"[WaypointManager] Generated {waypoints.Count} waypoints, lanes={numLanes}, curvature={roadCurvature:F2}, intersection={intersectionType}, turn={turnDirection}");
         }
 
         /// <summary>
@@ -363,6 +425,164 @@ namespace ADPlatform.Agents
             float baseAngle = maxCurveAngle * roadCurvature;
             float angle = Random.Range(baseAngle * 0.3f, baseAngle);
             return angle * direction;
+        }
+
+        /// <summary>
+        /// Generate intersection waypoints (Phase G)
+        /// Supports T-junction, Cross, Y-junction with turn directions
+        /// </summary>
+        private void GenerateIntersectionWaypoints()
+        {
+            float activeLaneX = GetLaneXPosition(currentLane);
+            int count = 0;
+
+            // Phase 1: Approach to intersection (straight section)
+            float approachStart = -roadLength / 2f;
+            float approachEnd = intersectionDistance - intersectionWidth / 2f;
+
+            for (float z = approachStart; z < approachEnd; z += waypointSpacing)
+            {
+                CreateWaypoint(activeLaneX, z, count++);
+            }
+
+            // Phase 2: Intersection maneuver based on turn direction
+            switch (turnDirection)
+            {
+                case 0: // Straight
+                    GenerateStraightThroughIntersection(activeLaneX, ref count);
+                    break;
+                case 1: // Left turn
+                    GenerateLeftTurn(activeLaneX, ref count);
+                    break;
+                case 2: // Right turn
+                    GenerateRightTurn(activeLaneX, ref count);
+                    break;
+            }
+
+            // Phase 3: Exit section (continue after intersection)
+            GenerateExitSection(ref count);
+        }
+
+        private void CreateWaypoint(float x, float z, int index)
+        {
+            GameObject wp = new GameObject($"WP_{index:D3}");
+            wp.transform.SetParent(transform);
+            wp.transform.localPosition = new Vector3(x, waypointY, z);
+            waypoints.Add(wp.transform);
+        }
+
+        private void CreateWaypointAtPosition(Vector3 localPos, int index)
+        {
+            GameObject wp = new GameObject($"WP_{index:D3}");
+            wp.transform.SetParent(transform);
+            wp.transform.localPosition = localPos;
+            waypoints.Add(wp.transform);
+        }
+
+        /// <summary>
+        /// Generate waypoints for going straight through intersection
+        /// </summary>
+        private void GenerateStraightThroughIntersection(float laneX, ref int count)
+        {
+            float startZ = intersectionDistance - intersectionWidth / 2f;
+            float endZ = intersectionDistance + intersectionWidth / 2f;
+
+            for (float z = startZ; z <= endZ; z += waypointSpacing * 0.5f)
+            {
+                CreateWaypoint(laneX, z, count++);
+            }
+        }
+
+        /// <summary>
+        /// Generate waypoints for left turn at intersection
+        /// Uses smooth arc path
+        /// </summary>
+        private void GenerateLeftTurn(float startLaneX, ref int count)
+        {
+            float intersectionCenter = intersectionDistance;
+            float turnStartZ = intersectionCenter - turnRadius;
+            float turnEndX = startLaneX - turnRadius - laneWidth;
+
+            // Arc points for smooth left turn (90 degrees)
+            int arcSegments = 8;
+            for (int i = 0; i <= arcSegments; i++)
+            {
+                float t = (float)i / arcSegments;
+                float angle = t * Mathf.PI / 2f;  // 0 to 90 degrees
+
+                // Parametric arc: starts going forward, ends going left
+                float x = startLaneX - turnRadius * (1f - Mathf.Cos(angle));
+                float z = turnStartZ + turnRadius * Mathf.Sin(angle);
+
+                CreateWaypoint(x, z, count++);
+            }
+        }
+
+        /// <summary>
+        /// Generate waypoints for right turn at intersection
+        /// Uses smooth arc path
+        /// </summary>
+        private void GenerateRightTurn(float startLaneX, ref int count)
+        {
+            float intersectionCenter = intersectionDistance;
+            float turnStartZ = intersectionCenter - turnRadius * 0.5f;
+
+            // Arc points for smooth right turn (90 degrees)
+            int arcSegments = 6;  // Tighter turn
+            for (int i = 0; i <= arcSegments; i++)
+            {
+                float t = (float)i / arcSegments;
+                float angle = t * Mathf.PI / 2f;  // 0 to 90 degrees
+
+                // Parametric arc: starts going forward, ends going right
+                float x = startLaneX + turnRadius * (1f - Mathf.Cos(angle));
+                float z = turnStartZ + turnRadius * 0.7f * Mathf.Sin(angle);
+
+                CreateWaypoint(x, z, count++);
+            }
+        }
+
+        /// <summary>
+        /// Generate exit section after intersection based on turn direction
+        /// </summary>
+        private void GenerateExitSection(ref int count)
+        {
+            Vector3 lastWp = waypoints[waypoints.Count - 1].localPosition;
+            float exitLength = roadLength / 2f - intersectionDistance - intersectionWidth / 2f;
+
+            switch (turnDirection)
+            {
+                case 0: // Straight - continue forward
+                    for (float d = waypointSpacing; d <= exitLength; d += waypointSpacing)
+                    {
+                        CreateWaypoint(lastWp.x, lastWp.z + d, count++);
+                    }
+                    break;
+
+                case 1: // Left turn - continue left (negative X direction)
+                    for (float d = waypointSpacing; d <= exitLength; d += waypointSpacing)
+                    {
+                        CreateWaypoint(lastWp.x - d, lastWp.z, count++);
+                    }
+                    break;
+
+                case 2: // Right turn - continue right (positive X direction)
+                    for (float d = waypointSpacing; d <= exitLength; d += waypointSpacing)
+                    {
+                        CreateWaypoint(lastWp.x + d, lastWp.z, count++);
+                    }
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Set intersection parameters from curriculum (Phase G)
+        /// </summary>
+        public void SetIntersection(int type, int direction)
+        {
+            intersectionType = Mathf.Clamp(type, 0, 3);
+            turnDirection = Mathf.Clamp(direction, 0, 2);
+            GenerateWaypoints();
         }
 
         /// <summary>

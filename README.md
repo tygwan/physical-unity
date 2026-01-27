@@ -11,7 +11,7 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 | **Phase 5** | 🔄 **In Progress** | Planning Models (RL/IL) - PRIMARY FOCUS |
 | Phase 6-7 | 📋 Planned | Integration & Advanced Topics |
 
-**Current Training**: Phase E Completed (+931), Phase F Next (N차선)
+**Current Training**: Phase G (Intersection) 학습 중 - 340K steps, +461 reward
 
 ---
 
@@ -65,8 +65,10 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 | **v12 Phase A** | 2M | **+937** | +714 | ✅ | Learned overtaking maneuver |
 | **v12 Phase B** | 2M | **+994** | +903 | ✅ | Overtake/follow decision |
 | **v12 Phase C** | 4M | **+1086** | +961 | ✅ | 4-NPC generalization |
-| **v12 Phase D** | 6M | **+402** | +332 | ✅ | Lane observation (254D) |
+| **v12 Phase D** | 6M | **+402** | +332 | ⏭️ | (Phase E로 대체) |
 | **v12 Phase E** | 6M | **+931** | +931 | ✅ | Curved roads, 2 NPCs |
+| **v12 Phase F** | 6M | **+988** | +988 | ✅ | Multi-lane roads |
+| **v12 Phase G** | 8M | +461 | 🔄 | 🔄 | Intersection navigation |
 | v12_HybridPolicy | 3M | -82 | -2172 | ❌ | Catastrophic forgetting |
 
 ### Phase Details
@@ -114,6 +116,23 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
   - 2 NPCs on curved roads
   - 200m goal distance on curves
 - **Curriculum Completed**: Straight → Gentle → Moderate → Sharp curves ✅
+
+#### v12 Phase F: Multi-Lane Roads (Completed ✅)
+- **Goal**: 다중 차선 도로에서 주행 학습
+- **Results**: 6M steps, **+988 reward** (all curriculum passed)
+- **Achievements**:
+  - 1→2 차선 도로 마스터
+  - 중앙선 규칙 학습
+  - 곡선 + 다차선 복합 환경
+  - 3 NPCs on multi-lane roads
+- **Curriculum Completed**: SingleLane → TwoLanes → CenterLine ✅
+
+#### v12 Phase G: Intersection Navigation (In Progress 🔄)
+- **Goal**: 교차로 (T자/십자/Y자) 주행 학습
+- **Current**: 340K steps, **+461 reward**
+- **Target**: 8M steps
+- **Curriculum**: NoIntersection → T-Junction → Cross → Y-Junction
+- **Turn Direction**: Straight → Left → Right
 
 #### v12_HybridPolicy: Incremental Learning Attempt (FAILED)
 - **Goal**: Preserve Phase B knowledge while adding lane encoder
@@ -286,14 +305,14 @@ off_road:             -5.0   # Episode end
 
 ---
 
-## Next Steps (Phase F+)
+## Next Steps (Phase H+)
 
 | Phase | Focus | Status |
 |-------|-------|--------|
 | **E** | 곡선 도로 + 비정형 각도 | ✅ **Completed (+931)** |
-| **F** | N차선 + 중앙선 규칙 | 🔄 **Next** |
-| **G** | 교차로 (T자/십자/Y자) | 📋 Planned |
-| **H** | 신호등 + 정지선 | 📋 Planned |
+| **F** | N차선 + 중앙선 규칙 | ✅ **Completed (+988)** |
+| **G** | 교차로 (T자/십자/Y자) | 🔄 **In Progress (340K, +461)** |
+| **H** | 신호등 + 정지선 | 📋 Next |
 | **I** | U턴 + 특수 기동 | 📋 Planned |
 | **J** | 횡단보도 + 보행자 | 📋 Planned |
 | **K** | 장애물 + 긴급 상황 | 📋 Planned |
@@ -319,4 +338,4 @@ off_road:             -5.0   # Episode end
 
 ---
 
-**Last Updated**: 2026-01-27 | **Phase E Completed** | Phase E Reward: +931
+**Last Updated**: 2026-01-27 | **Phase G In Progress** | Phase F: +988, Phase G: +461 (340K)

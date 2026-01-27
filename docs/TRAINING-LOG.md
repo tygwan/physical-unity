@@ -9,9 +9,10 @@
 | v12 Phase A | Dense Overtaking (Slow NPC) | 2M | **+937** | **COMPLETED** |
 | v12 Phase B | Overtake vs Follow Decision | 2M | **+903** | **COMPLETED** |
 | **v12 Phase C** | **Multi-NPC Generalization** | **4M** | **+961 (peak +1086)** | **COMPLETED** ✅ |
-| **v12 Phase D** | **Lane Observation (254D)** | **6M** | **+332 (peak +402)** | **COMPLETED** ✅ |
+| **v12 Phase D** | **Lane Observation (254D)** | **6M** | **+332 (peak +402)** | ⏭️ (Phase E로 대체) |
 | **v12 Phase E** | **Curved Roads** | **6M** | **+931 (peak +931)** | **COMPLETED** ✅ |
-| **v12 Phase F** | **N차선 + 중앙선 규칙** | **4-6M** | - | **NEXT** 🔄 |
+| **v12 Phase F** | **Multi-Lane Roads** | **6M** | **+988 (peak +988)** | **COMPLETED** ✅ |
+| **v12 Phase G** | **Intersection Navigation** | **8M** | **+461 (340K)** | **IN PROGRESS** 🔄 |
 | v12_ModularEncoder | Modular Architecture for Incremental Learning | - | - | Superseded |
 | v12_HybridPolicy | Phase C-1 Hybrid Training | 3M | -82.7 best | **FAILED** (Catastrophic Forgetting) |
 
@@ -515,34 +516,151 @@ Off-road: -5.0 (immediate episode end)
 
 ---
 
-### Phase F Plan (v12_phaseF) - NEXT
+### Phase F Training Log (v12_phaseF) - COMPLETED 2026-01-27
 
 #### Training Information
 | Field | Value |
 |-------|-------|
 | Version | v12_phaseF |
-| Date | TBD |
-| Status | **NEXT** 🔄 |
-| Config | `python/configs/planning/vehicle_ppo_v12_phaseF.yaml` (to create) |
-| Initialize From | `v12_phaseE_v2/E2EDrivingAgent/checkpoint.pt` |
+| Date | 2026-01-27 |
+| Status | **COMPLETED** ✅ |
+| Config | `python/configs/planning/vehicle_ppo_v12_phaseF.yaml` |
+| Initialize From | `v12_phaseE/E2EDrivingAgent/checkpoint.pt` |
 | Observation | 254D (same as Phase E) |
 
+#### Training Summary
+| Metric | Value |
+|--------|-------|
+| Total Steps | 6,000,000 |
+| Training Time | ~70 minutes |
+| Final Mean Reward | **+988** |
+| Peak Mean Reward | **+988** (at 6M steps) |
+| Std of Reward | ~100 (stabilized) |
+
 #### Intent
-- N차선 도로 학습 (1→2→3→4 차선)
-- 중앙선 규칙 준수 (역주행 금지)
-- 차선 변경 전략 (안전한 차선 선택)
+- N차선 도로 학습 (1→2 차선)
+- 중앙선 규칙 준수
+- 곡선 도로 + 다차선 복합 환경
 
-#### Expected Curriculum
-| Lesson | Lanes | Central Line | Goal |
-|--------|-------|--------------|------|
-| SingleLane | 1 | N/A | Baseline |
-| TwoLanes | 2 | Enabled | Left/Right choice |
-| ThreeLanes | 3 | Enabled | Lane selection |
-| FourLanes | 4 | Enabled | Complex traffic |
+#### Key Changes from Phase E
+| Aspect | Phase E | Phase F |
+|--------|---------|---------|
+| Lanes | 1 | 1 → 2 |
+| Center Line | No | Yes (enforced) |
+| Curvature | 0 → 1.0 | 0 → 0.6 |
+| NPC Count | 0-2 | 0-3 |
 
-#### Estimated Duration
-- **Steps**: 4-6M
-- **Time**: ~1-1.5 hours (at 20x time scale)
+#### Curriculum Progression (All Completed ✅)
+| Parameter | Final Lesson | Value |
+|-----------|--------------|-------|
+| num_lanes | TwoLanes | **2** ✅ |
+| center_line_enabled | CenterLineEnforced | **1** ✅ |
+| road_curvature | ModerateCurve | **0.6** ✅ |
+| curve_direction_variation | MixedDirections | **1.0** ✅ |
+| num_active_npcs | ThreeNPCs | **3** ✅ |
+| npc_speed_ratio | MediumNPCs | **0.7** ✅ |
+| goal_distance | LongGoal | **200m** ✅ |
+
+#### Key Achievements
+1. **All curriculum lessons passed**: Agent mastered 2-lane roads
+2. **Center line compliance**: Successfully respects center line rules
+3. **Curved + Multi-lane**: Handles complex curved multi-lane roads
+4. **3 NPCs**: Improved from 2 to 3 NPC handling
+5. **Reward improvement**: +988 vs Phase E's +931 (+6%)
+
+#### Checkpoints Saved
+- `E2EDrivingAgent-5999xxx.onnx` (6M)
+- `E2EDrivingAgent.onnx` (latest copy)
+- `results/v12_phaseF/E2EDrivingAgent.onnx` (production)
+
+#### Lessons Learned
+1. **Multi-lane curriculum works**: Progressive lane count increase successful
+2. **Center line integration smooth**: No major curriculum shock from center line rules
+3. **Phase E init crucial**: Starting from Phase E checkpoint enabled rapid learning
+4. **Complexity stacking**: Curves + lanes + NPCs handled well
+
+---
+
+### Phase G Training Log (v12_phaseG) - IN PROGRESS 🔄
+
+#### Training Information
+| Field | Value |
+|-------|-------|
+| Version | v12_phaseG |
+| Date | 2026-01-27 (started) |
+| Status | **IN PROGRESS** 🔄 |
+| Config | `python/configs/planning/vehicle_ppo_v12_phaseG.yaml` |
+| Initialize From | `v12_phaseF/E2EDrivingAgent/checkpoint.pt` |
+| Observation | 260D (+6D intersection info) |
+
+#### Training Summary (Current)
+| Metric | Value |
+|--------|-------|
+| Current Steps | ~340,000 / 8,000,000 (4.3%) |
+| Current Reward | **+461** |
+| Target Steps | 8,000,000 |
+
+#### Intent
+- 교차로 (T자/십자/Y자) 내비게이션 학습
+- 회전 방향 (직진/좌회전/우회전) 학습
+- 교차로 진입/통과 기동
+
+#### Key Changes from Phase F
+| Aspect | Phase F | Phase G |
+|--------|---------|---------|
+| Observation | 254D | **260D (+6D intersection)** |
+| Intersection Type | None | None → T → Cross → Y |
+| Turn Direction | N/A | Straight → Left → Right |
+| Goal Distance | 200m | 120-200m |
+| Road Curvature | 0-0.6 | **0** (simplified) |
+| NPC Count | 0-3 | 0-2 (reduced for complexity) |
+
+#### New Observation (6D Intersection Info)
+```yaml
+intersection_info: 6D
+  - intersection_type_none: 1D    # one-hot (0 or 1)
+  - intersection_type_t: 1D       # one-hot
+  - intersection_type_cross: 1D   # one-hot
+  - intersection_type_y: 1D       # one-hot
+  - distance_to_intersection: 1D  # normalized [0,1]
+  - turn_direction: 1D            # 0=straight, 0.5=left, 1=right
+```
+
+#### Curriculum Design
+| Parameter | Lessons | Values |
+|-----------|---------|--------|
+| intersection_type | NoIntersection → T-Junction → Cross → Y-Junction | 0 → 1 → 2 → 3 |
+| turn_direction | Straight → Left → Right | 0 → 1 → 2 |
+| num_active_npcs | NoNPCs → OneNPC → TwoNPCs | 0 → 1 → 2 |
+| goal_distance | Short → Medium → Long | 120 → 150 → 200m |
+
+#### Current Curriculum State (340K Steps)
+| Parameter | Current Lesson | Value |
+|-----------|----------------|-------|
+| intersection_type | NoIntersection | 0 (교차로 없음) |
+| turn_direction | StraightOnly | 0 (직진만) |
+| num_active_npcs | NoNPCs | 0 |
+| goal_distance | ShortGoal | 120m |
+
+#### Training Progress (Live)
+| Step | Mean Reward | Curriculum | Notes |
+|------|-------------|------------|-------|
+| 10K | +423 | NoIntersection | Started from Phase F checkpoint |
+| 100K | +439 | NoIntersection | Stable |
+| 200K | +442 | NoIntersection | Learning |
+| 300K | +456 | NoIntersection | Improving |
+| 340K | **+461** | NoIntersection | Current (waiting for threshold 800) |
+
+#### Expected Milestones
+- **~500K-800K**: NoIntersection → T-Junction transition (threshold: 800)
+- **~1-2M**: T-Junction mastery → Cross transition
+- **~3-4M**: Cross mastery → Y-Junction transition
+- **~6-8M**: All intersection types + turn directions complete
+
+#### Notes
+- Simplified environment: road_curvature=0 to focus on intersection learning
+- Reduced NPCs (0→1→2) to manage complexity
+- Initialized from Phase F (+988 reward) checkpoint
 
 ---
 

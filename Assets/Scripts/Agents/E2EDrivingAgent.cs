@@ -417,6 +417,39 @@ namespace ADPlatform.Agents
             // Crossing flags (1D each)
             sensor.AddObservation(leftLaneCrossing ? 1f : 0f);
             sensor.AddObservation(rightLaneCrossing ? 1f : 0f);
+
+            // Intersection observations (Phase G) - 6D
+            AddIntersectionObservations(sensor);
+        }
+
+        /// <summary>
+        /// Add intersection-related observations (Phase G)
+        /// Total: 6D (type one-hot 4D + turn direction one-hot 3D - shared = 6D)
+        /// </summary>
+        private void AddIntersectionObservations(VectorSensor sensor)
+        {
+            if (waypointManager == null)
+            {
+                // No intersection info - add zeros
+                for (int i = 0; i < 6; i++)
+                    sensor.AddObservation(0f);
+                return;
+            }
+
+            // Intersection type one-hot: [None, T-junction, Cross, Y-junction] (4D)
+            int intersectionType = waypointManager.intersectionType;
+            sensor.AddObservation(intersectionType == 0 ? 1f : 0f);  // None
+            sensor.AddObservation(intersectionType == 1 ? 1f : 0f);  // T-junction
+            sensor.AddObservation(intersectionType == 2 ? 1f : 0f);  // Cross
+            sensor.AddObservation(intersectionType == 3 ? 1f : 0f);  // Y-junction
+
+            // Distance to intersection (normalized)
+            float distToIntersection = waypointManager.intersectionDistance -
+                transform.InverseTransformPoint(waypointManager.transform.position).z;
+            sensor.AddObservation(Mathf.Clamp01(distToIntersection / 200f));
+
+            // Turn direction: 0=straight, 1=left, 2=right (encoded as normalized value)
+            sensor.AddObservation(waypointManager.turnDirection / 2f);
         }
 
         /// <summary>
