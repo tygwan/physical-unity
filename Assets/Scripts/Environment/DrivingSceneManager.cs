@@ -172,6 +172,15 @@ namespace ADPlatform.Environment
                 waypointManager.SetRoadCurvature(roadCurvature, curveDirectionVariation);
             }
 
+            // Multi-lane support (Phase F)
+            int numLanes = Mathf.RoundToInt(envParams.GetWithDefault("num_lanes", 1f));
+            bool centerLineEnabled = envParams.GetWithDefault("center_line_enabled", 0f) > 0.5f;
+            if (waypointManager != null)
+            {
+                waypointManager.SetLaneCount(numLanes);
+                waypointManager.SetCenterLineEnabled(centerLineEnabled);
+            }
+
             // NPC speed variation range (curriculum: 0.0 -> 0.3)
             float speedVariation = envParams.GetWithDefault("npc_speed_variation", 0.0f);
 
@@ -284,10 +293,21 @@ namespace ADPlatform.Environment
 
                 usedPositions.Add(chosenPos);
 
-                // Apply lateral offset so ego can overtake
-                // Random side: +X (right) or -X (left)
-                float lateralOffset = Random.Range(npcLateralOffsetMin, npcLateralOffsetMax);
-                if (Random.value > 0.5f) lateralOffset = -lateralOffset;
+                // Apply lateral offset for overtaking
+                // Phase F: Use lane positions if multi-lane, otherwise use random offset
+                float lateralOffset;
+                if (waypointManager != null && waypointManager.numLanes > 1)
+                {
+                    // Multi-lane: spawn NPC in a random lane (different from ego's lane 0)
+                    int npcLane = Random.Range(0, waypointManager.numLanes);
+                    lateralOffset = waypointManager.GetLaneXPosition(npcLane) - chosenPos.x;
+                }
+                else
+                {
+                    // Single lane: random side offset
+                    lateralOffset = Random.Range(npcLateralOffsetMin, npcLateralOffsetMax);
+                    if (Random.value > 0.5f) lateralOffset = -lateralOffset;
+                }
                 Vector3 spawnPos = chosenPos + Vector3.right * lateralOffset;
 
                 // NPC speed = speedLimit * baseRatio * (1.0 +/- variation)

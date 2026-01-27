@@ -70,6 +70,10 @@ namespace ADPlatform.Agents
         public float lateralDeviationPenalty = -0.02f;  // Penalty for off-center driving
         public float maxLateralDeviation = 2.5f;        // meters from center before penalty
 
+        [Header("Center Line Rules (Phase F)")]
+        public float wrongWayPenalty = -5f;             // Penalty for crossing center line (same as off-road)
+        public float centerLineCrossingPenalty = -0.5f; // Per-step penalty when on wrong side
+
         [Header("Following Behavior")]
         public float leadVehicleDetectRange = 40f;    // meters ahead to check
         public float safeFollowingDistance = 15f;      // meters (safe gap)
@@ -766,6 +770,16 @@ namespace ADPlatform.Agents
                 return;
             }
 
+            // 5.5. Wrong-way driving check (Phase F: Center Line Rules)
+            if (IsWrongWayDriving())
+            {
+                dbgEpisodeEndReason = "WRONG_WAY";
+                LogEpisodeSummary();
+                AddReward(wrongWayPenalty);
+                EndEpisode();
+                return;
+            }
+
             // 6. Near-collision penalty (TTC < 2s)
             if (IsNearCollision())
             {
@@ -813,6 +827,22 @@ namespace ADPlatform.Agents
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Check if vehicle is driving on wrong side of road (Phase F)
+        /// Uses WaypointManager to check center line rules
+        /// </summary>
+        private bool IsWrongWayDriving()
+        {
+            if (waypointManager == null)
+                return false;
+
+            // Get vehicle's local X position relative to road
+            Vector3 localPos = waypointManager.transform.InverseTransformPoint(transform.position);
+
+            // Check with WaypointManager if this violates center line
+            return waypointManager.IsWrongWayDriving(localPos.x);
         }
 
         private bool IsNearCollision()

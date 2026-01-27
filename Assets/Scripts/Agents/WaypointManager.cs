@@ -42,8 +42,19 @@ namespace ADPlatform.Agents
         [Header("Waypoint Generation")]
         public float roadLength = 500f;
         public float waypointSpacing = 20f;
-        public float laneX = 1.75f;          // X position of the lane
+        public float laneX = 1.75f;          // X position of the lane (single lane mode)
         public float waypointY = 0.5f;
+
+        [Header("Multi-Lane Support (Phase F)")]
+        [Tooltip("Number of lanes: 1-4 (curriculum-controlled)")]
+        [Range(1, 4)]
+        public int numLanes = 1;
+        [Tooltip("Lane width in meters (Korean standard: 3.5m)")]
+        public float laneWidth = 3.5f;
+        [Tooltip("Enable center line rule enforcement (no wrong-way driving)")]
+        public bool centerLineEnabled = false;
+        [Tooltip("Current lane index (0 = rightmost lane in direction of travel)")]
+        public int currentLane = 0;
 
         [Header("Road Curvature (Phase E)")]
         [Tooltip("Road curvature intensity: 0 = straight, 1.0 = max curves")]
@@ -152,11 +163,12 @@ namespace ADPlatform.Agents
                 waypointSpeedLimits[i] = GetSpeedLimitAtZ(progressZ);
             }
 
-            UnityEngine.Debug.Log($"[WaypointManager] Generated {waypoints.Count} waypoints, curvature={roadCurvature:F2}");
+            UnityEngine.Debug.Log($"[WaypointManager] Generated {waypoints.Count} waypoints, lanes={numLanes}, curvature={roadCurvature:F2}, centerLine={centerLineEnabled}");
         }
 
         /// <summary>
         /// Generate straight waypoints (Phase A-D original behavior)
+        /// Updated in Phase F to support multi-lane
         /// </summary>
         private void GenerateStraightWaypoints()
         {
@@ -164,24 +176,131 @@ namespace ADPlatform.Agents
             float endZ = roadLength / 2f;
             int count = 0;
 
+            // Calculate lane X position based on numLanes and currentLane
+            float activeLaneX = GetLaneXPosition(currentLane);
+
             for (float z = startZ; z <= endZ; z += waypointSpacing)
             {
                 GameObject wp = new GameObject($"WP_{count:D3}");
                 wp.transform.SetParent(transform);
-                wp.transform.localPosition = new Vector3(laneX, waypointY, z);
+                wp.transform.localPosition = new Vector3(activeLaneX, waypointY, z);
                 waypoints.Add(wp.transform);
                 count++;
             }
         }
 
         /// <summary>
+        /// Get X position for a specific lane index (Phase F)
+        /// Lane 0 = rightmost lane (Korean traffic: drive on right side)
+        /// </summary>
+        public float GetLaneXPosition(int laneIndex)
+        {
+            if (numLanes <= 1)
+            {
+                return laneX;  // Single lane mode (Phase A-E behavior)
+            }
+
+            // Multi-lane: lanes are numbered 0 (rightmost) to numLanes-1 (leftmost)
+            // Road center is at X = 0, lanes spread symmetrically
+            // Korean traffic: drive on right side, so lane 0 is right of center
+            float totalWidth = numLanes * laneWidth;
+            float rightEdge = totalWidth / 2f;
+            float laneCenterOffset = laneWidth / 2f;
+
+            // Lane 0 = rightmost = rightEdge - laneCenterOffset
+            // Lane 1 = next to right = rightEdge - laneWidth - laneCenterOffset
+            return rightEdge - (laneIndex * laneWidth) - laneCenterOffset;
+        }
+
+        /// <summary>
+        /// Get lane index from X position (Phase F)
+        /// Returns -1 if off-road, 0-3 for valid lanes
+        /// </summary>
+        public int GetLaneFromXPosition(float xPos)
+        {
+            if (numLanes <= 1)
+            {
+                // Single lane: check if within lane bounds
+                float halfWidth = laneWidth / 2f;
+                if (Mathf.Abs(xPos - laneX) <= halfWidth)
+                    return 0;
+                return -1;  // Off lane
+            }
+
+            // Multi-lane
+            float totalWidth = numLanes * laneWidth;
+            float rightEdge = totalWidth / 2f;
+
+            for (int i = 0; i < numLanes; i++)
+            {
+                float laneCenter = GetLaneXPosition(i);
+                float halfWidth = laneWidth / 2f;
+                if (Mathf.Abs(xPos - laneCenter) <= halfWidth)
+                    return i;
+            }
+            return -1;  // Off-road
+        }
+
+        /// <summary>
+        /// Check if position violates center line rule (Phase F)
+        /// In Korean traffic, driving on left side of center is wrong-way
+        /// </summary>
+        public bool IsWrongWayDriving(float xPos)
+        {
+            if (!centerLineEnabled || numLanes <= 1)
+                return false;
+
+            // Center line is at X = 0
+            // Wrong-way = driving on the opposite side (X < 0 for Korean right-side traffic)
+            // Actually for our lane setup, wrong-way would be negative lanes
+            // Let's define: positive X = right side (correct), negative X = wrong way
+            float tolerance = 0.5f;  // Small tolerance
+            return xPos < -tolerance;
+        }
+
+        /// <summary>
+        /// Get all available lane positions (for NPC spawning, lane change decisions)
+        /// </summary>
+        public float[] GetAllLanePositions()
+        {
+            float[] positions = new float[numLanes];
+            for (int i = 0; i < numLanes; i++)
+            {
+                positions[i] = GetLaneXPosition(i);
+            }
+            return positions;
+        }
+
+        /// <summary>
+        /// Set lane count from curriculum parameter (Phase F)
+        /// </summary>
+        public void SetLaneCount(int count)
+        {
+            numLanes = Mathf.Clamp(count, 1, 4);
+            currentLane = 0;  // Reset to rightmost lane
+            GenerateWaypoints();
+        }
+
+        /// <summary>
+        /// Set center line enforcement (Phase F)
+        /// </summary>
+        public void SetCenterLineEnabled(bool enabled)
+        {
+            centerLineEnabled = enabled;
+        }
+
+        /// <summary>
         /// Generate curved waypoints (Phase E)
         /// Creates smooth curves with varying directions based on curriculum parameters
+        /// Updated in Phase F to support multi-lane
         /// </summary>
         private void GenerateCurvedWaypoints()
         {
+            // Calculate lane X position based on numLanes and currentLane
+            float activeLaneX = GetLaneXPosition(currentLane);
+
             // Current position and heading
-            Vector3 currentPos = new Vector3(laneX, waypointY, -roadLength / 2f);
+            Vector3 currentPos = new Vector3(activeLaneX, waypointY, -roadLength / 2f);
             float currentHeading = 0f;  // 0 = forward (Z+), in degrees
             float totalDistance = 0f;
             int count = 0;
@@ -438,6 +557,48 @@ namespace ADPlatform.Agents
                 Vector3 zoneStart = transform.TransformPoint(new Vector3(0, 1f, speedZones[i].startZ));
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawWireCube(zoneStart, new Vector3(10f, 2f, 0.5f));
+            }
+
+            // Draw lane boundaries (Phase F)
+            if (numLanes > 1)
+            {
+                float totalWidth = numLanes * laneWidth;
+                float startZ = -roadLength / 2f;
+                float endZ = roadLength / 2f;
+
+                // Draw lane dividers
+                for (int i = 0; i <= numLanes; i++)
+                {
+                    float x = totalWidth / 2f - (i * laneWidth);
+                    Vector3 start = transform.TransformPoint(new Vector3(x, 0.1f, startZ));
+                    Vector3 end = transform.TransformPoint(new Vector3(x, 0.1f, endZ));
+
+                    if (i == numLanes / 2 && centerLineEnabled)
+                    {
+                        // Center line (yellow)
+                        Gizmos.color = Color.yellow;
+                        Gizmos.DrawLine(start, end);
+                        Gizmos.DrawLine(start + Vector3.up * 0.1f, end + Vector3.up * 0.1f);
+                    }
+                    else
+                    {
+                        // Regular lane divider (white)
+                        Gizmos.color = Color.white;
+                        Gizmos.DrawLine(start, end);
+                    }
+                }
+
+                // Draw lane center markers
+                for (int i = 0; i < numLanes; i++)
+                {
+                    float laneCenter = GetLaneXPosition(i);
+                    Gizmos.color = new Color(0.5f, 0.5f, 1f, 0.5f);  // Light blue
+                    for (float z = startZ; z <= endZ; z += 50f)
+                    {
+                        Vector3 markerPos = transform.TransformPoint(new Vector3(laneCenter, 0.05f, z));
+                        Gizmos.DrawSphere(markerPos, 0.3f);
+                    }
+                }
             }
         }
     }
