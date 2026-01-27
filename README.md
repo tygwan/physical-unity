@@ -11,7 +11,7 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 | **Phase 5** | 🔄 **In Progress** | Planning Models (RL/IL) - PRIMARY FOCUS |
 | Phase 6-7 | 📋 Planned | Integration & Advanced Topics |
 
-**Current Training**: Phase E In Progress (곡선 도로 학습)
+**Current Training**: Phase E Completed (+931), Phase F Next (N차선)
 
 ---
 
@@ -66,7 +66,7 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 | **v12 Phase B** | 2M | **+994** | +903 | ✅ | Overtake/follow decision |
 | **v12 Phase C** | 4M | **+1086** | +961 | ✅ | 4-NPC generalization |
 | **v12 Phase D** | 6M | **+402** | +332 | ✅ | Lane observation (254D) |
-| **v12 Phase E** | 🔄 | - | - | 🔄 In Progress | 곡선 도로 학습 |
+| **v12 Phase E** | 6M | **+931** | +931 | ✅ | Curved roads, 2 NPCs |
 | v12_HybridPolicy | 3M | -82 | -2172 | ❌ | Catastrophic forgetting |
 
 ### Phase Details
@@ -105,14 +105,15 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 - **Training**: 6M steps, +402 peak, +332 final
 - **Result**: Successfully learned with expanded observation space
 
-#### v12 Phase E: Curved Roads (In Progress)
+#### v12 Phase E: Curved Roads (Completed ✅)
 - **Goal**: 곡선 도로에서 안정적 주행 학습
-- **New Features**:
-  - WaypointManager에 곡선 생성 로직 추가
-  - `road_curvature` 파라미터 (0.0 → 1.0)
-  - `curve_direction_variation` 파라미터
-- **Curriculum**: Straight → Gentle → Moderate → Sharp curves
-- **Status**: 🔄 Training started, waiting for Unity Play
+- **Results**: 6M steps, **+931 reward** (all curriculum passed)
+- **Achievements**:
+  - Sharp curves (curvature 1.0) 마스터
+  - Mixed left/right curve directions
+  - 2 NPCs on curved roads
+  - 200m goal distance on curves
+- **Curriculum Completed**: Straight → Gentle → Moderate → Sharp curves ✅
 
 #### v12_HybridPolicy: Incremental Learning Attempt (FAILED)
 - **Goal**: Preserve Phase B knowledge while adding lane encoder
@@ -285,12 +286,12 @@ off_road:             -5.0   # Episode end
 
 ---
 
-## Next Steps (Phase E+)
+## Next Steps (Phase F+)
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| **E** | 곡선 도로 + 비정형 각도 | 🔄 **In Progress** |
-| **F** | N차선 + 중앙선 규칙 | 📋 Planned |
+| **E** | 곡선 도로 + 비정형 각도 | ✅ **Completed (+931)** |
+| **F** | N차선 + 중앙선 규칙 | 🔄 **Next** |
 | **G** | 교차로 (T자/십자/Y자) | 📋 Planned |
 | **H** | 신호등 + 정지선 | 📋 Planned |
 | **I** | U턴 + 특수 기동 | 📋 Planned |
@@ -318,4 +319,4 @@ off_road:             -5.0   # Episode end
 
 ---
 
-**Last Updated**: 2026-01-27 | **Phase E In Progress** | Phase D Reward: +332
+**Last Updated**: 2026-01-27 | **Phase E Completed** | Phase E Reward: +931

@@ -63,7 +63,7 @@ Phase 5는 프로젝트의 **핵심 Phase**로, 별도의 학습 로드맵으로
 | **Phase B** | Overtake vs Follow 판단 | 2M | **+903** | ✅ 완료 |
 | **Phase C** | Multi-NPC 일반화 (4대) | 4M | **+961** | ✅ 완료 |
 | **Phase D** | Lane Observation (254D) | 6M | **+332** | ✅ 완료 |
-| **Phase E** | 곡선 도로 + 비정형 각도 | 4-6M | - | 🔄 **진행중** |
+| **Phase E** | 곡선 도로 + 비정형 각도 | 6M | **+931** | ✅ 완료 |
 | **Phase F** | N차선 + 중앙선 규칙 | 4-6M | - | 📋 계획 |
 | **Phase G** | 교차로 (T자/십자/Y자) | 6-8M | - | 📋 계획 |
 | **Phase H** | 신호등 + 정지선 | 4-6M | - | 📋 계획 |
@@ -156,8 +156,8 @@ PRD.md                    # 전체 제품 요구사항
 # Windows PowerShell
 cd C:\Users\user\Desktop\dev\physical-unity
 
-# ML-Agents 학습 실행 (Phase E 예정)
-mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseE.yaml --run-id=v12_phaseE
+# ML-Agents 학습 실행 (Phase F 예정)
+mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseF.yaml --run-id=v12_phaseF
 
 # Unity Editor에서 Play 버튼 클릭
 ```
