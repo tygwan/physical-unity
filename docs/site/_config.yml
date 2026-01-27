@@ -1,0 +1,37 @@
+# GitHub Pages Configuration
+# Site: https://[username].github.io/physical-unity/
+
+title: "Autonomous Driving ML Platform"
+description: "Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 여정"
+baseurl: "/physical-unity"
+url: ""
+
+# Theme
+remote_theme: pages-themes/minimal@v0.2.0
+plugins:
+  - jekyll-remote-theme
+
+# Navigation
+nav:
+  - title: Home
+    url: /
+  - title: Training Phases
+    url: /phases/
+  - title: Gallery
+    url: /gallery/
+  - title: Lessons Learned
+    url: /lessons-learned/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+
+# Korean language support
+lang: ko
