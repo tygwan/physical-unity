@@ -10,8 +10,8 @@
 
 | Metric | Value |
 |--------|-------|
-| **Latest Completion** | v10g Foundation - 2026-01-27 |
-| **Next Training** | v12 Phase A (Dense Overtaking) |
+| **Latest Completion** | Phase A Dense Overtaking - 2026-01-28 |
+| **Next Training** | Phase B Decision Learning |
 | **Overall Progress** | Foundation complete, ready for Phase A |
 | **Latest Model** | E2EDrivingAgent-8000047.pt (1018.43 reward) |
 | **Last Updated** | 2026-01-27 |
@@ -158,3 +158,22 @@ experiments/phase-0-foundation/
 
 *Document updated: 2026-01-27*
 *v10g Foundation Training Complete - Ready for Phase A*
+
+---
+
+## Version Mapping Reference
+
+| Legacy Name | Current Name | Focus | Status |
+|------------|-------------|-------|--------|
+| v10g | Phase 0 | Foundation: Lane Keeping + NPC Coexistence | ✅ Complete |
+| v11 | (deprecated) | Sparse Overtaking (experimental) | ❌ Removed |
+| v12 Phase A | Phase A | Dense Overtaking (Single NPC) | ✅ Complete |
+| v12 Phase B | Phase B | Overtake vs Follow Decision | 📋 Planned |
+| v12 Phase C | Phase C | Multi-NPC Generalization (4+) | 📋 Planned |
+| v12 Phase D | Phase D | (reserved) | 📋 Reserved |
+| v12 Phase E | Phase E | Curved Roads + Non-standard Angles | 📋 Planned |
+| v12 Phase F | Phase F | Multi-Lane & Lane Switching | 📋 Planned |
+| v12 Phase G | Phase G | Intersection Navigation | 📋 Planned |
+
+**Note**: v10g and Phase 0 refer to the same foundational training. Current documentation uses "Phase 0" for consistency, but "v10g" appears in legacy configs and logs.
+

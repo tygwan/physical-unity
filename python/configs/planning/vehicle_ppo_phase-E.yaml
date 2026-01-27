@@ -18,7 +18,7 @@ behaviors:
     trainer_type: ppo
 
     # Initialize from Phase D best checkpoint
-    init_path: results/v12_phaseD/E2EDrivingAgent.onnx
+    init_path: results/phase-D/E2EDrivingAgent.onnx
 
     hyperparameters:
       batch_size: 4096

@@ -9,7 +9,7 @@ Autonomous Driving ML Learning Comprehensive Roadmap
 | Phase | Topic | Status | Best Result |
 |-------|-------|--------|-------------|
 | **Foundation (v10g)** | Lane Keeping + NPC Coexistence | **COMPLETE** | **+1018.43** |
-| **Phase A** | Dense Overtaking (Single NPC) | Ready | +937 (expected) |
+| **Phase A** | Dense Overtaking (Single NPC) | **COMPLETE** | **+2113.75** |
 | **Phase B** | Overtake vs Follow Decision | Planned | +903 (expected) |
 | **Phase C** | Multi-NPC Generalization (4x) | Planned | +961 (expected) |
 

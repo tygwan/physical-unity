@@ -1,6 +1,6 @@
 # E2EDrivingAgent PPO v12 Phase D: Lane Observation (254D)
 # Strategy: Fresh training with lane info, compressed curriculum
-# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-D.yaml --run-id=v12_phaseD
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-D.yaml --run-id=phase-D
 #
 # v12 Phase D Design:
 # - 254D observation (242D + 12D lane info)
@@ -147,7 +147,7 @@ env_settings:
   timeout_wait: 600
 
 checkpoint_settings:
-  run_id: v12_phaseD
+  run_id: phase-D
   resume: false
   force: false
 

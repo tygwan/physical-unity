@@ -21,7 +21,7 @@ title: Phase E - Curved Roads
 | **Final Reward** | **+931.1** |
 | **Peak Reward** | **+931.1** (at 6M steps) |
 | **Observation** | 254D |
-| **Initialize From** | Phase D (v12_phaseD) |
+| **Initialize From** | Phase D (phase-D) |
 
 ---
 

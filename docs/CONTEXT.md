@@ -72,7 +72,7 @@ Unity (C#)              Python (Windows Native)
 # Windows PowerShell에서 실행
 
 # 학습 시작 (Unity Editor Play 버튼 필요)
-mlagents-learn python/configs/planning/vehicle_ppo_v12_phaseD.yaml --run-id=v12_phaseD
+mlagents-learn python/configs/planning/vehicle_ppo_phase-D.yaml --run-id=phase-D
 
 # 이전 학습에서 이어서
 mlagents-learn python/configs/planning/vehicle_ppo.yaml --run-id=v12 --resume
