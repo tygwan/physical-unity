@@ -42,7 +42,7 @@ behaviors:
         gamma: 0.99
         strength: 1.0
 
-    max_steps: 2500000
+    max_steps: 2000000
     time_horizon: 256
     summary_freq: 5000
     threaded: false
@@ -96,7 +96,7 @@ env_settings:
 
 # Checkpoint settings
 checkpoint_settings:
-  run_id: v12_phaseA_dense_overtaking
+  run_id: v12_phaseA
   resume: false
   force: false
 
