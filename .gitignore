@@ -65,11 +65,18 @@ datasets/processed/*
 !datasets/splits/.gitkeep
 
 # Experiments (training artifacts)
-experiments/logs/*
-experiments/checkpoints/*
-!experiments/configs/.gitkeep
-!experiments/logs/.gitkeep
-!experiments/checkpoints/.gitkeep
+# Track config files and READMEs
+!experiments/*/config/*.yaml
+!experiments/*/README.md
+!experiments/README.md
+
+# Ignore large log files but keep structure
+experiments/*/logs/*.tfevents*
+experiments/*/logs/events.out.*
+
+# Keep checkpoint folder structure
+experiments/*/checkpoints/*
+!experiments/*/checkpoints/.gitkeep
 
 # MLflow
 mlruns/
