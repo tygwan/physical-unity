@@ -16,9 +16,10 @@ title: Phase G - Intersection Navigation
 | **Status** | 🔄 In Progress |
 | **Start Date** | 2026-01-27 |
 | **Target Steps** | 8,000,000 |
-| **Current Steps** | ~750,000 (9.4%) |
-| **Current Reward** | +492 |
+| **Current Steps** | ~3,560,000 (44.5%) |
+| **Current Reward** | **+792** (peak: +882 at 3.19M) |
 | **Initialize From** | Phase F (+988) |
+| **Current Curriculum** | **CrossIntersection** |
 
 ---
 
@@ -91,17 +92,25 @@ Stage 3: Right Turn (우회전 추가)
 
 ### Step-by-Step Progress
 
-| Step | Reward | Std | Curriculum State |
-|------|--------|-----|------------------|
-| 10K | +423 | 14 | NoIntersection, Straight |
-| 100K | +439 | 5 | NoIntersection, Straight |
-| 200K | +442 | 6 | NoIntersection, Straight |
-| 300K | +456 | 8 | NoIntersection, Straight |
-| 400K | +467 | 6 | NoIntersection, Straight |
-| 500K | +480 | 15 | NoIntersection, Straight |
-| 600K | +496 | 16 | NoIntersection, Straight |
-| 700K | +474 | 94 | NoIntersection, Straight |
-| **750K** | **+492** | - | **Current** |
+| Step | Reward | Std | Curriculum State | Notes |
+|------|--------|-----|------------------|-------|
+| 10K | +423 | 14 | NoIntersection, Straight | Start |
+| 500K | +480 | 15 | NoIntersection, Straight | Checkpoint saved |
+| 800K | +521 | 30 | NoIntersection, Straight | - |
+| 1.0M | +615 | 91 | NoIntersection, Straight | Checkpoint saved |
+| 1.08M | +750 | 140 | **Curriculum transition** | **TwoLanes, CenterLine enabled** |
+| 1.25M | +722 | 11 | TwoLanes, CenterLine | Stable |
+| 1.33M | +720 | 15 | **Turn curriculum** | **LeftTurn, OneNPC** |
+| 1.44M | +683 | 195 | **Turn curriculum** | **RightTurn, TwoNPCs** |
+| 2.0M | +683 | 159 | RightTurn, TwoNPCs | Checkpoint saved |
+| 2.15M | +734 | 17 | RightTurn, TwoNPCs | Peak (no intersection) |
+| 2.78M | +750 | 172 | RightTurn, TwoNPCs | Rising |
+| 3.0M | +792 | 141 | RightTurn, TwoNPCs | Checkpoint saved |
+| 3.11M | +855 | 218 | RightTurn, TwoNPCs | Peak |
+| 3.19M | **+882** | 208 | RightTurn, TwoNPCs | **PEAK** |
+| 3.20M | +837 | 280 | **Curriculum transition** | **T-Junction entered** |
+| 3.40M | +763 | 193 | **Curriculum transition** | **CrossIntersection entered** |
+| **3.56M** | **+792** | 221 | **CrossIntersection** | **Current** |
 
 ---
 
@@ -137,25 +146,27 @@ Phase G에서는 교차로 학습에 집중하기 위해 환경을 단순화했�
 
 ---
 
-## Expected Milestones
+## Milestones (Actual vs Expected)
 
-| Milestone | Expected Step | Condition |
-|-----------|---------------|-----------|
-| T-Junction 도입 | ~1-1.5M | reward > 800 |
-| T-Junction 마스터 | ~2M | reward > 600 |
-| Cross 도입 | ~2-3M | T-Junction 완료 |
-| Y-Junction 도입 | ~4-5M | Cross 완료 |
-| 좌회전 학습 | ~3-4M | turn curriculum |
-| 우회전 학습 | ~5-6M | turn curriculum |
-| **Phase G 완료** | ~8M | 모든 curriculum 완료 |
+| Milestone | Expected Step | Actual Step | Status |
+|-----------|---------------|-------------|--------|
+| TwoLanes transition | - | 1.08M | Completed |
+| LeftTurn introduced | - | 1.33M | Completed |
+| RightTurn introduced | - | 1.44M | Completed |
+| Pre-intersection peak | - | 3.19M (+882) | Completed |
+| **T-Junction 도입** | ~1-1.5M | **3.20M** | **Completed** |
+| **Cross 도입** | ~2-3M | **3.40M** | **Completed** |
+| Y-Junction 도입 | ~4-5M | TBD | Pending |
+| **Phase G 완료** | ~8M | TBD | In Progress |
 
 ---
 
 ## Notes
 
 - Phase F checkpoint에서 초기화하여 기존 능력 (차선 유지, 추월 등) 유지
-- 현재 보상 +492는 threshold 800까지 약 300 gap 있음
-- 커리큘럼 전환 시 일시적인 보상 하락 예상 (curriculum shock)
+- T-Junction과 Cross 교차로 진입 완료! (3.2M~3.4M steps)
+- 커리큘럼 전환 시에도 reward +700~800 유지 (curriculum shock 최소화)
+- Y-Junction 진입 전까지 Cross 교차로 안정화 중
 
 ---
 

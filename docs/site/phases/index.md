@@ -52,7 +52,7 @@ Foundation ──► Phase A ──► Phase B ──► Phase C ──► Phase
 
 ### [Phase G: Intersection](./phase-g) 🔄
 - **Goal**: 교차로 (T자/십자/Y자) 주행
-- **Current**: +492 reward (750K steps)
+- **Current**: +792 reward (3.56M steps) - CrossIntersection reached!
 - **Target**: 8M steps
 
 ---
@@ -71,13 +71,17 @@ Foundation ──► Phase A ──► Phase B ──► Phase C ──► Phase
 
 ## Failed Experiments
 
-### [v11: Sparse Reward](./failed/v11-sparse)
-- **Problem**: Sparse reward로는 추월 학습 불가
-- **Lesson**: Dense reward 필수
+See [Failed Experiments](./failed-experiments) for detailed analysis.
 
-### [HybridPolicy: Encoder Fine-tuning](./failed/hybrid-policy)
-- **Problem**: Catastrophic forgetting 발생
-- **Lesson**: 사전학습 encoder는 freeze 유지
+### v10g/v11: Sparse Reward
+- **Problem**: Sparse reward + followingBonus로는 추월 학습 불가
+- **Result**: +40~51 (8M steps, plateau)
+- **Lesson**: Dense reward 필수, followingBonus 제거
+
+### HybridPolicy: Encoder Fine-tuning
+- **Problem**: Stage 5에서 Catastrophic forgetting 발생
+- **Result**: -82.7 → -2171 (collapsed)
+- **Lesson**: 사전학습 encoder는 unfreeze하지 말 것
 
 ---
 
