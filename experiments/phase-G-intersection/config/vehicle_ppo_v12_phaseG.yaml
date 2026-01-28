@@ -1,3 +1,7 @@
+# DEPRECATED: This config uses old naming (v12_phaseG).
+# For current training, use: python/configs/planning/vehicle_ppo_phase-G.yaml
+# This file preserved for historical experiment reproducibility only.
+#
 # E2EDrivingAgent PPO v12 Phase G: Intersection Navigation
 # Strategy: Initialize from Phase F, add intersection handling curriculum
 # Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-G.yaml --run-id=phase-G

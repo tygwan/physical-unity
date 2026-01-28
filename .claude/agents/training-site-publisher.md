@@ -99,7 +99,7 @@ Unity + ML-Agents 기반 자율주행 강화학습 플랫폼
 
 | Phase | Reward | Status | Link |
 |-------|--------|--------|------|
-| Foundation (v10g) | +XXX | ✅ | [Details](./phases/foundation) |
+| Foundation (Phase 0) | +XXX | ✅ | [Details](./phases/foundation) |
 | Phase A | +937 | ✅ | [Details](./phases/phase-a) |
 | ... | ... | ... | ... |
 

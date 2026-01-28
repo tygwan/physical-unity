@@ -2,15 +2,15 @@
 
 ## Primary Hypothesis
 
-"An RL agent initialized from v10g foundation (lane-keeping) can learn overtaking maneuvers when trained with progressive NPC density curriculum and explicit overtaking rewards (+3.0/overtake), achieving >70% overtaking success while maintaining <5% collision rate within 2.5M steps."
+"An RL agent initialized from Phase 0 foundation (lane-keeping) can learn overtaking maneuvers when trained with progressive NPC density curriculum and explicit overtaking rewards (+3.0/overtake), achieving >70% overtaking success while maintaining <5% collision rate within 2.5M steps."
 
 ---
 
 ## Hypothesis Components
 
-### 1. Skill Transfer from v10g Foundation
+### 1. Skill Transfer from Phase 0 Foundation
 - **Claim**: Lane-keeping behaviors transfer to Phase A, maintaining 0% collision in Stage 1
-- **Metric**: Lane-keeping bonus remains >50% of v10g levels
+- **Metric**: Lane-keeping bonus remains >50% of Phase 0 levels
 - **Expected**: First collisions are learning explorations, not systematic failures
 
 ### 2. Overtaking Learning Signal
@@ -31,7 +31,7 @@
 ### 5. Convergence by 2.5M Steps
 - **Claim**: Mean reward plateaus by step 2.2M, indicating learning completion
 - **Metric**: Reward std <50 for final 200K steps
-- **Expected**: Similar convergence pattern to v10g (smooth S-curve)
+- **Expected**: Similar convergence pattern to Phase 0 (smooth S-curve)
 
 ---
 
@@ -89,7 +89,7 @@
 
 ### Mode 2: Reckless Overtaking
 **Symptom**: Collision rate >8%  
-**Fix**: Increase collision penalty -10→-15, reduce overtaking reward +3.0→+1.5, reload v10g
+**Fix**: Increase collision penalty -10→-15, reduce overtaking reward +3.0→+1.5, reload Phase 0
 
 ### Mode 3: Reward Collapse at 1.2M
 **Symptom**: Reward drops from +400→+150  

@@ -21,7 +21,7 @@ behaviors:
     trainer_type: ppo
 
     # Initialize from Phase E best checkpoint (disabled for resume)
-    # init_path: results/phase-E_v2/E2EDrivingAgent/checkpoint.pt
+    # init_path: results/phase-E/E2EDrivingAgent/checkpoint.pt
 
     hyperparameters:
       batch_size: 4096

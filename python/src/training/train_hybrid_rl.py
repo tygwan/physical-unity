@@ -11,7 +11,7 @@ Two-Phase Training:
 Usage:
     # Phase C-1 training (starts from Phase B checkpoint)
     python -m src.training.train_hybrid_rl \
-        --checkpoint results/v12_phaseB/E2EDrivingAgent/E2EDrivingAgent-2000150.pt \
+        --checkpoint results/phase-B/E2EDrivingAgent/E2EDrivingAgent-2000150.pt \
         --run-id hybrid_phaseC1
 
     # Resume from hybrid checkpoint

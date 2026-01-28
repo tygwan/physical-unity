@@ -18,11 +18,11 @@
 
 ---
 
-## v10g Foundation - Summary of Completion
+## Phase 0 Foundation - Summary of Completion
 
 ### Achievement Overview
 
-**v10g Foundation Training - COMPLETED 2026-01-27**
+**Phase 0 Foundation Training - COMPLETED 2026-01-27**
 
 ```
 Status: ✅ COMPLETE
@@ -54,13 +54,13 @@ Goal Completion: 100%
 
 ### Grade: A+ (Excellent)
 
-**Assessment**: v10g successfully exceeded all success criteria with perfect safety metrics and smooth convergence. Agent is production-ready and serves as excellent foundation for Phase A.
+**Assessment**: Phase 0 successfully exceeded all success criteria with perfect safety metrics and smooth convergence. Agent is production-ready and serves as excellent foundation for Phase A.
 
 ### Transition to Phase A
 
 **Status**: READY FOR PHASE A
 
-The v10g foundation model will be used as initialization for Phase A (Dense Overtaking), which will:
+The Phase 0 foundation model will be used as initialization for Phase A (Dense Overtaking), which will:
 - Add overtaking reward (+3.0 per successful overtake)
 - Introduce dense NPC scenarios
 - Expand curriculum complexity
@@ -74,9 +74,9 @@ The v10g foundation model will be used as initialization for Phase A (Dense Over
 
 | Phase | Duration | Steps | Peak Reward | Final Status | Date |
 |-------|----------|-------|-------------|--------------|------|
-| **v10g Foundation** | 1.17h | 8.0M | **1018.43** | **✅ Complete** | 2026-01-27 |
+| **Phase 0 Foundation** | 1.17h | 8.0M | **1018.43** | **✅ Complete** | 2026-01-27 |
 
-### Next Phase (v12 Phase A)
+### Next Phase (Phase A)
 
 ```
 Dense Overtaking with Single NPC
@@ -90,7 +90,7 @@ Status: Ready to start
 
 ---
 
-## v10g Completion Details
+## Phase 0 Completion Details
 
 ### What Worked Well
 
@@ -110,12 +110,12 @@ Status: Ready to start
 
 ### Artifacts Location
 
-All v10g artifacts available at:
+All Phase 0 artifacts available at:
 ```
 experiments/phase-0-foundation/
 ├── ANALYSIS.md (comprehensive analysis)
 ├── README.md (experiment overview)
-├── config/vehicle_ppo_v10g.yaml (training config)
+├── config/vehicle_ppo_v10g.yaml (historical training config)
 └── results/
     ├── E2EDrivingAgent-8000047.pt (final model)
     ├── E2EDrivingAgent-8000047.onnx (exported)
@@ -128,7 +128,7 @@ experiments/phase-0-foundation/
 
 | Milestone | Phase | Status |
 |-----------|-------|--------|
-| Foundation Ready | v10g | ✅ Complete |
+| Foundation Ready | Phase 0 | ✅ Complete |
 | Phase A Dense Overtaking | phase-A | 🔄 Next |
 | Phase B Decision Learning | phase-B | 📋 Planned |
 | Phase C Multi-NPC | phase-C | 📋 Planned |
@@ -143,21 +143,21 @@ experiments/phase-0-foundation/
 | [TRAINING-LOG.md](./TRAINING-LOG.md) | Detailed training data and metrics |
 | [LEARNING-ROADMAP.md](./LEARNING-ROADMAP.md) | Strategy, analysis, and future plans |
 | [README.md](../README.md) | Project overview |
-| [v10g Analysis](../experiments/phase-0-foundation/ANALYSIS.md) | Comprehensive analysis |
+| [Phase 0 Analysis](../experiments/phase-0-foundation/ANALYSIS.md) | Comprehensive analysis |
 
 ---
 
 ## Notes
 
-- v10g Foundation established perfect baseline for autonomous driving
+- Phase 0 Foundation established perfect baseline for autonomous driving
 - Focus shifts to overtaking and multi-agent decision-making in Phase A
 - All models and configs archived in experiments/phase-0-foundation/
-- Ready to initialize Phase A with v10g checkpoint
+- Ready to initialize Phase A with Phase 0 checkpoint
 
 ---
 
 *Document updated: 2026-01-27*
-*v10g Foundation Training Complete - Ready for Phase A*
+*Phase 0 Foundation Training Complete - Ready for Phase A*
 
 ---
 

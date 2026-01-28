@@ -153,5 +153,5 @@ for r in rewards[-5:]:
 ## Metrics to Track
 
 ```jsonl
-{"timestamp": "2026-01-27T12:00:00", "run_id": "v10g", "step": 1500000, "reward": -1049.08, "std": 139.5, "curriculum": "FourNPCs"}
+{"timestamp": "2026-01-27T12:00:00", "run_id": "Phase 0", "step": 1500000, "reward": -1049.08, "std": 139.5, "curriculum": "FourNPCs"}
 ```

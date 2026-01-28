@@ -7,7 +7,7 @@ with frozen Phase B encoder and trainable lane encoder.
 Usage:
     # Start Unity in Play mode first, then:
     python -m python.src.training.unity_hybrid_trainer \
-        --checkpoint results/v12_phaseB/E2EDrivingAgent/E2EDrivingAgent-2000150.pt \
+        --checkpoint results/phase-B/E2EDrivingAgent/E2EDrivingAgent-2000150.pt \
         --run-id hybrid_phaseC1
 """
 
@@ -671,7 +671,7 @@ class UnityHybridTrainer:
 def main():
     parser = argparse.ArgumentParser(description='Unity Hybrid PPO Training (Gradual Unfreezing)')
     parser.add_argument('--checkpoint', type=str,
-                       default='results/v12_phaseB/E2EDrivingAgent/E2EDrivingAgent-2000150.pt',
+                       default='results/phase-B/E2EDrivingAgent/E2EDrivingAgent-2000150.pt',
                        help='Phase B checkpoint path')
     parser.add_argument('--run-id', type=str, default='hybrid_phaseC1_gradual',
                        help='Run identifier')

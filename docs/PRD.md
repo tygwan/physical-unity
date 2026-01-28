@@ -272,7 +272,7 @@ SO THAT End-to-end 자율주행 시스템을 테스트할 수 있다
 | Unity-ML-Agents 연동 | Week 1 | Week 1 | ✅ |
 | 16 Training Areas 병렬화 | Week 2 | Week 2 | ✅ |
 | 기본 주행 학습 (v10) | Week 3 | Week 3 | ✅ |
-| 추월 학습 (v12 Phase A) | Week 4 | Week 4 | ✅ |
+| 추월 학습 (Phase A) | Week 4 | Week 4 | ✅ |
 | 판단력 학습 (Phase B) | Week 4 | Week 4 | ✅ |
 | Multi-NPC 일반화 (Phase C) | Week 5 | Week 5 | ✅ |
 | Lane Observation (Phase D) | Week 6 | 진행중 | 🔄 |

@@ -50,7 +50,7 @@ Training: 8M -> 2.5M steps (68% faster)
 
 ## 5. Curriculum Effectiveness
 
-Stage 1: Single NPC practice - transferred v10g skills effectively
+Stage 1: Single NPC practice - transferred Phase 0 skills effectively
 Stage 2: Multi-NPC (3-4) - optimal performance level achieved
 Stage 3: Dense traffic (5-6 NPCs) - successfully scaled with adaptation
 

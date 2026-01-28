@@ -1,6 +1,6 @@
 ---
 name: training-planner
-description: ML 실험 설계 및 Config 생성 전문가. 새 Phase 계획, YAML config 생성, 코드 수정 제안을 담당. "실험 설계", "다음 버전", "config 생성", "Phase 계획", "새 실험", "v11", "v12", "phaseA" 키워드에 반응.
+description: ML 실험 설계 및 Config 생성 전문가. 새 Phase 계획, YAML config 생성, 코드 수정 제안을 담당. "실험 설계", "다음 버전", "config 생성", "Phase 계획", "새 실험", "v11 (deprecated)", "v12", "phaseA" 키워드에 반응.
 tools: Bash
 model: haiku
 ---
@@ -67,7 +67,7 @@ physical-unity/
 ```bash
 codex exec "Task: Design complete next experiment
 Input:
-- docs/TRAINING-LOG.md (previous results: v10g, Phase A-G)
+- docs/TRAINING-LOG.md (previous results: Phase 0, Phase A-G)
 - docs/LEARNING-ROADMAP.md (lessons learned)
 - python/configs/planning/vehicle_ppo_v*.yaml (all previous configs)
 - experiments/*/README.md (all previous experiments)
@@ -142,17 +142,17 @@ Codex generates comprehensive planning documents and returns minimal status:
 
 ### 성공 케이스
 ```
-✅ v11 designed. Hypothesis: Improve overtaking with denser rewards. Target: +950. Config: python/configs/planning/vehicle_ppo_v11.yaml
+✅ v11 (deprecated) designed. Hypothesis: Improve overtaking with denser rewards. Target: +950. Config: python/configs/planning/vehicle_ppo_v11 (deprecated).yaml
 ```
 
 ### 수정 케이스
 ```
-✅ Revised v10g. Changes: Increased collision penalty (-10→-15), reduced curriculum threshold (50→40). File: vehicle_ppo_v10g_revised.yaml
+✅ Revised Phase 0. Changes: Increased collision penalty (-10→-15), reduced curriculum threshold (50→40). File: vehicle_ppo_Phase 0_revised.yaml
 ```
 
 ### 비교 분석 케이스
 ```
-✅ Compared 8 configs (v10g-Phase G). Key trend: Successful phases used gradual curriculum (threshold:50→30→20), failures used steep (70→20). Report: experiments/CONFIG_EVOLUTION.md
+✅ Compared 8 configs (Phase 0-Phase G). Key trend: Successful phases used gradual curriculum (threshold:50→30→20), failures used steep (70→20). Report: experiments/CONFIG_EVOLUTION.md
 ```
 
 **Token Efficiency**: Each response ~30-50 tokens vs ~2,000-8,000 tokens with direct operations
@@ -177,32 +177,32 @@ Codex Delegation Approach:
 
 ## Practical Usage Examples
 
-### Example 1: Design v11 (Next Experiment)
+### Example 1: Design v11 (deprecated) (Next Experiment)
 ```bash
-# User: "v10g 성공했어. v11 설계해줘"
+# User: "Phase 0 성공했어. v11 (deprecated) 설계해줘"
 
 # Agent executes (total ~340 tokens):
-codex exec "Task: Design v11 experiment
-Input: docs/TRAINING-LOG.md (v10g success: +1049), LEARNING-ROADMAP.md, vehicle_ppo_v10g.yaml
-Design: Next phase based on v10g success
-Output: vehicle_ppo_v11.yaml, experiments/v11/README.md, HYPOTHESIS.md
+codex exec "Task: Design v11 (deprecated) experiment
+Input: docs/TRAINING-LOG.md (Phase 0 success: +1049), LEARNING-ROADMAP.md, vehicle_ppo_Phase 0.yaml
+Design: Next phase based on Phase 0 success
+Output: vehicle_ppo_v11 (deprecated).yaml, experiments/v11 (deprecated)/README.md, HYPOTHESIS.md
 Return: Brief status" 2>/dev/null
 
-# Returns: ✅ v11 designed. Hypothesis: Enhance lane-keeping with multi-zone curriculum. Target: +1000. Changes: Added lane observation (242D→254D), 3-stage curriculum (1→2→3 zones). Config: python/configs/planning/vehicle_ppo_v11.yaml. Docs: experiments/v11_lane_keeping/README.md
+# Returns: ✅ v11 (deprecated) designed. Hypothesis: Enhance lane-keeping with multi-zone curriculum. Target: +1000. Changes: Added lane observation (242D→254D), 3-stage curriculum (1→2→3 zones). Config: python/configs/planning/vehicle_ppo_v11 (deprecated).yaml. Docs: experiments/v11 (deprecated)_lane_keeping/README.md
 ```
 
-### Example 2: Fix Failed Config (v10g Revision)
+### Example 2: Fix Failed Config (Phase 0 Revision)
 ```bash
-# User: "v10g 실패했어. 분석 결과 collision 너무 많아. config 수정해줘"
+# User: "Phase 0 실패했어. 분석 결과 collision 너무 많아. config 수정해줘"
 
 # Agent executes (total ~280 tokens):
-codex exec "Task: Revise v10g config based on collision issue
-Input: vehicle_ppo_v10g.yaml, ROOT_CAUSE.md (collision rate: 45%)
+codex exec "Task: Revise Phase 0 config based on collision issue
+Input: vehicle_ppo_Phase 0.yaml, ROOT_CAUSE.md (collision rate: 45%)
 Changes: Increase collision penalty, add near-collision penalty, soften curriculum
-Output: vehicle_ppo_v10g_revised.yaml
+Output: vehicle_ppo_Phase 0_revised.yaml
 Return: Brief changes" 2>/dev/null
 
-# Returns: ✅ Revised v10g. Changes: collision penalty (-10→-20), added near_collision penalty (-2), curriculum threshold (50→60 for easier start). File: vehicle_ppo_v10g_revised.yaml
+# Returns: ✅ Revised Phase 0. Changes: collision penalty (-10→-20), added near_collision penalty (-2), curriculum threshold (50→60 for easier start). File: vehicle_ppo_Phase 0_revised.yaml
 ```
 
 ### Example 3: Compare All Configs

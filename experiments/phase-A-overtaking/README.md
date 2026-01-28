@@ -16,7 +16,7 @@ Phase A successfully completed 2.5M steps of PPO training with exceptional resul
 | **Run ID** | phase-A-overtaking |
 | **Status** | COMPLETED (2026-01-28) |
 | **Base Configuration** | vehicle_ppo_phase-A.yaml |
-| **Initialize From** | Phase 0 (v10g) checkpoint |
+| **Initialize From** | Phase 0 (Phase 0) checkpoint |
 | **Total Steps** | 2,500,000 |
 | **Training Duration** | 29.6 minutes |
 | **Final Reward** | 2113.75 |
@@ -41,7 +41,7 @@ Phase A successfully completed 2.5M steps of PPO training with exceptional resul
 
 ### Phase 0 vs Phase A Comparison
 
-| Metric | Phase 0 (v10g) | Phase A | Change |
+| Metric | Phase 0 (Phase 0) | Phase A | Change |
 |--------|---|---|---|
 | Final Reward | +1018.43 | +2113.75 | +107% |
 | Peak Reward | +1086 | +3161.17 | +191% |

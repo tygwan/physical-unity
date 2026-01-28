@@ -1,18 +1,18 @@
 # Training Log - E2EDrivingAgent RL Training History
 
 > Phase A completed successfully on 2026-01-28
-> **Note**: v10g = Phase 0 (Foundation) - see version mapping below
+> **Note**: Phase 0 = Phase 0 (Foundation) - see version mapping below
 
 ## Overview
 
 | Version | Focus | Steps | Best Reward | Status |
 |---------|-------|-------|-------------|--------|
-| **v10g** | Lane Keeping + NPC Coexistence | 8M | **1018.43** | **✅ COMPLETED** |
+| **Phase 0** | Lane Keeping + NPC Coexistence | 8M | **1018.43** | **✅ COMPLETED** |
 | **Phase A** | Dense Overtaking (Single NPC) | 2.5M | **2113.75** | **✅ COMPLETED** |
 
 ---
 
-## v10g: Foundation - Lane Keeping + NPC Coexistence
+## Phase 0: Foundation - Lane Keeping + NPC Coexistence
 
 ### Status: ✅ COMPLETED (2026-01-27) - READY FOR PHASE A
 
@@ -74,7 +74,7 @@ All artifacts available at: `experiments/phase-0-foundation/`
 
 - **Final PyTorch Model**: `results/E2EDrivingAgent/E2EDrivingAgent-8000047.pt`
 - **ONNX Export**: `results/E2EDrivingAgent/E2EDrivingAgent-8000047.onnx`
-- **Training Config**: `config/vehicle_ppo_v10g.yaml`
+- **Training Config**: `config/vehicle_ppo_Phase 0.yaml`
 - **Detailed Analysis**: `ANALYSIS.md` (comprehensive metrics & findings)
 - **Run Logs**: `results/run_logs/events.out.tfevents.*`
 
@@ -90,7 +90,7 @@ All artifacts available at: `experiments/phase-0-foundation/`
 **Limitations**:
 1. Curriculum not fully utilized (final lessons not reached)
 2. Speed conservative at 92.6% of limit (could target 95%+)
-3. No overtaking capability (not trained in v10g)
+3. No overtaking capability (not trained in Phase 0)
 4. Early convergence indicates room for harder challenges
 
 ### Recommendations for Phase A Advancement
@@ -109,7 +109,7 @@ All artifacts available at: `experiments/phase-0-foundation/`
 
 ### Transition Status
 
-**v10g Foundation → v12 Phase A**:
+**Phase 0 Foundation → Phase A**:
 - ✅ Foundation model ready
 - ✅ Convergence verified
 - ✅ Safety metrics validated
@@ -139,7 +139,7 @@ All artifacts available at: `experiments/phase-0-foundation/`
 ---
 
 *Last Updated: 2026-01-27*
-*v10g Training Complete and Approved for Phase A Advancement*
+*Phase 0 Training Complete and Approved for Phase A Advancement*
 
 ---
 
@@ -159,7 +159,7 @@ All artifacts available at: `experiments/phase-0-foundation/`
 
 ### Phase 0 vs Phase A Comparison
 
-| Metric | Phase 0 (v10g) | Phase A | Change |
+| Metric | Phase 0 (Phase 0) | Phase A | Change |
 |--------|---|---|---|
 | **Final Reward** | +1018.43 | +2113.75 | +107% |
 | **Peak Reward** | +1086 | +3161.17 | +191% |

@@ -2,11 +2,11 @@
 
 ## Status: COMPLETE
 
-Phase A comprehensive design is ready for training, built on v10g foundation success.
+Phase A comprehensive design is ready for training, built on Phase 0 foundation success.
 
 ---
 
-## v10g Foundation (Baseline)
+## Phase 0 Foundation (Baseline)
 
 | Metric | Result | Status |
 |--------|--------|--------|
@@ -21,7 +21,7 @@ Phase A comprehensive design is ready for training, built on v10g foundation suc
 
 ### Objectives
 1. **Primary**: Learn overtaking capability
-2. **Secondary**: Maintain v10g safety (<5% collision)
+2. **Secondary**: Maintain Phase 0 safety (<5% collision)
 3. **Tertiary**: Handle increased NPC density (4→6)
 
 ### Timeline: 3-Stage Progressive Curriculum
@@ -36,7 +36,7 @@ Phase A comprehensive design is ready for training, built on v10g foundation suc
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Initialize From | v10g checkpoint | Transfer learning |
+| Initialize From | Phase 0 checkpoint | Transfer learning |
 | Total Steps | 2.5M | 45-60 minutes |
 | Network | 512x3 layers | Preserved (stable) |
 | Learning Rate | 3e-4 | Linear decay |
@@ -62,7 +62,7 @@ Phase A comprehensive design is ready for training, built on v10g foundation suc
 
 ### Configuration
 - **vehicle_ppo_phase-A.yaml** - ML-Agents config with 3-stage curriculum
-- **Config:** max_steps=2.5M, initialize from v10g
+- **Config:** max_steps=2.5M, initialize from Phase 0
 
 ### Post-Training (Auto-Generated)
 - Model: E2EDrivingAgent-2500000.pt + .onnx
@@ -109,7 +109,7 @@ Phase A comprehensive design is ready for training, built on v10g foundation suc
 
 | Risk | Mitigation |
 |------|-----------|
-| Skill degradation | v10g checkpoint init, strong penalties |
+| Skill degradation | Phase 0 checkpoint init, strong penalties |
 | Curriculum too fast | Extended thresholds, monitoring |
 | Reward gaming | Limit overtakes, position confirmation |
 | Instability | Preserve hyperparams, signal smoothing |
@@ -143,7 +143,7 @@ Config: `python/configs/planning/vehicle_ppo_phase-A.yaml`
 ```bash
 mlagents-learn python/configs/planning/vehicle_ppo_phase-A.yaml \
   --run-id=phase-A-overtaking \
-  --initialize-from=v10g_lane_keeping
+  --initialize-from=Phase 0_lane_keeping
 ```
 
 Monitor: `tensorboard --logdir=experiments/phase-A-overtaking/logs/`

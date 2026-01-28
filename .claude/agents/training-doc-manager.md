@@ -72,7 +72,7 @@ physical-unity/
 ## Phase 진행률
 | Phase | Status | Reward | Steps |
 |-------|--------|--------|-------|
-| v10g Foundation | ✅ 완료 | +XXX | 8M |
+| Phase 0 Foundation | ✅ 완료 | +XXX | 8M |
 | Phase A | ✅ 완료 | +937 | 2M |
 | Phase B | ✅ 완료 | +903 | 2M |
 | Phase C | ✅ 완료 | +961 | 4M |
@@ -105,7 +105,7 @@ physical-unity/
 
 ### 아카이브 조건
 - Phase 완료 시
-- 버전 전환 시 (v10g → v11 → v12)
+- 버전 전환 시 (Phase 0 → v11 (deprecated) → v12)
 - 월간 정리 시
 
 ### 아카이브 프로세스
@@ -121,7 +121,7 @@ physical-unity/
 ---
 archived: YYYY-MM-DD
 period: YYYY-MM-DD ~ YYYY-MM-DD
-versions: v10g, v11, Phase A-F
+versions: Phase 0, v11 (deprecated), Phase A-F
 ---
 
 # Training Log Archive
@@ -129,7 +129,7 @@ versions: v10g, v11, Phase A-F
 ## Summary
 | Version | Final Reward | Status | Key Learning |
 |---------|-------------|--------|--------------|
-| v10g | +XXX | 완료 | {요약} |
+| Phase 0 | +XXX | 완료 | {요약} |
 | Phase A | +937 | 완료 | {요약} |
 
 ## Detailed Logs
@@ -192,7 +192,7 @@ Codex returns minimal status messages to conserve Claude tokens:
 
 ### 성공 케이스
 ```
-✅ Done. Updated 4 files: TRAINING-LOG.md, PROGRESS.md, experiments/v10g/README.md, LEARNING-ROADMAP.md
+✅ Done. Updated 4 files: TRAINING-LOG.md, PROGRESS.md, experiments/Phase 0/README.md, LEARNING-ROADMAP.md
 ```
 
 ### 아카이브 케이스
@@ -261,15 +261,15 @@ Codex Delegation Approach:
 
 ### Example 1: Sync After Training Completion
 ```bash
-# User: "v10g 학습 완료됐어. 문서 동기화해줘"
+# User: "Phase 0 학습 완료됐어. 문서 동기화해줘"
 
 # Agent executes (total ~280 tokens):
-codex exec "Task: Synchronize docs for v10g completion
-Input: results/v10g/*, docs/TRAINING-LOG.md, experiments/v10g/README.md
+codex exec "Task: Synchronize docs for Phase 0 completion
+Input: results/Phase 0/*, docs/TRAINING-LOG.md, experiments/Phase 0/README.md
 Output: Update all docs with final results (8M steps, final reward)
 Return: ✅ Done. Updated: [files]" 2>/dev/null
 
-# Returns: ✅ Done. Updated 4 files: TRAINING-LOG.md (+8M steps, +1049 reward), PROGRESS.md (v10g→complete), experiments/v10g/README.md (final analysis), LEARNING-ROADMAP.md (+3 lessons)
+# Returns: ✅ Done. Updated 4 files: TRAINING-LOG.md (+8M steps, +1049 reward), PROGRESS.md (Phase 0→complete), experiments/Phase 0/README.md (final analysis), LEARNING-ROADMAP.md (+3 lessons)
 ```
 
 ### Example 2: Archive Old Logs
@@ -278,11 +278,11 @@ Return: ✅ Done. Updated: [files]" 2>/dev/null
 
 # Agent executes (total ~220 tokens):
 codex exec "Task: Archive completed training logs
-Input: docs/TRAINING-LOG.md (completed v10g-v11 entries)
+Input: docs/TRAINING-LOG.md (completed Phase 0-v11 (deprecated) entries)
 Output: Create archive file, clean up main log
 Return: ✅ Archived: [filename]" 2>/dev/null
 
-# Returns: ✅ Archived. Created: TRAINING-LOG-ARCHIVE-20260127.md (15 entries: v10g Foundation through Phase F)
+# Returns: ✅ Archived. Created: TRAINING-LOG-ARCHIVE-20260127.md (15 entries: Phase 0 Foundation through Phase F)
 ```
 
 ### Example 3: Fix Inconsistencies

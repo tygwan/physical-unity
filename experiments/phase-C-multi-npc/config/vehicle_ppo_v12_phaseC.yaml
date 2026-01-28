@@ -1,3 +1,7 @@
+# DEPRECATED: This config uses old naming (v12_phaseC).
+# For current training, use: python/configs/planning/vehicle_ppo_phase-C.yaml
+# This file preserved for historical experiment reproducibility only.
+#
 # E2EDrivingAgent PPO v12 Phase C: Complex Environment Generalization
 # Strategy: Multiple NPCs + full curriculum for real-world generalization
 # Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-C.yaml --run-id=phase-C --initialize-from=phase-B

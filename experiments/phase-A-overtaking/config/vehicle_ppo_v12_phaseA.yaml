@@ -1,3 +1,7 @@
+# DEPRECATED: This config uses old naming (v12_phaseA).
+# For current training, use: python/configs/planning/vehicle_ppo_phase-A.yaml
+# This file preserved for historical experiment reproducibility only.
+#
 # E2EDrivingAgent PPO v12 Phase A: Overtaking Skill Acquisition
 # Strategy: Dense reward for overtaking sub-phases + very slow NPC
 # Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-A.yaml --run-id=phase-A --initialize-from=curriculum_v11_overtake

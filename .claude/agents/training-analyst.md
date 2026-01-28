@@ -120,7 +120,7 @@ Return: 🔴 Root cause: [{primary_cause}]. Confidence: {high/medium/low}. Evide
 ```bash
 codex exec "Task: Compare training results across phases
 Input:
-- results/v10g/ (Foundation)
+- results/Phase 0/ (Foundation)
 - results/Phase-A/ through results/Phase-G/ (all phases)
 - docs/TRAINING-LOG.md (historical context)
 
@@ -188,18 +188,18 @@ Codex Delegation Approach:
 
 ## Practical Usage Examples
 
-### Example 1: v10g Complete Analysis
+### Example 1: Phase 0 Complete Analysis
 ```bash
-# User: "v10g 결과 분석해줘"
+# User: "Phase 0 결과 분석해줘"
 
 # Agent executes (total ~350 tokens):
-codex exec "Task: Complete analysis for v10g
-Input: results/v10g/, docs/TRAINING-LOG.md
+codex exec "Task: Complete analysis for Phase 0
+Input: results/Phase 0/, docs/TRAINING-LOG.md
 Analysis: Full systematic debugging workflow
-Output: experiments/v10g/ANALYSIS.md, update TRAINING-LOG.md
+Output: experiments/Phase 0/ANALYSIS.md, update TRAINING-LOG.md
 Return: [status] + summary" 2>/dev/null
 
-# Returns: ✅ Success. Final reward: +1049 (105% of target). Curriculum: 4/4 completed. Key achievement: Overtaking learned. Report: experiments/v10g/ANALYSIS.md
+# Returns: ✅ Success. Final reward: +1049 (105% of target). Curriculum: 4/4 completed. Key achievement: Overtaking learned. Report: experiments/Phase 0/ANALYSIS.md
 ```
 
 ### Example 2: Phase G Failure Analysis
@@ -221,12 +221,12 @@ Return: Root cause + evidence" 2>/dev/null
 # User: "현재 학습 상태만 빠르게 확인해줘"
 
 # Agent executes (total ~200 tokens):
-codex exec "Task: Quick assessment for v10g
-Input: results/v10g/run_logs/*.out (last 50 lines)
+codex exec "Task: Quick assessment for Phase 0
+Input: results/Phase 0/run_logs/*.out (last 50 lines)
 Output: Status only
 Return: Status + final reward" 2>/dev/null
 
-# Returns: ✅ v10g: Final reward +1049 (105% of target at 8M steps)
+# Returns: ✅ Phase 0: Final reward +1049 (105% of target at 8M steps)
 ```
 
 ## Integration with Other Agents

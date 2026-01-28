@@ -8,7 +8,7 @@ Autonomous Driving ML Learning Comprehensive Roadmap
 
 | Phase | Topic | Status | Best Result |
 |-------|-------|--------|-------------|
-| **Foundation (v10g)** | Lane Keeping + NPC Coexistence | **COMPLETE** | **+1018.43** |
+| **Foundation (Phase 0)** | Lane Keeping + NPC Coexistence | **COMPLETE** | **+1018.43** |
 | **Phase A** | Dense Overtaking (Single NPC) | **COMPLETE** | **+2113.75** |
 | **Phase B** | Overtake vs Follow Decision | Planned | +903 (expected) |
 | **Phase C** | Multi-NPC Generalization (4x) | Planned | +961 (expected) |
@@ -17,7 +17,7 @@ Autonomous Driving ML Learning Comprehensive Roadmap
 
 ## Part 1: Completed Training
 
-### Foundation Phase v10g: Lane Keeping + NPC Coexistence
+### Foundation Phase Phase 0: Lane Keeping + NPC Coexistence
 
 **Status**: COMPLETED (2026-01-27) - READY FOR PHASE A
 
@@ -92,20 +92,20 @@ Location: experiments/phase-0-foundation/
 
 - Final PyTorch Model: results/E2EDrivingAgent/E2EDrivingAgent-8000047.pt
 - ONNX Export: results/E2EDrivingAgent/E2EDrivingAgent-8000047.onnx
-- Training Config: config/vehicle_ppo_v10g.yaml
+- Training Config: config/vehicle_ppo_Phase 0.yaml
 - Detailed Analysis: ANALYSIS.md
 
 ---
 
 ## Part 2: Phase A Planning
 
-### v12 Phase A: Dense Overtaking (Single Slow NPC)
+### Phase A: Dense Overtaking (Single Slow NPC)
 
 Status: READY TO START
 
 Objective:
 - Learn to overtake single slow NPC
-- Build on v10g foundation
+- Build on Phase 0 foundation
 - Introduce dense overtaking reward
 - Target: +950 (with overtaking capability)
 
@@ -113,7 +113,7 @@ Objective:
 
 ## Next Actions
 
-1. Review v10g ANALYSIS.md thoroughly
+1. Review Phase 0 ANALYSIS.md thoroughly
 2. Design Phase A curriculum with dense overtaking
 3. Prepare Phase B-F scenarios
 4. Build full autonomous driving pipeline
@@ -121,4 +121,4 @@ Objective:
 ---
 
 Document updated: 2026-01-27
-v10g Foundation Training Completed - All documentation synchronized
+Phase 0 Foundation Training Completed - All documentation synchronized

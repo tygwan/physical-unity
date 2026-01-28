@@ -21,7 +21,7 @@ Architecture:
 Usage:
     # Load Phase B checkpoint
     policy = HybridDrivingPolicy.from_phase_b_checkpoint(
-        checkpoint_path='results/v12_phaseB/E2EDrivingAgent/E2EDrivingAgent-2000150.pt',
+        checkpoint_path='results/phase-B/E2EDrivingAgent/E2EDrivingAgent-2000150.pt',
         freeze_phase_b=True
     )
 

@@ -6,10 +6,10 @@
 cd /c/Users/user/Desktop/dev/physical-unity
 
 # 1. Start Unity (with PhaseA_DenseOvertaking scene, 16 areas)
-# 2. Run training from v10g checkpoint
+# 2. Run training from Phase 0 checkpoint
 mlagents-learn python/configs/planning/vehicle_ppo_phase-A.yaml \
   --run-id=phase-A-overtaking \
-  --initialize-from=v10g_lane_keeping
+  --initialize-from=Phase 0_lane_keeping
 
 # 3. Monitor (separate terminal)
 tensorboard --logdir=experiments/phase-A-overtaking/logs/
@@ -23,7 +23,7 @@ tensorboard --logdir=experiments/phase-A-overtaking/logs/
 - [ ] PhaseA_DenseOvertaking scene loaded
 - [ ] 16 training areas spawned
 - [ ] ROS2 bridge on port 5004
-- [ ] v10g checkpoint available in experiments/phase-0-foundation/
+- [ ] Phase 0 checkpoint available in experiments/phase-0-foundation/
 
 ---
 

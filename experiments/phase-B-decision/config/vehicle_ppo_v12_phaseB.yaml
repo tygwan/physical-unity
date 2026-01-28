@@ -1,3 +1,7 @@
+# DEPRECATED: This config uses old naming (v12_phaseB).
+# For current training, use: python/configs/planning/vehicle_ppo_phase-B.yaml
+# This file preserved for historical experiment reproducibility only.
+#
 # E2EDrivingAgent PPO v12 Phase B: Overtaking Decision Learning
 # Strategy: Varied NPC speed - agent must decide overtake vs follow
 # Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-B.yaml --run-id=phase-B --initialize-from=phase-A

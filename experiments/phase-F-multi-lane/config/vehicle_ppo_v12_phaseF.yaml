@@ -1,3 +1,7 @@
+# DEPRECATED: This config uses old naming (v12_phaseF).
+# For current training, use: python/configs/planning/vehicle_ppo_phase-F.yaml
+# This file preserved for historical experiment reproducibility only.
+#
 # E2EDrivingAgent PPO v12 Phase F: Multi-Lane Roads + Center Line Rules
 # Strategy: Initialize from Phase E, add lane count curriculum
 # Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-F.yaml --run-id=phase-F

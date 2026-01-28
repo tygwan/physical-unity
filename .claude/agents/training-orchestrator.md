@@ -152,7 +152,7 @@ tasklist | findstr "mlagents"
 ### Active Training
 | Run ID | Phase | Progress | Reward | Status |
 |--------|-------|----------|--------|--------|
-| v10g | Foundation | 1.5M/8M | -1049 | 🔴 문제 |
+| Phase 0 | Foundation | 1.5M/8M | -1049 | 🔴 문제 |
 
 ### Recent History
 | Phase | Result | Reward | Date |
@@ -161,17 +161,17 @@ tasklist | findstr "mlagents"
 | Phase E | ✅ 성공 | +931 | 2026-01-25 |
 
 ### Pending Actions
-1. 🔴 v10g 결과 분석 필요 (reward 음수)
+1. 🔴 Phase 0 결과 분석 필요 (reward 음수)
 2. ⏳ 분석 후 다음 단계 결정
 
 ### Recommended Next Steps
-1. `training-analyst` 호출하여 v10g 분석
+1. `training-analyst` 호출하여 Phase 0 분석
 2. 실패 원인 파악 후 재설계 또는 롤백
 
 ### Agent Delegation Plan
 | Step | Agent | Task |
 |------|-------|------|
-| 1 | training-analyst | v10g 결과 분석 |
+| 1 | training-analyst | Phase 0 결과 분석 |
 | 2 | training-doc-manager | 문서 업데이트 |
 | 3 | training-planner | 다음 버전 설계 (분석 결과 기반) |
 ```
@@ -181,7 +181,7 @@ tasklist | findstr "mlagents"
 ## Next Step Recommendation
 
 ### 현재 상황
-- v10g 학습 완료: {status}
+- Phase 0 학습 완료: {status}
 - Final Reward: {reward}
 - 판정: {성공/실패}
 
