@@ -66,7 +66,9 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 | **Phase A** | Phase 0 | 2.5M | **+2113** | +2113 | ✅ | Overtaking mastery |
 | **Phase B v1** | Phase 0 ⚠️ | 3M | -108 | -108 | ❌ | **FAILED** - Wrong checkpoint + reward bug |
 | **Phase B v2** | Phase A ✅ | 1M | **+877** | +877 | ✅ | Decision learning (recovery) |
-| **Phase C** | Phase B v2 | TBD | TBD | TBD | 📋 | Multi-NPC (4-5 NPCs) |
+| **Phase C** | Phase B v2 | 3.6M | **+1,372** | +1,372 | ✅ | Multi-NPC (8 NPCs), perfect safety |
+| **Phase D v1** | Phase C | 6M | +406 | -2,156 | ❌ | **FAILED** - Curriculum collapse (3 params simultaneous) |
+| **Phase D v2** | Phase C | TBD | TBD | TBD | 📋 | Lane observation retry (single-param progression) |
 
 **Legacy Results (Old Naming)**:
 | Phase | Steps | Best Reward | Final Reward | Status | Key Achievement |
@@ -123,6 +125,39 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
   - Leveraged Phase A's overtaking capability
   - 4-stage curriculum prevented shock
 - **Success Rate**: 100% goal completion, 0% collision
+
+#### Phase C: Multi-NPC Generalization (4-8 NPCs)
+- **Start**: Phase B v2 checkpoint (+877)
+- **Environment**: 8 NPCs, complex multi-agent scenarios
+- **Duration**: ~50 minutes, 3.6M steps
+- **Result**: **+1,372 reward** (228% of target +600)
+- **Achievement**:
+  - Perfect safety (0% collision)
+  - Robust generalization to 8 concurrent NPCs
+  - Maintained high performance across complexity
+- **Innovation**: Multi-agent decision-making at scale
+
+#### Phase D v1: Lane Observation (FAILED)
+- **Start**: Phase C checkpoint (+1,372)
+- **Innovation**: Added 12D lane observation (242D → 254D)
+  - Explicit lane boundaries (left/right distances at 4 positions)
+  - Faster convergence for lane-keeping
+  - Preparation for curved roads (Phase E)
+- **Duration**: 100 minutes, 6M steps
+- **Peak**: **+406 at 4.6M steps** (promising start)
+- **Collapse**: **-2,156 final** (catastrophic failure)
+- **Root Cause**:
+  1. 3 curriculum parameters transitioned simultaneously at 4.68M:
+     - num_active_npcs: 1 → 2
+     - speed_zone_count: 1 → 2
+     - npc_speed_variation: 0 → 0.3
+  2. Agent's scenario-specific policies became invalid
+  3. Collapse: +406 → -4,825 in <20K steps (-5,231 points)
+- **Lessons**:
+  - Curriculum parameters are NOT independent
+  - Peak reward ≠ robust learning
+  - Simultaneous transitions = exponential complexity
+- **Recovery**: Phase D v2 planned with single-parameter progression
 
 #### v12 Phase C: Multi-NPC Generalization
 - **Environment**: 1→2→3→4 NPCs, 230m goal, 4 speed zones

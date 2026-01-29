@@ -399,3 +399,146 @@ v2 solutions:
 
 *Phase B v2 Training Complete - 2026-01-29 17:25 UTC*
 *Ready for Phase C: 4-5 NPC Generalization*
+
+---
+
+## Phase C: Multi-NPC Generalization (4-8 NPCs)
+
+### Status: SUCCESS (2026-01-29) - APPROVED FOR PHASE D
+
+**Final Results Summary**:
+- **Final Reward**: +1,372 (228% of target: +600)
+- **Training Steps**: 3.6M steps total
+- **Base Checkpoint**: Phase B v2 (+877)
+- **Training Duration**: ~50 minutes
+- **Collision Rate**: ~0% (PERFECT SAFETY)
+
+**Achievement**: Successfully generalized to 8 NPCs in complex multi-agent scenarios.
+
+---
+
+*Phase C Training Complete - 2026-01-29 19:09 UTC*
+
+---
+
+## Phase D v1: Lane Observation (242D → 254D)
+
+### Status: FAILURE (2026-01-29) - Curriculum Collapse
+
+**Run ID**: phase-D
+**Started**: 2026-01-29 19:10
+**Completed**: 2026-01-29 20:47
+**Duration**: ~100 minutes
+**Total Steps**: 6,000,000
+
+### Summary
+
+Phase D v1 introduced explicit lane boundary observation (+12D), expanding observation space from 242D to 254D. Training showed promise with +406 peak reward at 4.6M steps, but suffered catastrophic collapse when 3 curriculum parameters transitioned simultaneously at 4.68M steps.
+
+| Metric | Target | Actual | Achievement |
+|--------|--------|--------|-------------|
+| **Peak Reward** | +1000+ | **+406** at 4.6M | 41% (promising) |
+| **Final Reward** | +1000+ | **-2,156** | FAILURE |
+| **Curriculum Completion** | 5/5 params | 3/5 params | 60% |
+| **Collapse Magnitude** | N/A | -5,231 points | Catastrophic |
+
+### Innovation: Lane Observation (+12D)
+
+**New Observation Space**: 254D (was 242D in Phase C)
+- ego_state (8D)
+- route_info (30D)
+- surrounding (40D × 4 history = 160D)
+- speed_zones (4D)
+- **lane_observation (12D)** ← NEW
+  - left_lane_distance: 4 values at relative positions (-20m, 0m, 20m, 40m)
+  - right_lane_distance: 4 values at relative positions
+
+**Why Lane Observation?**
+1. Explicit lane boundaries vs implicit learning from collisions
+2. Faster convergence for lane-keeping behavior  
+3. Critical for Phase E (curved roads) and Phase F (multi-lane)
+
+### Root Cause Analysis
+
+**Primary (95% Confidence)**: Simultaneous Curriculum Transition
+- **Step 4.68M**: 3 parameters transitioned at once:
+  1. num_active_npcs: 1 → 2
+  2. speed_zone_count: 1 → 2
+  3. npc_speed_variation: 0.0 → 0.3
+- **Result**: Agent's scenario-specific policies became invalid
+- **Collapse**: +406 → -4,825 in <20K steps (-5,231 points)
+
+**Secondary (80% Confidence)**: Scenario-Specific Policy Overfitting
+- Agent learned: "If 1 NPC, overtake immediately"
+- New scenario: "2 NPCs with variable speeds"
+- Old policy became liability, not asset
+- Unlearning cost >> Learning benefit
+
+**Tertiary (60% Confidence)**: Brittle Convergence
+- Peak +406 achieved too quickly (~500K steps after breakthrough)
+- No plateau period to solidify learning
+- Local optimum, not robust policy
+
+### Training Timeline
+
+```
+Steps    Reward    Event
+------   ------    -----
+0        -58       Exploration
+100K     -40       Stabilization
+500K     -36       Plateau
+1.5M     -207      Volatile
+2.5M     +157      Recovery begins
+3.5M     +298      Improvement
+4.0M     +350      Approaching target
+4.6M     +406      PEAK - Near success ✨
+4.68M    +406      Ready to transition...
+4.7M     -4,825    💥 CATASTROPHIC COLLAPSE
+5.0M     -3,487    Attempted recovery
+5.5M     -2,700    Still negative
+6.0M     -2,156    Budget exhausted ❌
+```
+
+### Key Lessons Learned
+
+1. **Curriculum Parameters Are NOT Independent**
+   - Changing multiple parameters simultaneously = exponential complexity increase
+   - Solution: Single-parameter progression (one at a time)
+
+2. **Peak Reward ≠ Robust Learning**
+   - +406 was local optimum, not true convergence
+   - Need validation: hold at peak for 500K+ steps before transition
+
+3. **Lane Observation Works (But Not Sufficient)**
+   - Lane info helped reach +406 faster than Phase C
+   - But doesn't solve multi-agent decision-making
+   - Keep for Phase D v2 / E / F
+
+4. **Brittle vs Robust Convergence**
+   - Fast convergence (500K steps) = brittle
+   - Slow convergence (1M+ steps) = robust
+   - Trade-off: speed vs stability
+
+### Recommendations for Phase D v2
+
+**Approach**: Conservative Curriculum Redesign
+1. **Single-Parameter Progression**: Only ONE parameter transitions at a time
+2. **Looser Thresholds**: Time-based (500K steps hold) + reward-based (>threshold)
+3. **Checkpoint Strategy**: Save at each stage completion
+4. **Expected Budget**: 8M-10M steps (vs v1: 6M)
+
+**Success Criteria**:
+- All 5 curriculum parameters reach max
+- Final reward > +1000
+- Stable for 500K steps at final stage
+
+### Decision: REDESIGN AND RETRY (Phase D v2)
+
+- Archive Phase D v1 results
+- 24-hour analysis and curriculum redesign
+- Phase D v2 with staggered single-parameter progression
+- HOLD Phase E advancement
+
+---
+
+*Phase D v1 Training Halted - 2026-01-29 20:47 UTC*
