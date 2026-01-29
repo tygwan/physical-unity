@@ -2,6 +2,8 @@
 
 Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 
+> **Development Infrastructure**: This project uses [cc-initializer](https://github.com/tygwan/cc-initializer) for Claude Code workflow automation, including custom agents, skills, hooks, and development lifecycle management.
+
 ## Project Status
 
 | Component | Status | Notes |
@@ -58,17 +60,26 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 
 ### Main Training Results
 
+| Phase | Base Checkpoint | Steps | Best Reward | Final Reward | Status | Key Achievement |
+|-------|-----------------|-------|-------------|--------------|--------|-----------------|
+| **Phase 0** | From scratch | 8M | **+1018** | +1018 | ✅ | Lane keeping, NPC coexistence |
+| **Phase A** | Phase 0 | 2.5M | **+2113** | +2113 | ✅ | Overtaking mastery |
+| **Phase B v1** | Phase 0 ⚠️ | 3M | -108 | -108 | ❌ | **FAILED** - Wrong checkpoint + reward bug |
+| **Phase B v2** | Phase A ✅ | 1M | **+877** | +877 | ✅ | Decision learning (recovery) |
+| **Phase C** | Phase B v2 | TBD | TBD | TBD | 📋 | Multi-NPC (4-5 NPCs) |
+
+**Legacy Results (Old Naming)**:
 | Phase | Steps | Best Reward | Final Reward | Status | Key Achievement |
 |-------|-------|-------------|--------------|--------|-----------------|
 | v10g | 8M | +95 (NPC0) | +40 (NPC4) | ✅ | Lane keeping, NPC avoidance |
 | v11 | 8M | +51 | +41 | ⚠️ | Sparse reward insufficient |
-| **v12 Phase A** | 2M | **+937** | +714 | ✅ | Learned overtaking maneuver |
-| **v12 Phase B** | 2M | **+994** | +903 | ✅ | Overtake/follow decision |
-| **v12 Phase C** | 4M | **+1086** | +961 | ✅ | 4-NPC generalization |
-| **v12 Phase D** | 6M | **+402** | +332 | ⏭️ | (Phase E로 대체) |
-| **v12 Phase E** | 6M | **+931** | +931 | ✅ | Curved roads, 2 NPCs |
-| **v12 Phase F** | 6M | **+988** | +988 | ✅ | Multi-lane roads |
-| **v12 Phase G** | 8M | +461 | 🔄 | 🔄 | Intersection navigation |
+| v12 Phase A (old) | 2M | +937 | +714 | ✅ | Learned overtaking maneuver |
+| v12 Phase B (old) | 2M | +994 | +903 | ✅ | Overtake/follow decision |
+| v12 Phase C (old) | 4M | +1086 | +961 | ✅ | 4-NPC generalization |
+| v12 Phase D (old) | 6M | +402 | +332 | ⏭️ | (Phase E로 대체) |
+| v12 Phase E (old) | 6M | +931 | +931 | ✅ | Curved roads, 2 NPCs |
+| v12 Phase F (old) | 6M | +988 | +988 | ✅ | Multi-lane roads |
+| v12 Phase G (old) | 8M | +461 | 🔄 | 🔄 | Intersection navigation |
 | v12_HybridPolicy | 3M | -82 | -2172 | ❌ | Catastrophic forgetting |
 
 ### Phase Details
@@ -91,10 +102,27 @@ Unity ML-Agents 기반 자율주행 Motion Planning AI 학습 플랫폼
 - **Result**: +937 peak, 추월 동작 학습 성공
 - **Bug Fix**: Speed penalty 조건문 버그 수정
 
-#### v12 Phase B: Overtake vs Follow Decision
-- **Curriculum**: NPC speed 0.3 → 0.5 → 0.7 → 0.9
-- **Result**: +994 peak, 조건부 추월/따라가기 판단 학습
-- **Improvement**: +26% over Phase A
+#### Phase B v1: Decision Learning (FAILED)
+- **Start**: Phase 0 checkpoint (+1018) ⚠️ Wrong choice
+- **Environment**: 2 NPCs, decision-making curriculum
+- **Duration**: 39.4 minutes, 3M steps
+- **Result**: **-108 reward** (catastrophic failure)
+- **Root Cause**:
+  1. Reward bug: `followingPenalty` too harsh (-0.5/step)
+  2. Wrong checkpoint: Phase 0 lacks overtaking capability
+  3. Curriculum shock: 0 NPC → 2 NPC too abrupt
+- **Lesson**: Always resume from most capable checkpoint
+
+#### Phase B v2: Decision Learning (Recovery SUCCESS)
+- **Start**: Phase A checkpoint (2.5M steps, +2113) ✅ Correct
+- **Curriculum**: 1→2→3→4 NPCs (gradual increase)
+- **Duration**: ~1 hour, 1M additional steps (total 3.5M)
+- **Result**: **+877 peak** (146% of target +600)
+- **Improvement**:
+  - Fixed reward function (removed harsh penalty)
+  - Leveraged Phase A's overtaking capability
+  - 4-stage curriculum prevented shock
+- **Success Rate**: 100% goal completion, 0% collision
 
 #### v12 Phase C: Multi-NPC Generalization
 - **Environment**: 1→2→3→4 NPCs, 230m goal, 4 speed zones
@@ -320,6 +348,125 @@ off_road:             -5.0   # Episode end
 
 ---
 
+## Development Infrastructure
+
+This project uses [cc-initializer](https://github.com/tygwan/cc-initializer) for automated development workflows with Claude Code.
+
+### Agents (38)
+
+**Core Framework Agents (26)**
+| Category | Agents | Purpose |
+|----------|--------|---------|
+| **Documentation** | dev-docs-writer, doc-generator, doc-splitter, doc-validator, prd-writer, tech-spec-writer, readme-helper | 문서 생성 및 검증 |
+| **Project Management** | progress-tracker, phase-tracker, project-analyzer, project-discovery, work-unit-manager | 프로젝트 추적 및 분석 |
+| **Code Quality** | code-reviewer, refactor-assistant, test-helper | 코드 리뷰 및 테스트 |
+| **Git/GitHub** | branch-manager, commit-helper, git-troubleshooter, github-manager, pr-creator | Git 워크플로우 자동화 |
+| **Analytics** | analytics-reporter, obsidian-sync | 통계 및 지식 관리 |
+| **Infrastructure** | config-validator, file-explorer, google-searcher, agent-writer | 인프라 지원 |
+
+**ML/AD-Specific Agents (12)**
+| Agent | Purpose | Trigger Keywords |
+|-------|---------|------------------|
+| ad-experiment-manager | AD 실험 생성, 실행, 비교, 추적 | "experiment", "실험", "training run", "학습 실행" |
+| benchmark-evaluator | nuPlan 벤치마크 실행, 메트릭 계산 | "evaluate", "평가", "benchmark", "metrics" |
+| dataset-curator | 데이터셋 다운로드, 전처리, 큐레이션 | "dataset", "데이터셋", "nuPlan", "Waymo" |
+| experiment-documenter | 자동 실험 문서화 및 결과 기록 | "실험 문서화", "학습 완료", "결과 기록", "update docs" |
+| forensic-analyst | 학습 실패 근본 원인 분석 (수학적 검증) | "근본 원인", "root cause", "forensic", "왜 실패" |
+| model-trainer | RL/IL 학습 시작 및 관리 | "train", "학습", "PPO", "SAC", "GAIL" |
+| training-analyst | 학습 결과 분석, 성공/실패 판정 | "결과 분석", "리포트", "왜 실패", "원인 분석" |
+| training-doc-manager | 학습 문서 동기화, 아카이브 관리 | "문서 동기화", "아카이브", "로그 정리" |
+| training-monitor | 실시간 학습 상태 모니터링 | "학습 상태", "진행률", "모니터링", "현재 reward" |
+| training-orchestrator | 학습 워크플로우 총괄 조율 | "다음 단계", "워크플로우", "전체 상태" |
+| training-planner | 실험 설계 및 Config 생성 | "실험 설계", "다음 버전", "config 생성" |
+| training-site-publisher | GitHub Pages 사이트 발행 | "사이트 업데이트", "gh-pages", "웹 발행" |
+
+### Skills (22)
+
+> **Note**: All core framework skills (18) from cc-initializer plus 4 ML-specific skills.
+
+**Core Skills (18)**
+| Skill | Description | Keywords |
+|-------|-------------|----------|
+| agile-sync | CHANGELOG, README, 진행상황 동기화 | "동기화", "sync", "changelog" |
+| analytics | Tool/Agent 사용 통계 시각화 | "통계", "사용량", "analytics", "metrics" |
+| brainstorming | 아이디어 구체화 및 대안 탐색 | "brainstorm", "아이디어", "alternative" |
+| context-optimizer | 컨텍스트 로딩 최적화 | "context", "token", "optimize", "summarize" |
+| dev-doc-system | 개발 문서 통합 관리 | "문서 시스템", "개발 기록", "방향 설정" |
+| feedback-loop | 피드백 수집 및 ADR 생성 | "feedback", "learning", "retrospective" |
+| gh | GitHub CLI 통합 | "github", "issue", "CI", "workflow" |
+| hook-creator | Claude Code Hook 생성 | "create hook", "configure hook" |
+| obsidian | Obsidian vault 동기화 | "obsidian", "vault", "지식 동기화" |
+| prompt-enhancer | 프로젝트 컨텍스트 기반 프롬프트 향상 | "enhance prompt", "context-aware" |
+| quality-gate | 개발 lifecycle Quality Gate | "pre-commit", "pre-merge", "quality" |
+| readme-sync | README 자동 동기화 | "readme sync", "update readme" |
+| repair | cc-initializer 자동 복구 | "repair", "fix", "troubleshoot" |
+| skill-creator | 새로운 Skill 생성 가이드 | "create skill", "new skill" |
+| sprint | Sprint lifecycle 관리 | "sprint", "velocity", "burndown" |
+| subagent-creator | 커스텀 Sub-agent 생성 | "create agent", "new agent" |
+| sync-fix | Phase/Sprint/문서 동기화 문제 해결 | "sync fix", "불일치", "동기화 문제" |
+| validate | cc-initializer 설정 검증 | "validate", "검증", "check config" |
+
+**ML-Specific Skills (4)**
+| Skill | Description | Command |
+|-------|-------------|---------|
+| dataset | 데이터셋 다운로드, 전처리, 분할 | `/dataset` |
+| experiment | ML 실험 생성, 실행, 비교, 추적 | `/experiment` |
+| evaluate | 모델 평가 및 벤치마크 실행 | `/evaluate` |
+| train | RL/IL 학습 시작 및 모니터링 | `/train` |
+
+### Commands (6)
+
+| Command | Purpose | Integration |
+|---------|---------|-------------|
+| /bugfix | 버그 수정 워크플로우 (이슈 분석→PR) | Git + Phase + Sprint |
+| /dev-doc-planner | PRD, 기술 설계서, 진행상황 문서 작성 | Templates (PRD/TECH-SPEC/PROGRESS) |
+| /feature | 기능 개발 워크플로우 (Phase→Sprint→Git→Doc) | Phase + Sprint + Git + Docs |
+| /git-workflow | Git 워크플로우 관리 (브랜치, 커밋, PR) | GitHub Flow + Conventional Commits |
+| /phase | Phase 상태 확인, 전환, 진행률 업데이트 | Phase 시스템 |
+| /release | 릴리스 워크플로우 (버전→문서→배포) | Git + Docs + Archive |
+
+### Hooks (6)
+
+**Pre-Tool Hooks**
+- `pre-tool-use-safety.sh`: Bash/Write/Edit 안전성 검사 (위험 명령어 차단)
+
+**Post-Tool Hooks**
+- `auto-doc-sync.sh`: Bash/Write/Edit 후 문서 자동 동기화
+- `phase-progress.sh`: Write/Edit 후 Phase 진행 상황 업데이트
+- `post-tool-use-tracker.sh`: Bash/Write/Edit 사용 추적 (analytics)
+
+**Notification Hooks**
+- `notification-handler.sh`: 모든 알림 처리
+
+**Utility Hooks**
+- `error-recovery.sh`: Hook 실패 시 자동 복구
+
+### Key Features
+
+**Automation**
+- Phase/Sprint 자동 진행 추적
+- Git 워크플로우 자동화 (Conventional Commits)
+- 문서 자동 동기화 (CHANGELOG, README, PROGRESS)
+- Quality Gate (pre-commit, pre-merge, pre-release)
+
+**ML/AD Specific**
+- 실험 추적 및 비교 (MLflow/W&B 통합)
+- TensorBoard 모니터링
+- 학습 문서 자동 생성 및 아카이브
+- GitHub Pages 자동 발행
+
+**Safety & Recovery**
+- 위험 명령어 차단 (rm -rf, git reset --hard 등)
+- Hook 실패 시 자동 복구
+- 문서 손상 감지 및 복구
+
+**Analytics**
+- Tool/Agent/Skill 사용 통계 (JSONL)
+- CLI 차트 시각화
+- 30일 데이터 보관
+
+---
+
 ## Documentation
 
 - [PRD (Product Requirements)](docs/PRD.md)
@@ -327,6 +474,8 @@ off_road:             -5.0   # Episode end
 - [Learning Roadmap](docs/LEARNING-ROADMAP.md)
 - [Phase Documents](docs/phases/README.md)
 - [Progress Tracking](docs/PROGRESS.md)
+- [Workflow Diagrams (Mermaid)](docs/WORKFLOW-DIAGRAMS.md)
+- [cc-initializer Components](.claude/docs/CC-INITIALIZER-COMPONENTS.md)
 
 ---
 
@@ -338,4 +487,6 @@ off_road:             -5.0   # Episode end
 
 ---
 
-**Last Updated**: 2026-01-27 | **Phase G In Progress** | Phase F: +988, Phase G: +461 (340K)
+**Last Updated**: 2026-01-29 | **Phase G In Progress** | Phase F: +988, Phase G: +461 (340K)
+
+**Development Infrastructure**: [cc-initializer](https://github.com/tygwan/cc-initializer) - 38 Agents, 29 Skills, 6 Hooks, 12 Commands
