@@ -1,5 +1,9 @@
 # Phase 4: Prediction Models (Simplified)
 
+> ⏸️ **STATUS: SUSPENDED** - Using Constant Velocity baseline instead of learned prediction
+>
+> **Reason**: Planning-focused strategy prioritizes RL/IL motion planning. Prediction uses simple CV model for faster iteration and reliable baselines.
+
 ## Overview
 
 Planning 집중 전략에 따라 Prediction은 기존 baseline 모델을 활용합니다. nuPlan baseline predictor 또는 간단한 Constant Velocity 모델 사용을 우선합니다.

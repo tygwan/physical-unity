@@ -1,0 +1,131 @@
+[INFO] Listening on port 5004. Start training by pressing the Play button in the Unity Editor.
+[INFO] Connected to Unity environment with package version 4.0.0 and communication version 1.5.0
+[INFO] Connected new brain: E2EDrivingAgent?team=0
+
+
+	Unity Technologies
+
+ Version information:
+  ml-agents: 1.1.0,
+  ml-agents-envs: 1.1.0,
+  Communicator API: 1.5.0,
+  PyTorch: 2.3.1+cu121
+[INFO] Hyperparameters for behavior name E2EDrivingAgent: 
+	trainer_type:	ppo
+	hyperparameters:	
+	  batch_size:	4096
+	  buffer_size:	40960
+	  learning_rate:	0.0003
+	  beta:	0.005
+	  epsilon:	0.2
+	  lambd:	0.99
+	  num_epoch:	10
+	  shared_critic:	False
+	  learning_rate_schedule:	constant
+	  beta_schedule:	constant
+	  epsilon_schedule:	constant
+	checkpoint_interval:	500000
+	network_settings:	
+	  normalize:	True
+	  hidden_units:	512
+	  num_layers:	3
+	  vis_encode_type:	simple
+	  memory:	None
+	  goal_conditioning_type:	hyper
+	  deterministic:	False
+	reward_signals:	
+	  extrinsic:	
+	    gamma:	0.995
+	    strength:	1.0
+	    network_settings:	
+	      normalize:	False
+	      hidden_units:	128
+	      num_layers:	2
+	      vis_encode_type:	simple
+	      memory:	None
+	      goal_conditioning_type:	hyper
+	      deterministic:	False
+	init_path:	results/phase-0-foundation/E2EDrivingAgent/E2EDrivingAgent-8000047.pt
+	keep_checkpoints:	5
+	even_checkpoints:	False
+	max_steps:	3000000
+	time_horizon:	2048
+	summary_freq:	50000
+	threaded:	False
+	self_play:	None
+	behavioral_cloning:	None
+[INFO] Initializing from results/phase-0-foundation/E2EDrivingAgent/E2EDrivingAgent-8000047.pt.
+[WARNING] Did not find these keys ['network_body.observation_encoder.processors.0.normalizer.normalization_steps', 'network_body.observation_encoder.processors.0.normalizer.running_mean', 'network_body.observation_encoder.processors.0.normalizer.running_variance', 'network_body.processors.0.normalizer.normalization_steps', 'network_body.processors.0.normalizer.running_mean', 'network_body.processors.0.normalizer.running_variance'] in checkpoint. Initializing.
+[WARNING] Did not find these keys ['network_body.observation_encoder.processors.0.normalizer.normalization_steps', 'network_body.observation_encoder.processors.0.normalizer.running_mean', 'network_body.observation_encoder.processors.0.normalizer.running_variance', 'network_body.processors.0.normalizer.normalization_steps', 'network_body.processors.0.normalizer.running_mean', 'network_body.processors.0.normalizer.running_variance'] in checkpoint. Initializing.
+[INFO] Starting training from step 0 and saving to results\phase-B-decision\E2EDrivingAgent.
+[INFO] Parameter 'num_active_npcs' is in lesson 'num_active_npcs' and has value 'Float: value=2'.
+[INFO] Parameter 'npc_speed_min' is in lesson 'npc_speed_min' and has value 'Float: value=8.0'.
+[INFO] Parameter 'npc_speed_max' is in lesson 'npc_speed_max' and has value 'Float: value=15.0'.
+[INFO] E2EDrivingAgent. Step: 50000. Time Elapsed: 53.493 s. Mean Reward: -134.444. Std of Reward: 144.268. Training.
+[INFO] E2EDrivingAgent. Step: 100000. Time Elapsed: 91.888 s. Mean Reward: -118.144. Std of Reward: 86.076. Training.
+[INFO] E2EDrivingAgent. Step: 150000. Time Elapsed: 131.137 s. Mean Reward: -144.216. Std of Reward: 142.933. Training.
+[INFO] E2EDrivingAgent. Step: 200000. Time Elapsed: 165.733 s. Mean Reward: -124.820. Std of Reward: 94.398. Training.
+[INFO] E2EDrivingAgent. Step: 250000. Time Elapsed: 218.418 s. Mean Reward: -108.188. Std of Reward: 1.578. Training.
+[INFO] E2EDrivingAgent. Step: 300000. Time Elapsed: 256.209 s. Mean Reward: -108.278. Std of Reward: 2.032. Training.
+[INFO] E2EDrivingAgent. Step: 350000. Time Elapsed: 293.075 s. Mean Reward: -108.193. Std of Reward: 1.424. Training.
+[INFO] E2EDrivingAgent. Step: 400000. Time Elapsed: 330.872 s. Mean Reward: -108.285. Std of Reward: 1.298. Training.
+[INFO] E2EDrivingAgent. Step: 450000. Time Elapsed: 375.271 s. Mean Reward: -108.301. Std of Reward: 1.208. Training.
+[INFO] E2EDrivingAgent. Step: 500000. Time Elapsed: 421.985 s. Mean Reward: -108.276. Std of Reward: 1.049. Training.
+[INFO] Exported results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-499922.onnx
+[INFO] E2EDrivingAgent. Step: 550000. Time Elapsed: 457.952 s. Mean Reward: -108.297. Std of Reward: 0.999. Training.
+[INFO] E2EDrivingAgent. Step: 600000. Time Elapsed: 494.176 s. Mean Reward: -108.390. Std of Reward: 0.852. Training.
+[INFO] E2EDrivingAgent. Step: 650000. Time Elapsed: 530.129 s. Mean Reward: -108.447. Std of Reward: 0.723. Training.
+[INFO] E2EDrivingAgent. Step: 700000. Time Elapsed: 576.033 s. Mean Reward: -108.416. Std of Reward: 0.769. Training.
+[INFO] E2EDrivingAgent. Step: 750000. Time Elapsed: 612.285 s. Mean Reward: -108.498. Std of Reward: 0.718. Training.
+[INFO] E2EDrivingAgent. Step: 800000. Time Elapsed: 653.338 s. Mean Reward: -108.651. Std of Reward: 0.733. Training.
+[INFO] E2EDrivingAgent. Step: 850000. Time Elapsed: 695.879 s. Mean Reward: -108.682. Std of Reward: 0.697. Training.
+[INFO] E2EDrivingAgent. Step: 900000. Time Elapsed: 732.616 s. Mean Reward: -108.676. Std of Reward: 0.665. Training.
+[INFO] E2EDrivingAgent. Step: 950000. Time Elapsed: 778.417 s. Mean Reward: -108.611. Std of Reward: 0.986. Training.
+[INFO] E2EDrivingAgent. Step: 1000000. Time Elapsed: 814.876 s. Mean Reward: -108.691. Std of Reward: 0.722. Training.
+[INFO] Exported results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-999940.onnx
+[INFO] E2EDrivingAgent. Step: 1050000. Time Elapsed: 852.502 s. Mean Reward: -108.697. Std of Reward: 0.736. Training.
+[INFO] E2EDrivingAgent. Step: 1100000. Time Elapsed: 889.029 s. Mean Reward: -108.706. Std of Reward: 0.746. Training.
+[INFO] E2EDrivingAgent. Step: 1150000. Time Elapsed: 933.951 s. Mean Reward: -108.672. Std of Reward: 0.705. Training.
+[INFO] E2EDrivingAgent. Step: 1200000. Time Elapsed: 969.388 s. Mean Reward: -108.668. Std of Reward: 0.745. Training.
+[INFO] E2EDrivingAgent. Step: 1250000. Time Elapsed: 1005.329 s. Mean Reward: -108.600. Std of Reward: 0.743. Training.
+[INFO] E2EDrivingAgent. Step: 1300000. Time Elapsed: 1039.481 s. Mean Reward: -108.636. Std of Reward: 0.703. Training.
+[INFO] E2EDrivingAgent. Step: 1350000. Time Elapsed: 1074.293 s. Mean Reward: -108.637. Std of Reward: 0.690. Training.
+[INFO] E2EDrivingAgent. Step: 1400000. Time Elapsed: 1117.813 s. Mean Reward: -108.529. Std of Reward: 0.704. Training.
+[INFO] E2EDrivingAgent. Step: 1450000. Time Elapsed: 1151.899 s. Mean Reward: -108.533. Std of Reward: 0.714. Training.
+[INFO] E2EDrivingAgent. Step: 1500000. Time Elapsed: 1185.331 s. Mean Reward: -108.530. Std of Reward: 0.694. Training.
+[INFO] Exported results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-1499939.onnx
+[INFO] E2EDrivingAgent. Step: 1550000. Time Elapsed: 1222.793 s. Mean Reward: -108.509. Std of Reward: 0.685. Training.
+[INFO] E2EDrivingAgent. Step: 1600000. Time Elapsed: 1268.410 s. Mean Reward: -108.511. Std of Reward: 0.696. Training.
+[INFO] E2EDrivingAgent. Step: 1650000. Time Elapsed: 1304.194 s. Mean Reward: -108.529. Std of Reward: 0.639. Training.
+[INFO] E2EDrivingAgent. Step: 1700000. Time Elapsed: 1340.051 s. Mean Reward: -108.503. Std of Reward: 0.679. Training.
+[INFO] E2EDrivingAgent. Step: 1750000. Time Elapsed: 1375.559 s. Mean Reward: -108.536. Std of Reward: 0.671. Training.
+[INFO] E2EDrivingAgent. Step: 1800000. Time Elapsed: 1411.672 s. Mean Reward: -108.528. Std of Reward: 0.699. Training.
+[INFO] E2EDrivingAgent. Step: 1850000. Time Elapsed: 1456.932 s. Mean Reward: -108.585. Std of Reward: 0.704. Training.
+[INFO] E2EDrivingAgent. Step: 1900000. Time Elapsed: 1492.586 s. Mean Reward: -108.624. Std of Reward: 0.710. Training.
+[INFO] E2EDrivingAgent. Step: 1950000. Time Elapsed: 1528.109 s. Mean Reward: -108.697. Std of Reward: 0.705. Training.
+[INFO] E2EDrivingAgent. Step: 2000000. Time Elapsed: 1563.793 s. Mean Reward: -108.582. Std of Reward: 0.669. Training.
+[INFO] Exported results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-1999939.onnx
+[INFO] E2EDrivingAgent. Step: 2050000. Time Elapsed: 1609.571 s. Mean Reward: -108.638. Std of Reward: 0.693. Training.
+[INFO] E2EDrivingAgent. Step: 2100000. Time Elapsed: 1646.205 s. Mean Reward: -108.579. Std of Reward: 0.696. Training.
+[INFO] E2EDrivingAgent. Step: 2150000. Time Elapsed: 1684.912 s. Mean Reward: -108.544. Std of Reward: 0.695. Training.
+[INFO] E2EDrivingAgent. Step: 2200000. Time Elapsed: 1723.066 s. Mean Reward: -108.442. Std of Reward: 0.682. Training.
+[INFO] E2EDrivingAgent. Step: 2250000. Time Elapsed: 1761.785 s. Mean Reward: -108.462. Std of Reward: 0.707. Training.
+[INFO] E2EDrivingAgent. Step: 2300000. Time Elapsed: 1809.853 s. Mean Reward: -108.424. Std of Reward: 0.690. Training.
+[INFO] E2EDrivingAgent. Step: 2350000. Time Elapsed: 1847.811 s. Mean Reward: -108.414. Std of Reward: 0.705. Training.
+[INFO] E2EDrivingAgent. Step: 2400000. Time Elapsed: 1885.740 s. Mean Reward: -108.388. Std of Reward: 0.684. Training.
+[INFO] E2EDrivingAgent. Step: 2450000. Time Elapsed: 1923.283 s. Mean Reward: -108.329. Std of Reward: 0.653. Training.
+[INFO] E2EDrivingAgent. Step: 2500000. Time Elapsed: 1961.115 s. Mean Reward: -108.320. Std of Reward: 0.686. Training.
+[INFO] Exported results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-2499935.onnx
+[INFO] E2EDrivingAgent. Step: 2550000. Time Elapsed: 2006.388 s. Mean Reward: -108.303. Std of Reward: 0.701. Training.
+[INFO] E2EDrivingAgent. Step: 2600000. Time Elapsed: 2042.611 s. Mean Reward: -108.283. Std of Reward: 0.681. Training.
+[INFO] E2EDrivingAgent. Step: 2650000. Time Elapsed: 2078.365 s. Mean Reward: -108.186. Std of Reward: 0.668. Training.
+[INFO] E2EDrivingAgent. Step: 2700000. Time Elapsed: 2112.931 s. Mean Reward: -108.194. Std of Reward: 0.651. Training.
+[INFO] E2EDrivingAgent. Step: 2750000. Time Elapsed: 2157.765 s. Mean Reward: -108.234. Std of Reward: 0.648. Training.
+[INFO] E2EDrivingAgent. Step: 2800000. Time Elapsed: 2193.784 s. Mean Reward: -108.251. Std of Reward: 0.642. Training.
+[INFO] E2EDrivingAgent. Step: 2850000. Time Elapsed: 2243.288 s. Mean Reward: -108.189. Std of Reward: 0.646. Training.
+[INFO] E2EDrivingAgent. Step: 2900000. Time Elapsed: 2283.226 s. Mean Reward: -108.200. Std of Reward: 0.673. Training.
+[INFO] E2EDrivingAgent. Step: 2950000. Time Elapsed: 2318.845 s. Mean Reward: -108.152. Std of Reward: 0.650. Training.
+[INFO] E2EDrivingAgent. Step: 3000000. Time Elapsed: 2365.649 s. Mean Reward: -108.041. Std of Reward: 0.648. Training.
+[INFO] Exported results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-2999936.onnx
+[INFO] Exported results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-3000036.onnx
+[INFO] Copied results\phase-B-decision\E2EDrivingAgent\E2EDrivingAgent-3000036.onnx to results\phase-B-decision\E2EDrivingAgent.onnx.

@@ -1,6 +1,6 @@
 # Phase B: Decision Learning - Training Guide
 
-**Version**: v12_phaseB
+**Version**: phase-B
 **Created**: 2026-01-28
 **Duration**: ~25 minutes (3.0M steps)
 **GPU**: RTX 4090 (24GB VRAM) - Sufficient

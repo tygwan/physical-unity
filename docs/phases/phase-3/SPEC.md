@@ -1,5 +1,9 @@
 # Phase 3: Perception Models (Simplified)
 
+> ⏸️ **STATUS: SUSPENDED** - Using Ground Truth approach instead of full perception training
+>
+> **Reason**: Planning-focused strategy prioritizes RL/IL motion planning. Perception uses direct object info from simulator for faster iteration.
+
 ## Overview
 
 Planning 집중 전략에 따라 Perception은 간소화하여 구현합니다. Pre-trained 모델 활용 또는 Ground Truth 사용을 우선합니다.
