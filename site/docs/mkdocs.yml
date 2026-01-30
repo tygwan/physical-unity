@@ -1,0 +1,89 @@
+site_name: AD ML Platform - Documentation
+site_url: https://tygwan.github.io/physical-unity/docs/
+site_description: Autonomous Driving ML Platform technical documentation
+site_author: tygwan
+
+repo_name: tygwan/physical-unity
+repo_url: https://github.com/tygwan/physical-unity
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to light mode
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+
+nav:
+  - Home: index.md
+  - Overview:
+    - PRD: prd.md
+    - Tech Spec: tech-spec.md
+    - Progress: progress.md
+  - Training Phases:
+    - Phase A - Dense Overtaking: phases/phase-a.md
+    - Phase B - Decision Learning: phases/phase-b.md
+    - Phase C - Multi-NPC: phases/phase-c.md
+    - Phase D - Lane Observation: phases/phase-d.md
+    - Phase E - Curved Roads: phases/phase-e.md
+    - Phase F - Multi-Lane: phases/phase-f.md
+    - Phase G - Intersection: phases/phase-g.md
+  - Safety Standards:
+    - SOTIF Edge Case Strategy: safety/sotif-edge-case-strategy.md
+  - Architecture:
+    - Reward Design: architecture/reward-design.md
+    - Observation Space: architecture/observation-space.md
+    - Curriculum Learning: architecture/curriculum-learning.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/tygwan/physical-unity

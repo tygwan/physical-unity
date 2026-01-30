@@ -1,0 +1,64 @@
+---
+interface Props {
+  id: string;
+  name: string;
+  subtitle: string;
+  reward: number | null;
+  status: 'success' | 'in_progress' | 'planned';
+  tags: string[];
+  description: string;
+  observations: string;
+  steps: string;
+  keyInsight: string;
+}
+
+const { id, name, subtitle, reward, status, tags, description, observations, steps, keyInsight } = Astro.props;
+
+const statusConfig = {
+  success: { label: 'SUCCESS', bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', dot: 'bg-emerald-400' },
+  in_progress: { label: 'IN PROGRESS', bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', dot: 'bg-amber-400' },
+  planned: { label: 'PLANNED', bg: 'bg-slate-500/10', text: 'text-slate-400', border: 'border-slate-500/20', dot: 'bg-slate-400' },
+};
+const s = statusConfig[status];
+---
+
+<article class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-6 transition-all duration-300 hover:border-slate-700 hover:bg-slate-900/80 hover:shadow-xl hover:shadow-sky-500/5">
+  <!-- Top row: status + reward -->
+  <div class="flex items-start justify-between">
+    <span class={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.bg} ${s.text} ${s.border} border`}>
+      <span class={`h-1.5 w-1.5 rounded-full ${s.dot} ${status === 'in_progress' ? 'animate-pulse' : ''}`}></span>
+      {s.label}
+    </span>
+    {reward !== null && (
+      <span class="text-2xl font-bold text-white">+{reward.toLocaleString()}</span>
+    )}
+    {reward === null && (
+      <span class="text-lg font-medium text-slate-500">Training...</span>
+    )}
+  </div>
+
+  <!-- Title -->
+  <h3 class="mt-4 text-xl font-bold text-white">{name}: {subtitle}</h3>
+
+  <!-- Description -->
+  <p class="mt-2 text-sm leading-relaxed text-slate-400">{description}</p>
+
+  <!-- Key insight -->
+  <div class="mt-4 rounded-lg border border-sky-500/10 bg-sky-500/5 p-3">
+    <p class="text-xs font-medium text-sky-400">Key Insight</p>
+    <p class="mt-1 text-sm text-slate-300">{keyInsight}</p>
+  </div>
+
+  <!-- Meta -->
+  <div class="mt-4 flex items-center gap-4 text-xs text-slate-500">
+    <span>Obs: {observations}</span>
+    <span>Steps: {steps}</span>
+  </div>
+
+  <!-- Tags -->
+  <div class="mt-4 flex flex-wrap gap-2">
+    {tags.map((tag) => (
+      <span class="rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-400">{tag}</span>
+    ))}
+  </div>
+</article>

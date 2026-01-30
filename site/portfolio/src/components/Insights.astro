@@ -1,0 +1,159 @@
+---
+import { policyDiscoveries } from '../data/phases';
+
+const worked = [
+  {
+    title: 'Dense Reward Shaping',
+    detail: '7 reward components (progress, speed, lane keeping, overtaking, violation, jerk, time) provided clear learning signals from the start.',
+  },
+  {
+    title: 'Curriculum Learning',
+    detail: 'Progressive difficulty increase (NPCs, speed zones, goal distance) enabled stable training. Staggered thresholds prevented simultaneous transitions.',
+  },
+  {
+    title: 'Checkpoint Transfer',
+    detail: 'Warm-starting from previous phases provided critical bootstrap. Phase B v2 succeeded with Phase A checkpoint where v1 (fresh start) failed.',
+  },
+  {
+    title: '16 Parallel Environments',
+    detail: 'Simultaneous training across 16 areas provided diverse experience and faster convergence. Essential for PPO on-policy learning.',
+  },
+];
+
+const failed = [
+  {
+    title: 'Simultaneous Curriculum Shock',
+    detail: 'Phase D v1: 3 parameters advanced at the same threshold (reward ~400), causing reward crash from +406 to -4,825. Fixed with staggered thresholds in v2.',
+    policy: 'P-002',
+  },
+  {
+    title: 'Fresh Start with Complex Obs',
+    detail: 'Phase B v1: Training from scratch with NPC interaction collapsed at 1.8M steps. Complex observations need warm-start from simpler policy.',
+    policy: 'P-003',
+  },
+  {
+    title: 'Excessive Penalty Design',
+    detail: 'Phase B v1: speedUnderPenalty -0.1/step taught agent to stop entirely. Reduced to -0.02 (80% decrease) in v2 to restore learning.',
+    policy: 'P-004',
+  },
+  {
+    title: 'Observation Dimension Change',
+    detail: '242D to 254D transition breaks checkpoint compatibility. Fresh training required for lane observation integration, losing accumulated knowledge.',
+    policy: 'P-009',
+  },
+];
+
+// Standards mapping
+const standards = [
+  { standard: 'SOTIF (ISO 21448)', desc: '4-quadrant safety model. Functional Insufficiency analysis for each observation dimension. Systematic Known/Unknown Safe/Unsafe classification.', accent: 'sky' },
+  { standard: 'UN R171 (DCAS)', desc: 'Cut-in/cut-out test parameters: TTC 1.5-5.0s, max deceleration -7.0 m/s2, jerk limit 3.0 m/s3. Level 2 driving assistance validation.', accent: 'violet' },
+  { standard: 'UN R157 (ALKS)', desc: 'Lateral acceleration limit 0.3g, curvature rate dk/ds < 0.1/m2, crosstrack error < 0.3m. Level 3 automated lane keeping standards.', accent: 'emerald' },
+];
+
+const accentColors: Record<string, string> = {
+  sky:     'border-sky-500/15 bg-sky-500/5 text-sky-400',
+  violet:  'border-violet-500/15 bg-violet-500/5 text-violet-400',
+  emerald: 'border-emerald-500/15 bg-emerald-500/5 text-emerald-400',
+};
+
+// Convergence map: experiential discoveries -> standards
+const convergences = [
+  { policy: 'P-001', name: 'Variable Isolation', arrow: 'Controlled Experiment Design' },
+  { policy: 'P-002', name: 'Staggered Curriculum', arrow: 'SOTIF Incremental Complexity' },
+  { policy: 'P-003', name: 'Capability Checkpoint', arrow: 'Transfer Learning Best Practice' },
+  { policy: 'P-004', name: 'Conservative Penalty', arrow: 'Reward Shaping Theory' },
+  { policy: 'P-005', name: 'Lateral Accel Limit', arrow: 'UN R157 (lat_accel < 0.3g)' },
+  { policy: 'P-006', name: 'TTC-Based Response', arrow: 'UN R171 (TTC 1.5-5.0s)' },
+  { policy: 'P-007', name: 'Curvature Rate', arrow: 'SOTIF FI + UN R157 dk/ds' },
+];
+---
+
+<section id="insights" class="py-24">
+  <div class="mx-auto max-w-7xl px-6">
+
+    <h2 class="section-heading">Insights</h2>
+    <p class="section-sub">
+      Lessons learned from 7 phases of RL training -- what worked, what failed, and how failures converge with safety standards
+    </p>
+
+    <!-- ========== What Worked / What Failed ========== -->
+    <div class="mt-12 grid gap-8 lg:grid-cols-2">
+
+      <!-- What worked -->
+      <div>
+        <h3 class="mb-5 flex items-center gap-2 text-lg font-semibold text-emerald-400">
+          <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-xs">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7" /></svg>
+          </span>
+          What Worked
+        </h3>
+        <div class="space-y-3">
+          {worked.map((item) => (
+            <div class="rounded-xl border border-emerald-500/10 bg-emerald-500/5 p-4 transition hover:border-emerald-500/20 card-glow">
+              <h4 class="font-semibold text-white text-sm">{item.title}</h4>
+              <p class="mt-1 text-xs text-slate-400 leading-relaxed">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- What failed -->
+      <div>
+        <h3 class="mb-5 flex items-center gap-2 text-lg font-semibold text-rose-400">
+          <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-xs">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </span>
+          What Failed
+        </h3>
+        <div class="space-y-3">
+          {failed.map((item) => (
+            <div class="rounded-xl border border-rose-500/10 bg-rose-500/5 p-4 transition hover:border-rose-500/20 card-glow">
+              <div class="flex items-center justify-between mb-1">
+                <h4 class="font-semibold text-white text-sm">{item.title}</h4>
+                <span class="text-[10px] font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 py-0.5">{item.policy}</span>
+              </div>
+              <p class="text-xs text-slate-400 leading-relaxed">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Standard Convergence Map ========== -->
+    <div class="mt-16 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 sm:p-8">
+      <h3 class="text-lg font-semibold text-white mb-2">Experiential Discovery to Standard Convergence</h3>
+      <p class="text-sm text-slate-400 mb-6">
+        Policies discovered through trial-and-error independently converge with established safety standards and best practices.
+      </p>
+      <div class="space-y-2 font-mono text-sm">
+        {convergences.map((c) => (
+          <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-0">
+            <div class="flex items-center gap-2 sm:w-[45%]">
+              <span class="text-xs text-sky-400 bg-sky-500/10 border border-sky-500/20 rounded px-1.5 py-0.5">{c.policy}</span>
+              <span class="text-sm text-slate-300">{c.name}</span>
+            </div>
+            <div class="hidden sm:block text-slate-600 px-3 sm:w-[10%] text-center">&harr;</div>
+            <div class="sm:w-[45%] text-sm text-amber-400">{c.arrow}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <!-- ========== Safety Standards ========== -->
+    <div class="mt-12">
+      <h3 class="text-lg font-semibold text-white mb-6">Safety Standards Integration</h3>
+      <div class="grid gap-4 sm:grid-cols-3">
+        {standards.map((s) => {
+          const colors = accentColors[s.accent];
+          return (
+            <div class={`rounded-xl border p-5 ${colors}`}>
+              <div class="text-sm font-semibold">{s.standard}</div>
+              <p class="mt-2 text-xs text-slate-400 leading-relaxed">{s.desc}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+  </div>
+</section>

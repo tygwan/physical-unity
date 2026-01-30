@@ -1,0 +1,164 @@
+---
+import { stats } from '../data/phases';
+
+const techItems = [
+  { name: 'Unity 6',        category: 'Simulation',   color: 'from-slate-500 to-slate-400' },
+  { name: 'ML-Agents 3.0',  category: 'Framework',    color: 'from-sky-500 to-sky-400' },
+  { name: 'PyTorch 2.0+',   category: 'ML Engine',    color: 'from-orange-500 to-orange-400' },
+  { name: 'PPO',            category: 'RL Algorithm',  color: 'from-emerald-500 to-emerald-400' },
+  { name: 'ROS2 Humble',    category: 'Middleware',    color: 'from-blue-500 to-blue-400' },
+  { name: 'C# / Python',    category: 'Languages',     color: 'from-violet-500 to-violet-400' },
+  { name: 'CUDA',           category: 'Compute',       color: 'from-green-500 to-green-400' },
+  { name: 'TensorBoard',    category: 'Monitoring',    color: 'from-rose-500 to-rose-400' },
+];
+
+const architecture = [
+  { label: 'Observation',  value: '254D vector', desc: 'ego state, route, NPC, lane markings, goal' },
+  { label: 'Action Space', value: 'Continuous 2D', desc: 'acceleration [-4, 2] m/s2, steering [-0.5, 0.5] rad' },
+  { label: 'Reward',       value: '7 components', desc: 'progress, speed, lane, overtaking, violation, jerk, time' },
+  { label: 'Training',     value: '16 parallel', desc: 'simultaneous environments with curriculum learning' },
+];
+
+const hwSpecs = [
+  { label: 'GPU',     value: stats.hardware.gpu },
+  { label: 'RAM',     value: stats.hardware.ram },
+  { label: 'Storage', value: stats.hardware.storage },
+  { label: 'OS',      value: stats.hardware.os },
+];
+
+const pipelineSteps = [
+  { label: 'Unity Simulation',  color: 'sky',     desc: '16 parallel envs' },
+  { label: 'ML-Agents Bridge',  color: 'violet',  desc: 'gRPC protocol' },
+  { label: 'PyTorch PPO',       color: 'orange',  desc: 'GPU training' },
+  { label: 'ONNX Export',       color: 'emerald', desc: 'model packaging' },
+  { label: 'Unity Inference',   color: 'rose',    desc: 'real-time control' },
+];
+
+const colorMap: Record<string, string> = {
+  sky:     'bg-sky-500/10 border-sky-500/20 text-sky-400',
+  violet:  'bg-violet-500/10 border-violet-500/20 text-violet-400',
+  orange:  'bg-orange-500/10 border-orange-500/20 text-orange-400',
+  emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+  rose:    'bg-rose-500/10 border-rose-500/20 text-rose-400',
+};
+
+// System architecture comparison: Tesla vs This Project
+const systemLayers = [
+  { layer: 'Input', tesla: '8x Cameras (1280x960)', project: '254D Ground Truth Vector', icon: 'I' },
+  { layer: 'Perception', tesla: 'Occupancy Network (400M params)', project: 'Direct from simulation', icon: 'P' },
+  { layer: 'Prediction', tesla: 'Occupancy Flow (2s horizon)', project: 'Constant velocity model', icon: 'R' },
+  { layer: 'Planning', tesla: 'MCTS + Neural Evaluator', project: 'PPO RL Policy (direct)', icon: 'L' },
+  { layer: 'Control', tesla: 'Neural MPC (40ms)', project: 'RL Policy output (2D)', icon: 'C' },
+];
+---
+
+<section id="architecture" class="py-24">
+  <div class="mx-auto max-w-7xl px-6">
+
+    <h2 class="section-heading">Architecture</h2>
+    <p class="section-sub">
+      System design, training pipeline, and hardware specifications
+    </p>
+
+    <!-- ========== Tech Stack Badges ========== -->
+    <div class="mt-12 flex flex-wrap justify-center gap-3">
+      {techItems.map((item) => (
+        <div class="group relative overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40 px-5 py-3 transition hover:border-slate-700 card-glow">
+          <div class={`absolute inset-0 bg-gradient-to-r ${item.color} opacity-0 transition group-hover:opacity-5`}></div>
+          <div class="relative">
+            <div class="text-sm font-semibold text-white">{item.name}</div>
+            <div class="text-xs text-slate-500">{item.category}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <!-- ========== Architecture Grid ========== -->
+    <div class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {architecture.map((item) => (
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-5 card-glow">
+          <div class="text-xs font-medium uppercase tracking-wider text-sky-400">{item.label}</div>
+          <div class="mt-2 text-lg font-bold text-white font-mono">{item.value}</div>
+          <div class="mt-1 text-sm text-slate-400">{item.desc}</div>
+        </div>
+      ))}
+    </div>
+
+    <!-- ========== Training Pipeline ========== -->
+    <div class="mt-12 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 sm:p-8">
+      <h3 class="text-lg font-semibold text-white mb-6">Training Pipeline</h3>
+      <div class="flex flex-col items-center gap-2 sm:flex-row sm:gap-0 sm:justify-between">
+        {pipelineSteps.map((step, i) => (
+          <>
+            <div class={`rounded-lg border px-4 py-2.5 text-center ${colorMap[step.color]} w-full sm:w-auto`}>
+              <div class="text-sm font-medium">{step.label}</div>
+              <div class="text-[10px] opacity-70 mt-0.5">{step.desc}</div>
+            </div>
+            {i < pipelineSteps.length - 1 && (
+              <>
+                <div class="hidden sm:block text-slate-600 px-2 text-lg">&rarr;</div>
+                <div class="sm:hidden text-slate-600 text-lg">&darr;</div>
+              </>
+            )}
+          </>
+        ))}
+      </div>
+    </div>
+
+    <!-- ========== System Architecture Comparison ========== -->
+    <div class="mt-12 grid gap-6 lg:grid-cols-2">
+
+      <!-- This Project -->
+      <div class="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6">
+        <h3 class="text-lg font-semibold text-sky-400 mb-4 flex items-center gap-2">
+          <span class="flex h-6 w-6 items-center justify-center rounded bg-sky-500/20 text-xs font-mono">AD</span>
+          This Project
+        </h3>
+        <div class="space-y-3">
+          {systemLayers.map((l) => (
+            <div class="flex items-center gap-3">
+              <span class="flex h-7 w-7 items-center justify-center rounded bg-sky-500/15 text-sky-400 text-xs font-mono shrink-0">{l.icon}</span>
+              <div class="flex-1">
+                <div class="text-xs text-slate-500">{l.layer}</div>
+                <div class="text-sm text-slate-300">{l.project}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- Tesla FSD -->
+      <div class="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6">
+        <h3 class="text-lg font-semibold text-rose-400 mb-4 flex items-center gap-2">
+          <span class="flex h-6 w-6 items-center justify-center rounded bg-rose-500/20 text-xs font-mono">T</span>
+          Tesla FSD 12/13
+        </h3>
+        <div class="space-y-3">
+          {systemLayers.map((l) => (
+            <div class="flex items-center gap-3">
+              <span class="flex h-7 w-7 items-center justify-center rounded bg-rose-500/15 text-rose-400 text-xs font-mono shrink-0">{l.icon}</span>
+              <div class="flex-1">
+                <div class="text-xs text-slate-500">{l.layer}</div>
+                <div class="text-sm text-slate-300">{l.tesla}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Hardware Specs ========== -->
+    <div class="mt-12 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 sm:p-8">
+      <h3 class="text-lg font-semibold text-white mb-6">Hardware Environment</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {hwSpecs.map((spec) => (
+          <div class="text-center">
+            <div class="text-xs text-slate-500 uppercase tracking-wider">{spec.label}</div>
+            <div class="mt-1 text-sm font-semibold text-white">{spec.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+  </div>
+</section>

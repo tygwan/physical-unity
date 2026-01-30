@@ -1,0 +1,226 @@
+# Phase B v2: Decision Learning (Hybrid Approach)
+#
+# ROOT CAUSE OF v1 FAILURE:
+#   Agent learned to STOP (speed=0) as optimal policy.
+#   Speed penalty accumulation: -0.2/step × 501 steps = -100.2
+#   See: experiments/phase-B-decision/ROOT-CAUSE-ANALYSIS.md
+#
+# v2 CHANGES (Option C: Hybrid Approach):
+#   1. INIT: Phase A checkpoint (proven +2113 capability)
+#   2. HYPERPARAMS: Identical to Phase A (proven stable)
+#   3. REWARD: Unity code changes required (see DESIGN.md)
+#      - speedUnderPenalty: -0.1 -> -0.02 (80% reduction)
+#      - overtakeInitiateBonus: 0.5 -> 2.0
+#      - overtakeBesideBonus: 0.2 -> 0.5
+#      - overtakeAheadBonus: 1.0 -> 2.0
+#      - overtakeCompleteBonus: 2.0 -> 3.0
+#      - NEW: blocked detection (suspend speed penalty when NPC ahead)
+#   4. CURRICULUM: Gradual 0->1->2->3 NPCs (not immediate 2)
+#
+# Usage:
+#   mlagents-learn python/configs/planning/vehicle_ppo_phase-B-v2.yaml \
+#     --run-id=phase-B-decision-v2 \
+#     --initialize-from=phase-A-overtaking
+#
+# PRE-FLIGHT VALIDATION (MANDATORY):
+#   1. 10K steps: Verify speed > 5 m/s
+#   2. 100K steps: Verify positive reward trend
+#   3. Auto-abort if speed < 1 m/s for 50K steps
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # === Hyperparameters: IDENTICAL to Phase A (proven stable) ===
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 3.0e-4
+      beta: 5.0e-3          # Phase A value (v1 changed this - reverted)
+      epsilon: 0.2
+      lambd: 0.95            # Phase A value (v1 used 0.99 - reverted)
+      num_epoch: 5           # Phase A value (v1 used 10 - reverted)
+      learning_rate_schedule: linear  # Phase A value (v1 used constant - reverted)
+
+    # === Network: IDENTICAL to Phase A ===
+    network_settings:
+      normalize: false       # Phase A value (v1 used true - reverted)
+      hidden_units: 512
+      num_layers: 3
+
+    # === Reward: IDENTICAL to Phase A ===
+    reward_signals:
+      extrinsic:
+        gamma: 0.99          # Phase A value (v1 used 0.995 - reverted)
+        strength: 1.0
+
+    # === Training Duration ===
+    max_steps: 3500000       # Extended for 4-stage curriculum
+    time_horizon: 256        # Phase A value (v1 used 2048 - reverted)
+    summary_freq: 5000       # Frequent logging for early detection
+    checkpoint_interval: 500000
+    keep_checkpoints: 7
+    threaded: false
+
+    # === INITIALIZATION: Phase A checkpoint (proven +2113) ===
+    init_path: results/phase-A-overtaking/E2EDrivingAgent/E2EDrivingAgent-2500155.pt
+
+# === 4-Stage Gradual Curriculum ===
+# Stage 0: Solo warmup (restore baseline)
+# Stage 1: Single slow NPC (learn overtaking decision)
+# Stage 2: Two mixed NPCs (selective overtaking)
+# Stage 3: Three mixed NPCs (complex decisions)
+environment_parameters:
+  # NPC count: 0 -> 1 -> 2 -> 3
+  num_active_npcs:
+    curriculum:
+      - name: Stage0_Solo
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 200
+          threshold: 200.0       # Moderate bar: agent can still drive
+          signal_smoothing: true
+        value: 0.0               # No NPCs - warmup only
+
+      - name: Stage1_SingleNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 400.0       # Must show overtaking capability
+          signal_smoothing: true
+        value: 1.0               # 1 NPC
+
+      - name: Stage2_TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 600.0       # Must handle 2 NPCs
+          signal_smoothing: true
+        value: 2.0               # 2 NPCs
+
+      - name: Stage3_ThreeNPCs
+        value: 3.0               # 3 NPCs (final stage)
+
+  # NPC speed ratio: slow -> mixed
+  npc_speed_ratio:
+    curriculum:
+      - name: VerySlow
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 200
+          threshold: 200.0
+          signal_smoothing: true
+        value: 0.3               # 30% of speed limit
+
+      - name: Slow
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 400.0
+          signal_smoothing: true
+        value: 0.5               # 50% of speed limit
+
+      - name: Medium
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 600.0
+          signal_smoothing: true
+        value: 0.7               # 70% of speed limit
+
+      - name: Mixed
+        value: 0.85              # 85% of speed limit (some fast, some slow)
+
+  # Goal distance: progressive
+  goal_distance:
+    curriculum:
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 200
+          threshold: 200.0
+          signal_smoothing: true
+        value: 80.0
+
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 400.0
+          signal_smoothing: true
+        value: 120.0
+
+      - name: LongGoal
+        value: 200.0
+
+  # Speed zone count
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 200
+          threshold: 400.0
+          signal_smoothing: true
+        value: 1.0
+
+      - name: MultiZone
+        value: 2.0
+
+  # NPC speed variation
+  npc_speed_variation:
+    curriculum:
+      - name: Uniform
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 300
+          threshold: 600.0
+          signal_smoothing: true
+        value: 0.0
+
+      - name: Mixed
+        value: 0.3
+
+# Environment settings
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+# Checkpoint settings
+checkpoint_settings:
+  run_id: phase-B-decision-v2
+  resume: false
+  force: false
+
+# Engine configuration
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda
+
+# === PHASE B v2 METADATA ===
+# version: phase-B-decision-v2
+# parent: phase-A-overtaking (checkpoint init)
+# v1_failure_ref: experiments/phase-B-decision/ROOT-CAUSE-ANALYSIS.md
+# design_doc: experiments/phase-B-decision-v2/DESIGN.md
+# expected_reward: +800 (Stage 0) -> +1800 (Stage 3)
+# expected_duration: 3.5M steps (~45 min on RTX 4090)

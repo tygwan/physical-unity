@@ -1,0 +1,243 @@
+---
+import { phases, canonicalPhases } from '../data/phases';
+
+// Build the roadmap nodes in display order (including failed versions)
+interface RoadmapNode {
+  id: string;
+  label: string;
+  subtitle: string;
+  reward: number | null;
+  status: 'success' | 'failed' | 'in_progress' | 'planned';
+  version?: number;
+  isFork: boolean; // visual: is this a failed branch?
+}
+
+const roadmapNodes: RoadmapNode[] = [
+  { id: 'phase-a',    label: 'A',    subtitle: 'Dense Overtaking',   reward: 937,   status: 'success',     isFork: false },
+  { id: 'phase-b-v1', label: 'B v1', subtitle: 'Decision Learning',  reward: -108,  status: 'failed',      isFork: true, version: 1 },
+  { id: 'phase-b-v2', label: 'B v2', subtitle: 'Decision Learning',  reward: 994,   status: 'success',     isFork: false, version: 2 },
+  { id: 'phase-c',    label: 'C',    subtitle: 'Multi-NPC',          reward: 1086,  status: 'success',     isFork: false },
+  { id: 'phase-d-v1', label: 'D v1', subtitle: 'Lane Obs 254D',     reward: -2156, status: 'failed',      isFork: true, version: 1 },
+  { id: 'phase-d-v2', label: 'D v2', subtitle: 'Lane Obs 254D',     reward: null,  status: 'in_progress', isFork: false, version: 2 },
+  { id: 'phase-e',    label: 'E',    subtitle: 'Curved Roads',       reward: 931,   status: 'success',     isFork: false },
+  { id: 'phase-f',    label: 'F',    subtitle: 'Multi-Lane',         reward: 988,   status: 'success',     isFork: false },
+  { id: 'phase-g',    label: 'G',    subtitle: 'Intersection',       reward: 492,   status: 'in_progress', isFork: false },
+];
+
+const statusStyles: Record<string, { dot: string; border: string; bg: string; text: string; ring: string }> = {
+  success:     { dot: 'bg-emerald-400', border: 'border-emerald-500/30', bg: 'bg-emerald-500/8',  text: 'text-emerald-400', ring: 'ring-emerald-500/20' },
+  failed:      { dot: 'bg-red-400',     border: 'border-red-500/30',     bg: 'bg-red-500/8',      text: 'text-red-400',     ring: 'ring-red-500/20' },
+  in_progress: { dot: 'bg-amber-400',   border: 'border-amber-500/30',   bg: 'bg-amber-500/8',    text: 'text-amber-400',   ring: 'ring-amber-500/20' },
+  planned:     { dot: 'bg-slate-500',   border: 'border-slate-600/30',   bg: 'bg-slate-600/8',    text: 'text-slate-400',   ring: 'ring-slate-500/20' },
+};
+
+function rewardDisplay(reward: number | null, status: string): string {
+  if (reward === null) return 'Training...';
+  if (reward < 0) return reward.toLocaleString();
+  return `+${reward.toLocaleString()}`;
+}
+---
+
+<section id="phases" class="py-24">
+  <div class="mx-auto max-w-7xl px-6">
+
+    <h2 class="section-heading">Training Phases</h2>
+    <p class="section-sub">
+      Progressive curriculum learning across 7 phases. Failed attempts are shown as branched paths -- each failure produced design policies reused in later phases.
+    </p>
+
+    <!-- ========== Desktop Roadmap (horizontal flow) ========== -->
+    <div class="mt-16 hidden lg:block">
+      <div class="relative">
+        <!-- Main flow line -->
+        <div class="absolute left-0 right-0 top-[72px] h-0.5 bg-slate-800"></div>
+
+        <div class="flex gap-2 justify-between">
+          {roadmapNodes.map((node, i) => {
+            const s = statusStyles[node.status];
+            const isFailed = node.status === 'failed';
+            const isActive = node.status === 'in_progress';
+            return (
+              <div class={`relative flex flex-col items-center ${isFailed ? 'opacity-75' : ''}`} style={`flex: ${isFailed ? '0.7' : '1'}`}>
+                {/* Fork indicator for failed versions */}
+                {isFailed && (
+                  <div class="absolute -top-1 left-1/2 -translate-x-1/2">
+                    <svg class="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </div>
+                )}
+
+                {/* Reward value above */}
+                <div class="mb-2 text-center h-10 flex items-end justify-center">
+                  <span class={`text-sm font-bold font-mono ${isFailed ? 'text-red-400' : isActive ? 'text-amber-400' : 'text-sky-400'}`}>
+                    {rewardDisplay(node.reward, node.status)}
+                  </span>
+                </div>
+
+                {/* Node circle */}
+                <div class={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 ${s.border} ${s.bg} ${isActive ? 'animate-pulse' : ''} transition hover:scale-110`}>
+                  {isFailed ? (
+                    <svg class="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  ) : node.status === 'success' ? (
+                    <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <div class={`h-3 w-3 rounded-full ${s.dot} ${isActive ? 'animate-pulse' : ''}`}></div>
+                  )}
+                </div>
+
+                {/* Label below */}
+                <div class="mt-3 text-center">
+                  <div class={`text-xs font-bold ${s.text}`}>{node.label}</div>
+                  <div class="mt-0.5 text-[10px] text-slate-500 max-w-[80px] mx-auto leading-tight">{node.subtitle}</div>
+                </div>
+
+                {/* Status badge */}
+                <div class="mt-2">
+                  <span class={`inline-block rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider ${s.bg} ${s.text} border ${s.border}`}>
+                    {node.status === 'in_progress' ? 'ACTIVE' : node.status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Mobile Roadmap (vertical flow) ========== -->
+    <div class="mt-12 lg:hidden">
+      <div class="relative ml-6 border-l-2 border-slate-800 pl-8">
+        {roadmapNodes.map((node) => {
+          const s = statusStyles[node.status];
+          const isFailed = node.status === 'failed';
+          const isActive = node.status === 'in_progress';
+          return (
+            <div class={`relative mb-6 last:mb-0 ${isFailed ? 'opacity-80' : ''}`}>
+              {/* Node dot on the line */}
+              <div class={`absolute -left-[2.55rem] top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 ${s.border} ${s.bg}`}>
+                {isFailed ? (
+                  <svg class="w-3 h-3 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                ) : node.status === 'success' ? (
+                  <svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <div class={`h-2 w-2 rounded-full ${s.dot} ${isActive ? 'animate-pulse' : ''}`}></div>
+                )}
+              </div>
+              {/* Content */}
+              <div class="flex items-baseline justify-between gap-3">
+                <div>
+                  <span class={`text-sm font-bold ${s.text}`}>{node.label}</span>
+                  <span class="text-xs text-slate-500 ml-2">{node.subtitle}</span>
+                </div>
+                <span class={`text-sm font-bold font-mono ${isFailed ? 'text-red-400' : isActive ? 'text-amber-400' : 'text-sky-400'}`}>
+                  {rewardDisplay(node.reward, node.status)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <!-- ========== Reward Evolution Chart ========== -->
+    <div class="mx-auto mt-16 max-w-4xl rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6">
+      <h3 class="mb-4 text-sm font-medium text-slate-400 font-mono">Reward Evolution (all attempts)</h3>
+      <div class="space-y-2 font-mono text-sm">
+        {roadmapNodes.map((node) => {
+          const maxAbs = 2156;
+          const absReward = node.reward !== null ? Math.abs(node.reward) : 0;
+          const width = node.reward !== null ? Math.max((absReward / 1200) * 100, 8) : 15;
+          const isNeg = node.reward !== null && node.reward < 0;
+          const barColor = node.status === 'failed'
+            ? 'bg-gradient-to-r from-red-700 to-red-500'
+            : node.status === 'in_progress'
+              ? 'bg-gradient-to-r from-amber-600 to-amber-400'
+              : 'bg-gradient-to-r from-sky-600 to-sky-400';
+          return (
+            <div class="flex items-center gap-3">
+              <span class={`w-12 text-right text-xs ${node.status === 'failed' ? 'text-red-400' : 'text-slate-500'}`}>
+                {node.label}
+              </span>
+              <div class="flex-1 relative">
+                <div class={`h-6 rounded ${barColor} flex items-center justify-end pr-2 transition-all`} style={`width: ${Math.min(width, 100)}%`}>
+                  <span class="text-xs font-medium text-white whitespace-nowrap">
+                    {node.reward !== null ? (isNeg ? node.reward.toLocaleString() : `+${node.reward.toLocaleString()}`) : '...'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div class="mt-4 flex items-center gap-4 text-xs text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-sky-600 to-sky-400 inline-block"></span> Success</span>
+        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-red-700 to-red-500 inline-block"></span> Failed</span>
+        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-amber-600 to-amber-400 inline-block"></span> In Progress</span>
+      </div>
+    </div>
+
+    <!-- ========== Phase Detail Cards ========== -->
+    <div class="mt-16">
+      <h3 class="text-lg font-semibold text-white mb-6">Phase Details</h3>
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {phases.map((phase) => {
+          const s = statusStyles[phase.status];
+          const isFailed = phase.status === 'failed';
+          return (
+            <article class={`group rounded-xl border ${s.border} ${s.bg} p-5 transition-all duration-300 hover:bg-opacity-20 card-glow`}>
+              {/* Header */}
+              <div class="flex items-start justify-between mb-3">
+                <span class={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border ${s.bg} ${s.text} ${s.border}`}>
+                  <span class={`h-1.5 w-1.5 rounded-full ${s.dot} ${phase.status === 'in_progress' ? 'animate-pulse' : ''}`}></span>
+                  {phase.status === 'in_progress' ? 'IN PROGRESS' : phase.status.toUpperCase()}
+                </span>
+                {phase.reward !== null ? (
+                  <span class={`text-xl font-bold font-mono ${isFailed ? 'text-red-400' : 'text-white'}`}>
+                    {phase.reward < 0 ? phase.reward.toLocaleString() : `+${phase.reward.toLocaleString()}`}
+                  </span>
+                ) : (
+                  <span class="text-sm font-medium text-amber-400">Training...</span>
+                )}
+              </div>
+
+              {/* Title */}
+              <h4 class="text-base font-bold text-white">{phase.name}: {phase.subtitle}</h4>
+              <p class="mt-1.5 text-xs leading-relaxed text-slate-400">{phase.description}</p>
+
+              {/* Key insight */}
+              <div class={`mt-3 rounded-lg border p-3 ${isFailed ? 'border-red-500/10 bg-red-500/5' : 'border-sky-500/10 bg-sky-500/5'}`}>
+                <p class={`text-xs font-medium ${isFailed ? 'text-red-400' : 'text-sky-400'}`}>
+                  {isFailed ? 'Failure Cause' : 'Key Insight'}
+                </p>
+                <p class="mt-1 text-xs text-slate-300">{phase.keyInsight}</p>
+              </div>
+
+              {/* Meta */}
+              <div class="mt-3 flex items-center gap-3 text-xs text-slate-500">
+                <span>Obs: {phase.observations}</span>
+                <span>Steps: {phase.steps}</span>
+              </div>
+
+              {/* Tags */}
+              <div class="mt-3 flex flex-wrap gap-1.5">
+                {phase.tags.map((tag) => (
+                  <span class="rounded bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-400">{tag}</span>
+                ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+
+  </div>
+</section>

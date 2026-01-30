@@ -144,6 +144,29 @@ config.yaml                                ← 이름을 명확하게 지정해�
 - v2 실험 폴더 준비 (별도 독립 폴더)
 - v1 폴더의 Status를 FAILED로 업데이트
 
+## Policy Discovery Integration
+
+학습 완료 또는 실패 문서화 시, `docs/POLICY-DISCOVERY-LOG.md`도 함께 업데이트한다.
+
+### 성공 시
+- 이전 Phase 실패에서 적용한 수정이 효과적이었는지 기록
+- 발견한 원칙이 있으면 Policy Registry에 새 항목 추가 (P-XXX)
+- 관련 국제 표준(SOTIF, UN R171/R157) 매칭 확인
+
+### 실패 시
+- 실패 원인에서 새로운 설계 원칙 도출
+- Policy Registry에 "미검증" 상태로 등록
+- 다음 Phase(v2)에서 검증 예정으로 표시
+
+### Entry 작성 필수 항목
+1. Phase명 + 버전
+2. 시도 내용
+3. 발생 문제 (수치 포함)
+4. 수정 내용 (구체적 변경)
+5. 결과
+6. 발견 원칙 (P-XXX)
+7. 관련 표준
+
 ## Validation Checklist
 
 실험 문서 생성 후 반드시 아래 체크리스트를 확인:

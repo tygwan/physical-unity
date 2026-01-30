@@ -98,3 +98,14 @@ events.out.*
 *.db
 *.parquet
 *.feather
+
+# Site build outputs
+site/docs/site/
+site/portfolio/node_modules/
+site/portfolio/dist/
+site/portfolio/.astro/
+
+# Claude Code ephemeral
+.claude.zip
+.claude/session.log
+nul

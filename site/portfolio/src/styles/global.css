@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+@theme {
+  --color-slate-850: #1a2332;
+  --color-blue-950: #0a1628;
+  --color-accent: #38bdf8;
+  --color-accent-dim: #0ea5e9;
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-danger: #ef4444;
+  --color-gold: #f59e0b;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #1e293b; }
+::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* ---------- Animations ---------- */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(56, 189, 248, 0.3); }
+  50%      { box-shadow: 0 0 20px rgba(56, 189, 248, 0.6); }
+}
+@keyframes slide-right {
+  from { width: 0; }
+  to   { width: var(--target-width, 100%); }
+}
+@keyframes draw-line {
+  from { stroke-dashoffset: 1000; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+.animate-fade-in-up-delay-1 {
+  animation: fade-in-up 0.6s ease-out 0.1s forwards;
+  opacity: 0;
+}
+.animate-fade-in-up-delay-2 {
+  animation: fade-in-up 0.6s ease-out 0.2s forwards;
+  opacity: 0;
+}
+.animate-fade-in-up-delay-3 {
+  animation: fade-in-up 0.6s ease-out 0.3s forwards;
+  opacity: 0;
+}
+.animate-fade-in-up-delay-4 {
+  animation: fade-in-up 0.6s ease-out 0.4s forwards;
+  opacity: 0;
+}
+.animate-scale-in {
+  animation: scale-in 0.5s ease-out forwards;
+  opacity: 0;
+}
+.glow-accent {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* ---------- Section utilities ---------- */
+.section-heading {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: white;
+  text-align: center;
+}
+@media (min-width: 640px) {
+  .section-heading { font-size: 2.25rem; }
+}
+.section-sub {
+  margin-top: 1rem;
+  text-align: center;
+  color: #94a3b8;
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+/* ---------- Roadmap connector lines ---------- */
+.roadmap-line {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, #334155, #475569);
+}
+.roadmap-line-success {
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+}
+.roadmap-line-fail {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+}
+
+/* ---------- Status dot ---------- */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-dot-success  { background: #22c55e; }
+.status-dot-failed   { background: #ef4444; }
+.status-dot-progress { background: #eab308; animation: pulse 2s infinite; }
+.status-dot-planned  { background: #64748b; }
+
+/* ---------- Card glow on hover ---------- */
+.card-glow {
+  transition: all 0.3s ease;
+}
+.card-glow:hover {
+  box-shadow: 0 0 30px rgba(56, 189, 248, 0.08);
+  border-color: #334155;
+}
+
+/* ---------- Gap badge colors ---------- */
+.gap-critical { background: rgba(239,68,68,0.12); color: #f87171; border-color: rgba(239,68,68,0.25); }
+.gap-major    { background: rgba(245,158,11,0.12); color: #fbbf24; border-color: rgba(245,158,11,0.25); }
+.gap-moderate { background: rgba(56,189,248,0.12); color: #38bdf8; border-color: rgba(56,189,248,0.25); }
+.gap-achieved { background: rgba(34,197,94,0.12);  color: #4ade80; border-color: rgba(34,197,94,0.25); }
+
+/* ---------- Mono font for data ---------- */
+.font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }

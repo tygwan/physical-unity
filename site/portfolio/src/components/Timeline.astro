@@ -1,0 +1,112 @@
+---
+import { phases } from '../data/phases';
+
+const timelineData = phases.map((p) => ({
+  name: p.name.replace('Phase ', ''),
+  subtitle: p.subtitle,
+  reward: p.reward,
+  status: p.status,
+}));
+---
+
+<section id="timeline" class="py-24">
+  <div class="mx-auto max-w-7xl px-6">
+    <h2 class="text-center text-3xl font-bold text-white sm:text-4xl">Training Timeline</h2>
+    <p class="mt-4 text-center text-slate-400">Progressive curriculum learning across 7 phases</p>
+
+    <!-- Desktop horizontal timeline -->
+    <div class="mt-16 hidden lg:block">
+      <div class="relative">
+        <!-- Line -->
+        <div class="absolute left-0 right-0 top-8 h-0.5 bg-slate-800"></div>
+        <div class="absolute left-0 top-8 h-0.5 bg-gradient-to-r from-sky-500 to-blue-500" style="width: 71%"></div>
+
+        <!-- Nodes -->
+        <div class="relative flex justify-between">
+          {timelineData.map((item) => {
+            const isSuccess = item.status === 'success';
+            const isActive = item.status === 'in_progress';
+            const dotClass = isSuccess
+              ? 'bg-sky-500 border-sky-400'
+              : isActive
+                ? 'bg-amber-500 border-amber-400 animate-pulse'
+                : 'bg-slate-700 border-slate-600';
+            return (
+              <div class="flex flex-col items-center">
+                <div class="mb-2 text-center">
+                  {item.reward !== null ? (
+                    <span class={`text-lg font-bold ${isSuccess ? 'text-sky-400' : 'text-amber-400'}`}>
+                      +{item.reward}
+                    </span>
+                  ) : (
+                    <span class="text-sm text-amber-400">v2...</span>
+                  )}
+                </div>
+                <div class={`relative z-10 h-4 w-4 rounded-full border-2 ${dotClass}`}></div>
+                <div class="mt-3 text-center">
+                  <div class="text-sm font-semibold text-white">{item.name}</div>
+                  <div class="mt-0.5 text-xs text-slate-500">{item.subtitle}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile vertical timeline -->
+    <div class="mt-12 lg:hidden">
+      <div class="relative ml-4 border-l-2 border-slate-800 pl-8">
+        {timelineData.map((item) => {
+          const isSuccess = item.status === 'success';
+          const isActive = item.status === 'in_progress';
+          const dotClass = isSuccess
+            ? 'bg-sky-500 border-sky-400'
+            : isActive
+              ? 'bg-amber-500 border-amber-400'
+              : 'bg-slate-700 border-slate-600';
+          return (
+            <div class="relative mb-8 last:mb-0">
+              <div class={`absolute -left-[2.55rem] top-1 h-3.5 w-3.5 rounded-full border-2 ${dotClass}`}></div>
+              <div class="flex items-baseline gap-3">
+                <span class="text-sm font-semibold text-white">{item.name}</span>
+                <span class="text-xs text-slate-500">{item.subtitle}</span>
+                {item.reward !== null && (
+                  <span class={`ml-auto text-sm font-bold ${isSuccess ? 'text-sky-400' : 'text-amber-400'}`}>
+                    +{item.reward}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <!-- Reward evolution chart (ASCII-style) -->
+    <div class="mx-auto mt-16 max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+      <h3 class="mb-4 text-sm font-medium text-slate-400 font-mono">Reward Evolution</h3>
+      <div class="space-y-2 font-mono text-sm">
+        {phases.map((p) => {
+          const maxReward = 1086;
+          const width = p.reward !== null ? Math.max((p.reward / maxReward) * 100, 5) : 15;
+          const barColor = p.status === 'success'
+            ? 'bg-gradient-to-r from-sky-600 to-sky-400'
+            : 'bg-gradient-to-r from-amber-600 to-amber-400';
+          return (
+            <div class="flex items-center gap-3">
+              <span class="w-8 text-right text-slate-500 text-xs">{p.name.replace('Phase ', '')}</span>
+              <div class="flex-1">
+                <div class={`h-6 rounded ${barColor} flex items-center justify-end pr-2`} style={`width: ${width}%`}>
+                  <span class="text-xs font-medium text-white">
+                    {p.reward !== null ? `+${p.reward}` : '...'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</section>

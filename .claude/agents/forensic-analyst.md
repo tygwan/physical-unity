@@ -416,3 +416,6 @@ ROOT-CAUSE-ANALYSIS.md 생성:
 ✅ ROOT-CAUSE-ANALYSIS.md 생성
 ✅ Actionable recommendations 제시
 ✅ User satisfied with depth of analysis
+
+### Policy Discovery 연동
+근본 원인 분석 시 `docs/POLICY-DISCOVERY-LOG.md`의 기존 원칙(P-XXX) 위반 여부를 확인한다. 새로운 실패 패턴에서 원칙을 도출하면 Policy ID를 부여하고 문서에 추가한다.
