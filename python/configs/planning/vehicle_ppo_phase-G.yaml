@@ -1,5 +1,5 @@
 # E2EDrivingAgent PPO v12 Phase G: Intersection Navigation
-# Strategy: FRESH START (254D→260D dimension change prevents checkpoint transfer)
+# Strategy: FRESH START (254D->260D dimension change prevents checkpoint transfer)
 # Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-G.yaml --run-id=phase-G --force
 #
 # v12 Phase G Design:
@@ -8,20 +8,20 @@
 # - Turn direction curriculum: Straight -> Left -> Right
 # - Road curvature DISABLED (focus on intersection mastery)
 # - Speed zones DISABLED (single zone, 60 km/h default)
-# - Fresh start required: 254D→260D first-layer weight shape mismatch
+# - Fresh start required: 254D->260D first-layer weight shape mismatch
 # - Expected: 10M steps (fresh start, generous budget)
 #
 # P-002 Strict Compliance (from Phase F v4 lesson):
 # - ALL thresholds are UNIQUE across ALL parameters
 # - Minimum 50-point gap between consecutive thresholds
-# - 3 macro phases: Intersection(150-400) → Environment(450-600) → NPC(650-800)
+# - 3 macro phases: Intersection(150-400) -> Environment(450-600) -> NPC(650-800)
 #
 # P-012 Compliance (from Phase F v3 lesson):
 # - No two parameters share any threshold value
-# - ML-Agents uses single global smoothed reward → same threshold = simultaneous transition
+# - ML-Agents uses single global smoothed reward -> same threshold = simultaneous transition
 #
 # P-009 Note (Observation-Environment Coupling):
-# - 254D→260D (+6D intersection obs) is combined with new intersection environment
+# - 254D->260D (+6D intersection obs) is combined with new intersection environment
 # - Acceptable because: (1) fresh start (no existing policy to protect),
 #   (2) intersection obs directly useful for intersection task,
 #   (3) fixed-env-first approach would provide zero intersection signal
@@ -36,7 +36,7 @@ behaviors:
   E2EDrivingAgent:
     trainer_type: ppo
 
-    # NO init_path: 254D→260D dimension change prevents checkpoint transfer
+    # NO init_path: 254D->260D dimension change prevents checkpoint transfer
     # Agent starts fresh, learning intersection navigation from zero
 
     hyperparameters:
@@ -69,9 +69,9 @@ behaviors:
     threaded: false
 
 environment_parameters:
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
   # MACRO PHASE 1: Intersection Core (thresholds 150-400)
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
 
   # Intersection type: 0=None, 1=T-junction, 2=Cross, 3=Y-junction
   # P-012: Thresholds 150, 350, 550 (unique, interleaved with other params)
@@ -127,11 +127,11 @@ environment_parameters:
       - name: RightTurn
         value: 2.0
 
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
   # MACRO PHASE 2: Environment Complexity (thresholds 250-600)
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
 
-  # Lane count: 1→2 lanes
+  # Lane count: 1->2 lanes
   # P-012: Threshold 250 (unique)
   num_lanes:
     curriculum:
@@ -184,9 +184,9 @@ environment_parameters:
       - name: LongGoal
         value: 200.0
 
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
   # MACRO PHASE 3: NPC Interaction (thresholds 500-800)
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
 
   # NPC count: reduced for intersection complexity
   # P-012: Thresholds 500, 700 (unique)
@@ -241,9 +241,9 @@ environment_parameters:
       - name: Varied
         value: 0.15
 
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
   # DISABLED: Not relevant for intersection training
-  # ═══════════════════════════════════════════════════════
+  # =======================================================
 
   # Road curvature: disabled (straight roads only for intersection focus)
   road_curvature:
