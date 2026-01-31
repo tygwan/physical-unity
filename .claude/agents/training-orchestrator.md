@@ -39,26 +39,44 @@ physical-unity/
 ## Workflow State Machine
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    TRAINING WORKFLOW STATE                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐ │
-│   │  PLAN    │ ──▶ │  TRAIN   │ ──▶ │ ANALYZE  │ ──▶ │  DECIDE  │ │
-│   │          │     │          │     │          │     │          │ │
-│   │ planner  │     │ monitor  │     │ analyst  │     │ this     │ │
-│   └──────────┘     └──────────┘     └──────────┘     └──────────┘ │
-│        ▲                                                   │       │
-│        └───────────────────────────────────────────────────┘       │
-│                                                                     │
-│   Side Effects:                                                     │
-│   ┌──────────────┐    ┌───────────────────┐                        │
-│   │ doc-manager  │    │ site-publisher    │                        │
-│   │ (문서 동기화) │    │ (gh-pages 발행)   │                        │
-│   └──────────────┘    └───────────────────┘                        │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                       TRAINING WORKFLOW STATE                             │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│ ┌────────┐  ┌────────┐  ┌─────────┐  ┌──────────┐  ┌────────┐          │
+│ │  PLAN  │─▶│ TRAIN  │─▶│ ANALYZE │─▶│ DOCUMENT │─▶│ DECIDE │          │
+│ │        │  │        │  │         │  │          │  │        │          │
+│ │planner │  │monitor │  │ analyst │  │ exp-doc  │  │  this  │          │
+│ └────────┘  └────────┘  └─────────┘  └──────────┘  └────────┘          │
+│      ▲                                                  │               │
+│      └──────────────────────────────────────────────────┘               │
+│                                                                          │
+│ ⚠️  DOCUMENT is MANDATORY, not a side effect.                           │
+│ Training without documentation = incomplete workflow.                    │
+│                                                                          │
+│ Post-DECIDE (optional):                                                  │
+│ ┌──────────────┐    ┌───────────────────┐                               │
+│ │ doc-manager  │    │ site-publisher    │                               │
+│ │ (문서 동기화) │    │ (gh-pages 발행)   │                               │
+│ └──────────────┘    └───────────────────┘                               │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
+
+### DOCUMENT Step Requirements
+
+DOCUMENT 단계는 ANALYZE 직후, DECIDE 전에 **반드시** 실행해야 한다.
+
+**필수 산출물** (experiment-documenter 담당):
+1. `experiments/phase-{X}/README.md` - Quick reference + 결과 요약
+2. `experiments/phase-{X}/DESIGN.md` - 기술 설계 문서
+3. `experiments/phase-{X}/ANALYSIS.md` - 학습 결과 분석
+4. `experiments/phase-{X}/config/` - 사용된 config 복사본
+5. `experiments/phase-{X}/results/` - training_status.json 등 아티팩트
+
+**검증 기준**: experiment-documenter의 Validation Checklist 전항목 PASS
+
+**위반 시**: DECIDE 단계에서 "문서 미완성" 경고 출력, 다음 Phase 진행 차단
 
 ## Decision Matrix
 
@@ -110,13 +128,17 @@ tasklist | findstr "mlagents"
 
 #### State: COMPLETED (학습 완료)
 ```
-→ 결과 분석
-→ Call: training-analyst
-→ 문서 업데이트
-→ Call: training-doc-manager
-→ 사이트 발행
-→ Call: training-site-publisher
-→ 다음 단계 결정
+→ 1. 결과 분석
+→    Call: training-analyst
+→ 2. ⚠️ 실험 문서화 (MANDATORY)
+→    Call: experiment-documenter
+→    검증: README.md, DESIGN.md, ANALYSIS.md, config/, results/ 모두 존재
+→ 3. 문서 동기화
+→    Call: training-doc-manager
+→ 4. 사이트 발행
+→    Call: training-site-publisher
+→ 5. 다음 단계 결정
+→    조건: 2번 검증 통과 필수
 ```
 
 ### 3. 워크플로우 실행
@@ -128,15 +150,22 @@ tasklist | findstr "mlagents"
    - 결과 분석 및 판정
    - TRAINING-LOG.md 결과 섹션 작성
 
-2. **문서 동기화** (training-doc-manager)
-   - 모든 문서 동기화
+2. **⚠️ 실험 문서화** (experiment-documenter) ← MANDATORY
+   - experiments/phase-{X}/ 표준 폴더 구조 생성
+   - README.md, DESIGN.md, ANALYSIS.md 작성
+   - config/, results/ 아티팩트 수집
+   - Validation Checklist 전항목 확인
+   - **이 단계를 건너뛰면 다음 Phase 진행 불가**
+
+3. **문서 동기화** (training-doc-manager)
+   - docs/phases/README.md 업데이트
    - 필요시 아카이브
 
-3. **사이트 발행** (training-site-publisher)
+4. **사이트 발행** (training-site-publisher)
    - gh-pages 업데이트
    - 커밋 및 푸시
 
-4. **다음 계획** (training-planner) - 성공 시
+5. **다음 계획** (training-planner) - 성공 시
    - 다음 Phase 설계
    - Config 생성
 ```

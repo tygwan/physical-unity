@@ -154,24 +154,35 @@ mlagents-learn python/configs/planning/vehicle_ppo_phase-D-v3.yaml --run-id=phas
 | 3M | +838.7 | Peak 도달 |
 | 5M | +837.9 | 안정 수렴 |
 
-### Run 2: phase-D-v3-254d (254D - VectorObservationSize 수정)
+### Run 2: phase-D-v3-254d (254D - VectorObservationSize 수정) - COMPLETED
 
 **수정 사항**: Unity Scene에서 `VectorObservationSize: 242 → 254` (16 agents 모두)
 - Checkpoint 검증: `seq_layers.0.weight: [512, 254]` (254D 확인)
-- 학습 상태: **진행 중**
+- 결과: **+895.5 reward** (5M steps 완료, SUCCESS)
 
-| Steps | Reward | Std | 비고 |
-|-------|--------|-----|------|
-| 10K | -50.5 | 19.4 | 초기 탐색 |
-| 100K | -40.9 | 8.0 | 안정화 시작 |
-| 200K | -37.6 | 2.7 | Plateau 진입 |
-| 300K | -36.8 | 1.5 | 242D와 동일 패턴 |
-| 500K | -36.5 | 1.5 | Checkpoint 1 exported |
-| 700K | -35.9 | 2.0 | 진행 중 (현재) |
+| Steps | Reward | 비고 |
+|-------|--------|------|
+| 500K | -36.5 | 탐색 단계 |
+| 1M | -392.0 | 혼란기 (탐색 폭발) |
+| 1.5M | +105.8 | Breakthrough |
+| 2M | +384.3 | 급속 상승 |
+| 2.5M | +553.1 | 수렴 접근 |
+| 3M | +878.8 | Peak 근접 |
+| 3.5M | +883.2 | Peak |
+| 4M | +855.4 | 안정 |
+| 4.5M | +849.6 | 안정 |
+| 5M | **+895.5** | 최종 수렴 |
 
-**242D 대비 동일 시점 비교**:
-- 242D @ 700K: -35.9 → 이후 1M에서 breakthrough 발생
-- 254D @ 700K: -35.9 → 동일 패턴, 1M 근처 breakthrough 예상
+**242D vs 254D 최종 비교**:
+
+| Metric | 242D (lane obs 없음) | 254D (lane obs 활성) | 차이 |
+|--------|---------------------|---------------------|------|
+| 최종 Reward | +835 | +895.5 | **+60 (+7.2%)** |
+| Peak Reward | +838.7 @ 3M | +895.5 @ 5M | +56.8 |
+| Breakthrough 시점 | 1.5M | 1.5M | 동일 |
+| 수렴 시점 | 3M | 3M | 동일 |
+
+**결론**: Lane observation(12D)이 +7.2% 성능 향상에 기여. 관측 공간 확장의 효과가 검증됨.
 
 **Policy Discoveries**:
 - P-009: 관측-환경 결합 금지 (관측 변경 시 환경 고정)
@@ -180,4 +191,4 @@ mlagents-learn python/configs/planning/vehicle_ppo_phase-D-v3.yaml --run-id=phas
 ---
 
 **Last Updated**: 2026-01-30
-**Status**: Training in progress (phase-D-v3-254d, 700K/5M steps)
+**Status**: COMPLETED (phase-D-v3-254d, +895.5 reward)

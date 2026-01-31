@@ -1,0 +1,300 @@
+# E2EDrivingAgent PPO v12 Phase F v4: Multi-Lane Roads + Center Line Rules
+# Strategy: Initialize from Phase E, strictly staggered curriculum
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-F-v4.yaml --run-id=phase-F-v4 --initialize-from=phase-E
+#
+# v4 Design (fixes v3 simultaneous transition crash):
+# - 254D observation (same as Phase E)
+# - STRICT P-002: Every threshold is UNIQUE across ALL params (min 50-point gap)
+# - learning_rate_schedule: constant (v3 used linear, caused lr decay to ~0 on extension)
+# - 3 macro phases: Lane Phase (150-300) -> Env Phase (400-550) -> NPC Phase (600-850)
+# - Initialize from Phase E checkpoint via --initialize-from CLI flag
+# - Budget: 10M steps (generous for 15 curriculum transitions)
+#
+# v3 Post-Mortem:
+# - Threshold 350 was shared by 4 params (goal_distance, speed_zone, curvature, npcs)
+# - At step 4.38M, 3 params transitioned simultaneously -> -2480 reward crash
+# - Agent spent 1.6M steps recovering, never fully restored
+# - lr decayed to ~0 on 2M extension due to linear schedule
+# - 4.32M best checkpoint (+406) lost to keep_checkpoints=5 rotation
+#
+# v4 Curriculum Threshold Map (all unique, ordered by transition priority):
+#   150 - num_lanes L0 (1->2)
+#   200 - num_lanes L1 (2->3)
+#   250 - center_line L0 (off->on)
+#   300 - num_lanes L2 (3->4)
+#   --- Lane Phase complete ---
+#   400 - goal_distance L0 (150->200m)
+#   450 - speed_zone_count L0 (1->2)
+#   500 - goal_distance L1 (200->250m)
+#   --- Env Phase 1 complete ---
+#   550 - road_curvature L0 (0->0.3)
+#   600 - road_curvature L1 (0.3->0.6)
+#   650 - curve_direction L0 (0->1)
+#   --- Env Phase 2 complete ---
+#   700 - num_active_npcs L0 (0->1)
+#   750 - num_active_npcs L1 (1->2)
+#   800 - num_active_npcs L2 (2->3)
+#   850 - npc_speed_ratio L0 (0.5->0.7)
+#   900 - npc_speed_variation L0 (0->0.2)
+#   --- NPC Phase complete ---
+#
+# Unity Environment Requirements:
+# - Same as Phase F v3 (WaypointManager multi-lane, DrivingSceneManager env params)
+# - Scene: PhaseF_MultiLane (already created)
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # Initialize from Phase E: use --initialize-from=phase-E CLI flag
+    # Do NOT use init_path in YAML (ONNX format incompatible with torch.load)
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 10000000
+    time_horizon: 256
+    summary_freq: 10000
+    threaded: false
+
+environment_parameters:
+  # ============================================================
+  # LANE PHASE (thresholds 150-300): Core Phase F feature
+  # ============================================================
+
+  # Lane count curriculum: 1 -> 2 -> 3 -> 4 lanes
+  # Threshold 150/200/300 - transitions first as core feature
+  # min_lesson_length: 1000 (prevent rapid successive lane transitions)
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1000
+          threshold: 150.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoLanes
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1000
+          threshold: 200.0
+          signal_smoothing: true
+        value: 2.0
+      - name: ThreeLanes
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1000
+          threshold: 300.0
+          signal_smoothing: true
+        value: 3.0
+      - name: FourLanes
+        value: 4.0
+
+  # Center line enforcement: 0 = no penalty, 1 = penalty for crossing
+  # Threshold 250 - between 2nd and 3rd lane transitions
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 250.0
+          signal_smoothing: true
+        value: 0.0
+      - name: CenterLineEnforced
+        value: 1.0
+
+  # ============================================================
+  # ENV PHASE 1 (thresholds 400-500): Goal and speed complexity
+  # ============================================================
+
+  # Goal distance: 150m -> 200m -> 250m
+  # Threshold 400/500 - well above lane phase (300)
+  goal_distance:
+    curriculum:
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 400.0
+          signal_smoothing: true
+        value: 150.0
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 500.0
+          signal_smoothing: true
+        value: 200.0
+      - name: LongGoal
+        value: 250.0
+
+  # Speed zones: 1 -> 2
+  # Threshold 450 - between goal_distance transitions
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 450.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoZones
+        value: 2.0
+
+  # ============================================================
+  # ENV PHASE 2 (thresholds 550-650): Curvature (Phase E maintenance)
+  # ============================================================
+
+  # Road curvature (agent already knows this from Phase E)
+  # Threshold 550/600 - after goal/speed established
+  road_curvature:
+    curriculum:
+      - name: Straight
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 550.0
+          signal_smoothing: true
+        value: 0.0
+      - name: GentleCurves
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 600.0
+          signal_smoothing: true
+        value: 0.3
+      - name: ModerateCurves
+        value: 0.6
+
+  # Curve direction variation
+  # Threshold 650 - after curvature established
+  curve_direction_variation:
+    curriculum:
+      - name: SingleDirection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 650.0
+          signal_smoothing: true
+        value: 0.0
+      - name: MixedDirections
+        value: 1.0
+
+  # ============================================================
+  # NPC PHASE (thresholds 700-900): Most dangerous, transitions last
+  # ============================================================
+
+  # NPC count: 0 -> 1 -> 2 -> 3
+  # Threshold 700/750/800 - highest priority tier
+  # min_lesson_length: 800 (extra caution for NPCs)
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 700.0
+          signal_smoothing: true
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 750.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 800.0
+          signal_smoothing: true
+        value: 2.0
+      - name: ThreeNPCs
+        value: 3.0
+
+  # NPC speed ratio: 0.5 -> 0.7
+  # Threshold 850 - after NPC count stabilized
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 850.0
+          signal_smoothing: true
+        value: 0.5
+      - name: MediumNPCs
+        value: 0.7
+
+  # NPC speed variation
+  # Threshold 900 - final transition (highest threshold)
+  npc_speed_variation:
+    curriculum:
+      - name: Uniform
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 400
+          threshold: 900.0
+          signal_smoothing: true
+        value: 0.0
+      - name: Varied
+        value: 0.2
+
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+checkpoint_settings:
+  run_id: phase-F-v4
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda

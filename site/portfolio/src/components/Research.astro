@@ -1,5 +1,5 @@
 ---
-import { policyDiscoveries, sotifQuadrants, teslaGapAnalysis, resourceComparisons } from '../data/phases';
+import { policyDiscoveries, sotifQuadrants, teslaGapAnalysis, resourceComparisons, references, referenceCategories } from '../data/phases';
 
 const quadrantColors: Record<number, { bg: string; border: string; text: string; label: string }> = {
   1: { bg: 'bg-emerald-500/8', border: 'border-emerald-500/20', text: 'text-emerald-400', label: 'SAFE' },
@@ -13,6 +13,22 @@ const gapColors: Record<string, string> = {
   MAJOR: 'gap-major',
   MODERATE: 'gap-moderate',
   ACHIEVED: 'gap-achieved',
+};
+
+const refCatColors: Record<string, string> = {
+  standard: 'border-violet-500/20 bg-violet-500/5',
+  academic: 'border-sky-500/20 bg-sky-500/5',
+  control: 'border-emerald-500/20 bg-emerald-500/5',
+  curriculum: 'border-amber-500/20 bg-amber-500/5',
+  analysis: 'border-slate-500/20 bg-slate-500/5',
+};
+
+const refLabelColors: Record<string, string> = {
+  standard: 'text-violet-400',
+  academic: 'text-sky-400',
+  control: 'text-emerald-400',
+  curriculum: 'text-amber-400',
+  analysis: 'text-slate-400',
 };
 ---
 
@@ -172,6 +188,78 @@ const gapColors: Record<string, string> = {
             </div>
           );
         })}
+      </div>
+    </div>
+
+    <!-- ========== References & Academic Research ========== -->
+    <div class="mt-20">
+      <h3 class="text-xl font-bold text-white flex items-center gap-2">
+        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400 text-xs font-mono">R</span>
+        References &amp; Academic Research
+      </h3>
+      <p class="mt-2 text-sm text-slate-400 max-w-2xl">
+        Standards, papers, and technical analyses that inform the training curriculum, reward design, and safety validation framework.
+      </p>
+
+      <!-- Category tabs -->
+      <div class="mt-8 flex flex-wrap gap-2">
+        {referenceCategories.map((cat) => {
+          const catRefs = references.filter((r) => r.category === cat.key);
+          return (
+            <span class="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-300">
+              <span class="font-mono text-cyan-400 mr-1">{cat.icon}</span>
+              {cat.label} <span class="text-slate-500 ml-1">({catRefs.length})</span>
+            </span>
+          );
+        })}
+      </div>
+
+      <!-- Reference list grouped by category -->
+      {referenceCategories.map((cat) => {
+        const catRefs = references.filter((r) => r.category === cat.key);
+        const catColors = refCatColors;
+        const labelColors = refLabelColors;
+        return (
+          <div class="mt-8">
+            <h4 class={`text-sm font-semibold ${labelColors[cat.key]} uppercase tracking-wider mb-4`}>
+              {cat.label}
+            </h4>
+            <div class="space-y-3">
+              {catRefs.map((ref) => (
+                <div class={`rounded-xl border ${catColors[cat.key]} p-4 transition hover:border-slate-600`}>
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                      <a href={ref.url} target="_blank" rel="noopener noreferrer"
+                         class="text-sm font-medium text-white hover:text-cyan-400 transition leading-snug">
+                        {ref.title}
+                      </a>
+                      <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        {ref.venue && <span>{ref.venue}</span>}
+                        <span class="text-slate-700">&middot;</span>
+                        <span>{ref.year}</span>
+                      </div>
+                    </div>
+                    <a href={ref.url} target="_blank" rel="noopener noreferrer"
+                       class="shrink-0 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs text-slate-400 hover:text-white hover:border-slate-500 transition">
+                      Open &rarr;
+                    </a>
+                  </div>
+                  <p class="mt-2 text-xs text-slate-400 leading-relaxed">{ref.relevance}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      <div class="mt-8 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+        <p class="text-sm text-slate-400 leading-relaxed">
+          <span class="text-slate-200 font-medium">Convergence Insight:</span> Our empirical policies (P-001 through P-011) discovered through trial-and-error training
+          independently converge with established international safety standards.
+          P-002 (Staggered Curriculum) maps to SOTIF's incremental complexity principle.
+          P-005/P-006 (planned) directly implement UN R157/R171 numerical limits.
+          This convergence validates that RL-based policy learning naturally rediscovers safety engineering principles.
+        </p>
       </div>
     </div>
 

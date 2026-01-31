@@ -169,14 +169,18 @@ namespace ADPlatform.Agents
             }
             else
             {
-                // Multi-zone layout: Residential → UrbanNarrow → UrbanGeneral → Expressway
+                // Descending speed layout: familiar default speed first, slower zones later
+                // Prevents curriculum shock: 1-zone (60 km/h) → 2-zones starts at (60, 50)
+                // count=2: UrbanGeneral(60) → UrbanNarrow(50)       [gentle 10 km/h drop]
+                // count=3: UrbanGeneral(60) → UrbanNarrow(50) → Residential(30)  [progressive]
+                // count=4: UrbanGeneral(60) → UrbanNarrow(50) → Residential(30) → Expressway(80)
                 SpeedZoneType[] zoneTypes = {
-                    SpeedZoneType.Residential,    // 30 km/h
+                    SpeedZoneType.UrbanGeneral,   // 60 km/h (same as single-zone default)
                     SpeedZoneType.UrbanNarrow,    // 50 km/h
-                    SpeedZoneType.UrbanGeneral,   // 60 km/h
+                    SpeedZoneType.Residential,    // 30 km/h
                     SpeedZoneType.Expressway      // 80 km/h
                 };
-                float[] zoneLimits = { 8.33f, 13.89f, 16.67f, 22.22f };
+                float[] zoneLimits = { 16.67f, 13.89f, 8.33f, 22.22f };
 
                 for (int i = 0; i < numSpeedZones; i++)
                 {
@@ -190,64 +194,85 @@ namespace ADPlatform.Agents
         /// <summary>
         /// Generate waypoints along the road with speed limit tags
         /// Supports curved roads when roadCurvature > 0 (Phase E)
+        /// Phase F v3 fix: reuses existing GameObjects to maintain Transform reference
+        /// continuity during curriculum transitions (prevents observation mismatch)
         /// </summary>
         public void GenerateWaypoints()
         {
-            // Clear existing
-            foreach (Transform child in transform)
-            {
-                Destroy(child.gameObject);
-            }
+            // Phase F v3: reuse existing child GameObjects instead of destroying them
+            // Destroying Transforms during curriculum transitions breaks agent observation
+            // references, causing policy-observation mismatch and entropy collapse
+            int existingChildCount = transform.childCount;
             waypoints.Clear();
 
+            // Collect new positions without creating GameObjects
+            List<Vector3> positions = new List<Vector3>();
             if (intersectionType > 0)
             {
-                // Intersection road (Phase G)
-                GenerateIntersectionWaypoints();
+                CollectIntersectionPositions(positions);
             }
             else if (roadCurvature <= 0.01f)
             {
-                // Straight road (Phase A-D behavior)
-                GenerateStraightWaypoints();
+                CollectStraightPositions(positions);
             }
             else
             {
-                // Curved road (Phase E+)
-                GenerateCurvedWaypoints();
+                CollectCurvedPositions(positions);
+            }
+
+            // Apply positions: reuse existing GameObjects, create new only if needed
+            for (int i = 0; i < positions.Count; i++)
+            {
+                Transform wp;
+                if (i < existingChildCount)
+                {
+                    wp = transform.GetChild(i);
+                    wp.gameObject.SetActive(true);
+                }
+                else
+                {
+                    GameObject go = new GameObject($"WP_{i:D3}");
+                    go.transform.SetParent(transform);
+                    wp = go.transform;
+                }
+                wp.localPosition = positions[i];
+                wp.name = $"WP_{i:D3}";
+                waypoints.Add(wp);
+            }
+
+            // Deactivate excess waypoints (don't destroy - may be reused later)
+            for (int i = positions.Count; i < existingChildCount; i++)
+            {
+                transform.GetChild(i).gameObject.SetActive(false);
             }
 
             // Assign speed limits to waypoints
             waypointSpeedLimits = new float[waypoints.Count];
             for (int i = 0; i < waypoints.Count; i++)
             {
-                // Use arc length approximation for curved roads
                 float progressZ = (float)i / waypoints.Count * roadLength - roadLength / 2f;
                 waypointSpeedLimits[i] = GetSpeedLimitAtZ(progressZ);
             }
 
-            UnityEngine.Debug.Log($"[WaypointManager] Generated {waypoints.Count} waypoints, lanes={numLanes}, curvature={roadCurvature:F2}, intersection={intersectionType}, turn={turnDirection}");
+            int reused = Mathf.Min(positions.Count, existingChildCount);
+            int created = Mathf.Max(0, positions.Count - existingChildCount);
+            UnityEngine.Debug.Log($"[WaypointManager] Generated {waypoints.Count} waypoints (reused={reused}, new={created}), lanes={numLanes}, curvature={roadCurvature:F2}, intersection={intersectionType}, turn={turnDirection}");
         }
 
         /// <summary>
-        /// Generate straight waypoints (Phase A-D original behavior)
+        /// Collect straight waypoint positions (Phase A-D original behavior)
         /// Updated in Phase F to support multi-lane
+        /// Phase F v3: outputs positions instead of creating GameObjects
         /// </summary>
-        private void GenerateStraightWaypoints()
+        private void CollectStraightPositions(List<Vector3> positions)
         {
             float startZ = -roadLength / 2f;
             float endZ = roadLength / 2f;
-            int count = 0;
-
-            // Calculate lane X position based on numLanes and currentLane
             float activeLaneX = GetLaneXPosition(currentLane);
 
             for (float z = startZ; z <= endZ; z += waypointSpacing)
             {
-                GameObject wp = new GameObject($"WP_{count:D3}");
-                wp.transform.SetParent(transform);
-                wp.transform.localPosition = new Vector3(activeLaneX, waypointY, z);
-                waypoints.Add(wp.transform);
-                count++;
+                positions.Add(new Vector3(activeLaneX, waypointY, z));
             }
         }
 
@@ -335,12 +360,48 @@ namespace ADPlatform.Agents
 
         /// <summary>
         /// Set lane count from curriculum parameter (Phase F)
+        /// Phase F v3 fix: shifts existing waypoint positions instead of regenerating
+        /// Maintains Transform reference continuity for agent observations
         /// </summary>
         public void SetLaneCount(int count)
         {
+            float oldLaneX = GetLaneXPosition(currentLane);
+
             numLanes = Mathf.Clamp(count, 1, 4);
             currentLane = 0;  // Reset to rightmost lane
-            GenerateWaypoints();
+
+            float newLaneX = GetLaneXPosition(currentLane);
+
+            if (waypoints.Count > 0)
+            {
+                // Shift existing waypoint X positions without destroying GameObjects
+                float deltaX = newLaneX - oldLaneX;
+                if (Mathf.Abs(deltaX) > 0.001f)
+                {
+                    foreach (var wp in waypoints)
+                    {
+                        if (wp != null)
+                        {
+                            Vector3 pos = wp.localPosition;
+                            pos.x += deltaX;
+                            wp.localPosition = pos;
+                        }
+                    }
+                }
+                // Re-assign speed limits for shifted positions
+                if (waypointSpeedLimits != null)
+                {
+                    for (int i = 0; i < waypoints.Count; i++)
+                    {
+                        waypointSpeedLimits[i] = GetSpeedLimitAtZ(waypoints[i].localPosition.z);
+                    }
+                }
+                UnityEngine.Debug.Log($"[WaypointManager] SetLaneCount({count}): {waypoints.Count} waypoints repositioned (deltaX={deltaX:F2})");
+            }
+            else
+            {
+                GenerateWaypoints();
+            }
         }
 
         /// <summary>
@@ -352,64 +413,45 @@ namespace ADPlatform.Agents
         }
 
         /// <summary>
-        /// Generate curved waypoints (Phase E)
+        /// Collect curved waypoint positions (Phase E)
         /// Creates smooth curves with varying directions based on curriculum parameters
         /// Updated in Phase F to support multi-lane
+        /// Phase F v3: outputs positions instead of creating GameObjects
         /// </summary>
-        private void GenerateCurvedWaypoints()
+        private void CollectCurvedPositions(List<Vector3> positions)
         {
-            // Calculate lane X position based on numLanes and currentLane
             float activeLaneX = GetLaneXPosition(currentLane);
 
-            // Current position and heading
             Vector3 currentPos = new Vector3(activeLaneX, waypointY, -roadLength / 2f);
-            float currentHeading = 0f;  // 0 = forward (Z+), in degrees
+            float currentHeading = 0f;
             float totalDistance = 0f;
-            int count = 0;
-            int curveDirection = 1;  // 1 = right, -1 = left
+            int curveDirection = 1;
 
-            // Determine curve segments
             float segmentLength = Random.Range(minCurveSegmentLength, maxCurveSegmentLength);
             float segmentProgress = 0f;
             float targetCurveAngle = GetRandomCurveAngle(curveDirection);
 
             while (totalDistance < roadLength)
             {
-                // Create waypoint
-                GameObject wp = new GameObject($"WP_{count:D3}");
-                wp.transform.SetParent(transform);
-                wp.transform.localPosition = currentPos;
-                waypoints.Add(wp.transform);
-                count++;
+                positions.Add(currentPos);
 
-                // Update segment progress
                 segmentProgress += waypointSpacing;
                 if (segmentProgress >= segmentLength)
                 {
-                    // Start new curve segment
                     segmentProgress = 0f;
                     segmentLength = Random.Range(minCurveSegmentLength, maxCurveSegmentLength);
 
-                    // Determine curve direction
                     if (curveDirectionVariation > 0.5f)
-                    {
-                        // Random direction
                         curveDirection = Random.value > 0.5f ? 1 : -1;
-                    }
                     else
-                    {
-                        // Alternate or maintain direction
                         curveDirection = -curveDirection;
-                    }
                     targetCurveAngle = GetRandomCurveAngle(curveDirection);
                 }
 
-                // Apply gradual heading change (smooth curve)
                 float curveRate = (targetCurveAngle / segmentLength) * waypointSpacing;
                 currentHeading += curveRate;
                 currentHeading = Mathf.Clamp(currentHeading, -maxCurveAngle, maxCurveAngle);
 
-                // Move to next position
                 float headingRad = currentHeading * Mathf.Deg2Rad;
                 Vector3 moveDir = new Vector3(Mathf.Sin(headingRad), 0f, Mathf.Cos(headingRad));
                 currentPos += moveDir * waypointSpacing;
@@ -428,13 +470,13 @@ namespace ADPlatform.Agents
         }
 
         /// <summary>
-        /// Generate intersection waypoints (Phase G)
+        /// Collect intersection waypoint positions (Phase G)
         /// Supports T-junction, Cross, Y-junction with turn directions
+        /// Phase F v3: outputs positions instead of creating GameObjects
         /// </summary>
-        private void GenerateIntersectionWaypoints()
+        private void CollectIntersectionPositions(List<Vector3> positions)
         {
             float activeLaneX = GetLaneXPosition(currentLane);
-            int count = 0;
 
             // Phase 1: Approach to intersection (straight section)
             float approachStart = -roadLength / 2f;
@@ -442,135 +484,90 @@ namespace ADPlatform.Agents
 
             for (float z = approachStart; z < approachEnd; z += waypointSpacing)
             {
-                CreateWaypoint(activeLaneX, z, count++);
+                positions.Add(new Vector3(activeLaneX, waypointY, z));
             }
 
             // Phase 2: Intersection maneuver based on turn direction
             switch (turnDirection)
             {
-                case 0: // Straight
-                    GenerateStraightThroughIntersection(activeLaneX, ref count);
+                case 0:
+                    CollectStraightThroughPositions(activeLaneX, positions);
                     break;
-                case 1: // Left turn
-                    GenerateLeftTurn(activeLaneX, ref count);
+                case 1:
+                    CollectLeftTurnPositions(activeLaneX, positions);
                     break;
-                case 2: // Right turn
-                    GenerateRightTurn(activeLaneX, ref count);
+                case 2:
+                    CollectRightTurnPositions(activeLaneX, positions);
                     break;
             }
 
-            // Phase 3: Exit section (continue after intersection)
-            GenerateExitSection(ref count);
+            // Phase 3: Exit section
+            CollectExitSectionPositions(positions);
         }
 
-        private void CreateWaypoint(float x, float z, int index)
-        {
-            GameObject wp = new GameObject($"WP_{index:D3}");
-            wp.transform.SetParent(transform);
-            wp.transform.localPosition = new Vector3(x, waypointY, z);
-            waypoints.Add(wp.transform);
-        }
-
-        private void CreateWaypointAtPosition(Vector3 localPos, int index)
-        {
-            GameObject wp = new GameObject($"WP_{index:D3}");
-            wp.transform.SetParent(transform);
-            wp.transform.localPosition = localPos;
-            waypoints.Add(wp.transform);
-        }
-
-        /// <summary>
-        /// Generate waypoints for going straight through intersection
-        /// </summary>
-        private void GenerateStraightThroughIntersection(float laneX, ref int count)
+        private void CollectStraightThroughPositions(float laneX, List<Vector3> positions)
         {
             float startZ = intersectionDistance - intersectionWidth / 2f;
             float endZ = intersectionDistance + intersectionWidth / 2f;
 
             for (float z = startZ; z <= endZ; z += waypointSpacing * 0.5f)
             {
-                CreateWaypoint(laneX, z, count++);
+                positions.Add(new Vector3(laneX, waypointY, z));
             }
         }
 
-        /// <summary>
-        /// Generate waypoints for left turn at intersection
-        /// Uses smooth arc path
-        /// </summary>
-        private void GenerateLeftTurn(float startLaneX, ref int count)
+        private void CollectLeftTurnPositions(float startLaneX, List<Vector3> positions)
         {
-            float intersectionCenter = intersectionDistance;
-            float turnStartZ = intersectionCenter - turnRadius;
-            float turnEndX = startLaneX - turnRadius - laneWidth;
+            float turnStartZ = intersectionDistance - turnRadius;
 
-            // Arc points for smooth left turn (90 degrees)
             int arcSegments = 8;
             for (int i = 0; i <= arcSegments; i++)
             {
                 float t = (float)i / arcSegments;
-                float angle = t * Mathf.PI / 2f;  // 0 to 90 degrees
+                float angle = t * Mathf.PI / 2f;
 
-                // Parametric arc: starts going forward, ends going left
                 float x = startLaneX - turnRadius * (1f - Mathf.Cos(angle));
                 float z = turnStartZ + turnRadius * Mathf.Sin(angle);
 
-                CreateWaypoint(x, z, count++);
+                positions.Add(new Vector3(x, waypointY, z));
             }
         }
 
-        /// <summary>
-        /// Generate waypoints for right turn at intersection
-        /// Uses smooth arc path
-        /// </summary>
-        private void GenerateRightTurn(float startLaneX, ref int count)
+        private void CollectRightTurnPositions(float startLaneX, List<Vector3> positions)
         {
-            float intersectionCenter = intersectionDistance;
-            float turnStartZ = intersectionCenter - turnRadius * 0.5f;
+            float turnStartZ = intersectionDistance - turnRadius * 0.5f;
 
-            // Arc points for smooth right turn (90 degrees)
-            int arcSegments = 6;  // Tighter turn
+            int arcSegments = 6;
             for (int i = 0; i <= arcSegments; i++)
             {
                 float t = (float)i / arcSegments;
-                float angle = t * Mathf.PI / 2f;  // 0 to 90 degrees
+                float angle = t * Mathf.PI / 2f;
 
-                // Parametric arc: starts going forward, ends going right
                 float x = startLaneX + turnRadius * (1f - Mathf.Cos(angle));
                 float z = turnStartZ + turnRadius * 0.7f * Mathf.Sin(angle);
 
-                CreateWaypoint(x, z, count++);
+                positions.Add(new Vector3(x, waypointY, z));
             }
         }
 
-        /// <summary>
-        /// Generate exit section after intersection based on turn direction
-        /// </summary>
-        private void GenerateExitSection(ref int count)
+        private void CollectExitSectionPositions(List<Vector3> positions)
         {
-            Vector3 lastWp = waypoints[waypoints.Count - 1].localPosition;
+            Vector3 lastPos = positions[positions.Count - 1];
             float exitLength = roadLength / 2f - intersectionDistance - intersectionWidth / 2f;
 
             switch (turnDirection)
             {
-                case 0: // Straight - continue forward
+                case 0:
                     for (float d = waypointSpacing; d <= exitLength; d += waypointSpacing)
-                    {
-                        CreateWaypoint(lastWp.x, lastWp.z + d, count++);
-                    }
+                        positions.Add(new Vector3(lastPos.x, waypointY, lastPos.z + d));
                     break;
-
-                case 1: // Left turn - continue left (negative X direction)
+                case 1:
                     for (float d = waypointSpacing; d <= exitLength; d += waypointSpacing)
-                    {
-                        CreateWaypoint(lastWp.x - d, lastWp.z, count++);
-                    }
+                        positions.Add(new Vector3(lastPos.x - d, waypointY, lastPos.z));
                     break;
-
-                case 2: // Right turn - continue right (positive X direction)
+                case 2:
                     for (float d = waypointSpacing; d <= exitLength; d += waypointSpacing)
-                    {
-                        CreateWaypoint(lastWp.x + d, lastWp.z, count++);
-                    }
+                        positions.Add(new Vector3(lastPos.x + d, waypointY, lastPos.z));
                     break;
             }
         }

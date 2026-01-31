@@ -1,11 +1,10 @@
-name: Deploy Portfolio & Docs
+name: Deploy Site
 
 on:
   push:
     branches: [master]
     paths:
-      - 'site/**'
-      - 'docs/**'
+      - 'site/portfolio/**'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch:
 
@@ -27,7 +26,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Build Astro Portfolio
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -35,39 +33,18 @@ jobs:
           cache: npm
           cache-dependency-path: site/portfolio/package-lock.json
 
-      - name: Install Astro dependencies
+      - name: Install dependencies
         working-directory: site/portfolio
         run: npm ci
 
-      - name: Build Astro portfolio
+      - name: Build Astro site
         working-directory: site/portfolio
         run: npx astro build
-
-      # Build MkDocs Documentation
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install MkDocs dependencies
-        run: pip install mkdocs-material mkdocs-git-revision-date-localized-plugin
-
-      - name: Build MkDocs docs
-        working-directory: site/docs
-        run: mkdocs build -d site
-
-      # Merge outputs: Astro at root, MkDocs at /docs/
-      - name: Merge site outputs
-        run: |
-          mkdir -p _site
-          cp -r site/portfolio/dist/* _site/
-          mkdir -p _site/docs
-          cp -r site/docs/site/* _site/docs/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: site/portfolio/dist
 
   deploy:
     environment:

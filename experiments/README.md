@@ -56,6 +56,28 @@ Phase A (2M) ──> Phase B (2M) ──> Phase C (4M) ──> Phase E (6M) ─�
    └─ Dense traffic └─ Decisions     └─ Multi-NPC    └─ Curves      └─ Lanes       └─ Intersections
 ```
 
+## Scene-Phase Matching Rule (P-011)
+
+Each training phase MUST use its designated Unity scene. Wrong scene = training failure.
+
+| Phase | Required Scene | Road Width | Features |
+|-------|---------------|------------|----------|
+| A | PhaseA_DenseOvertaking | 4.5m (1 lane) | Dense NPC traffic |
+| B | PhaseB_DecisionLearning | 4.5m (1 lane) | Decision making |
+| C | PhaseC_MultiNPC | 4.5m (1 lane) | Multi-NPC |
+| E | PhaseE_CurvedRoads | 4.5m (1 lane) | Curved waypoints |
+| F | PhaseF_MultiLane | 11.5m (3 lane) | Multi-lane, center line |
+| G | PhaseG_Intersection | 14m (4 lane) | Intersections, turn logic |
+
+**Pre-training checklist**:
+1. Open Unity Editor
+2. Verify active scene name matches the phase (top of hierarchy)
+3. DrivingSceneManager will log a warning if scene-phase mismatch is detected
+4. Start mlagents-learn, THEN press Play in Unity
+
+**Failure case (Phase F v1)**: PhaseE scene (4.5m road) was active during Phase F training.
+num_lanes=2 transition generated 7m waypoints on 4.5m road -> off-road -> -8 reward -> 4.27M wasted steps.
+
 ## Quick Commands
 
 ### Start Training

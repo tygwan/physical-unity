@@ -12,17 +12,16 @@ interface RoadmapNode {
   isFork: boolean; // visual: is this a failed branch?
 }
 
-const roadmapNodes: RoadmapNode[] = [
-  { id: 'phase-a',    label: 'A',    subtitle: 'Dense Overtaking',   reward: 937,   status: 'success',     isFork: false },
-  { id: 'phase-b-v1', label: 'B v1', subtitle: 'Decision Learning',  reward: -108,  status: 'failed',      isFork: true, version: 1 },
-  { id: 'phase-b-v2', label: 'B v2', subtitle: 'Decision Learning',  reward: 994,   status: 'success',     isFork: false, version: 2 },
-  { id: 'phase-c',    label: 'C',    subtitle: 'Multi-NPC',          reward: 1086,  status: 'success',     isFork: false },
-  { id: 'phase-d-v1', label: 'D v1', subtitle: 'Lane Obs 254D',     reward: -2156, status: 'failed',      isFork: true, version: 1 },
-  { id: 'phase-d-v2', label: 'D v2', subtitle: 'Lane Obs 254D',     reward: null,  status: 'in_progress', isFork: false, version: 2 },
-  { id: 'phase-e',    label: 'E',    subtitle: 'Curved Roads',       reward: 931,   status: 'success',     isFork: false },
-  { id: 'phase-f',    label: 'F',    subtitle: 'Multi-Lane',         reward: 988,   status: 'success',     isFork: false },
-  { id: 'phase-g',    label: 'G',    subtitle: 'Intersection',       reward: 492,   status: 'in_progress', isFork: false },
-];
+// Derive roadmap nodes from canonical phases data (single source of truth)
+const roadmapNodes: RoadmapNode[] = phases.map((p) => ({
+  id: p.id,
+  label: p.name.replace('Phase ', ''),
+  subtitle: p.subtitle,
+  reward: p.reward,
+  status: p.status,
+  isFork: p.status === 'failed',
+  version: p.version,
+}));
 
 const statusStyles: Record<string, { dot: string; border: string; bg: string; text: string; ring: string }> = {
   success:     { dot: 'bg-emerald-400', border: 'border-emerald-500/30', bg: 'bg-emerald-500/8',  text: 'text-emerald-400', ring: 'ring-emerald-500/20' },
@@ -153,7 +152,7 @@ function rewardDisplay(reward: number | null, status: string): string {
       <h3 class="mb-4 text-sm font-medium text-slate-400 font-mono">Reward Evolution (all attempts)</h3>
       <div class="space-y-2 font-mono text-sm">
         {roadmapNodes.map((node) => {
-          const maxAbs = 2156;
+          const maxAbs = 2200; // Scale reference: Phase A peak was 2113
           const absReward = node.reward !== null ? Math.abs(node.reward) : 0;
           const width = node.reward !== null ? Math.max((absReward / 1200) * 100, 8) : 15;
           const isNeg = node.reward !== null && node.reward < 0;

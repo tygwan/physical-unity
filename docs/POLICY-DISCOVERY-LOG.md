@@ -13,7 +13,7 @@
 | ID | 원칙명 | 발견 Phase | 관련 표준 | 상태 |
 |----|--------|-----------|----------|------|
 | P-001 | 변수 격리 원칙 (Single Variable Isolation) | Phase B v1→v2 | 실험설계 기본원칙 | 검증 완료 |
-| P-002 | Staggered Curriculum 원칙 | Phase D v1→v2 | SOTIF 점진적 복잡도 | 검증 중 |
+| P-002 | Staggered Curriculum 원칙 | Phase D v1→v2, E | SOTIF 점진적 복잡도 | 검증 완료 (위반 시 회복 가능하나 비효율) |
 | P-003 | 능력 기반 체크포인트 선택 | Phase B v1→v2 | Transfer Learning Best Practice | 검증 완료 |
 | P-004 | 보수적 페널티 설계 | Phase B v1→v2 | Reward Shaping Theory | 검증 완료 |
 | P-005 | 횡가속도 제한 (예정) | Phase E (예정) | UN R157 (lat_accel < 0.3g) | 미검증 |
@@ -22,6 +22,7 @@
 | P-008 | 센서 열화 대응 (예정) | Phase K (예정) | SOTIF TC (Triggering Condition) | 미검증 |
 | P-009 | 관측-환경 결합 금지 (Observation Coupling) | Phase D v2→v3 | P-001 확장, SOTIF 점진적 복잡도 | 검증 완료 |
 | P-010 | Scene-Config-Code 일관성 (Triple Consistency) | Phase D v3 254D | 시스템 무결성, Preflight Check | 검증 완료 |
+| P-011 | Scene-Phase 매칭 (Scene-Phase Matching) | Phase F v1 | P-010 확장, 환경 무결성 | 검증 완료 |
 
 ## 상세 기록
 
@@ -150,8 +151,9 @@
 - 242D 기준 +835 달성 (Phase C와 동등, lane obs 미활성 상태)
 
 **Phase D v3 결과 (254D 수정 후)**:
-- 학습 진행 중 (560K/5M steps, reward -36.2)
+- **+895.5 reward** (5M steps 완료, SUCCESS)
 - 254D 입력 확인: checkpoint `seq_layers.0.weight: [512, 254]`
+- 242D 대비 **+7.2% 향상** (835 → 895.5)
 
 **발견한 원칙**:
 - **P-009 (관측-환경 결합 금지)**: 관측 공간 변경과 환경 난이도 변경을 동시에 수행하지 않는다. P-001(변수 격리)의 확장으로, 새로운 센서/관측을 추가할 때는 환경을 고정하고, 관측 학습이 완료된 후에만 커리큘럼을 적용한다.
@@ -200,11 +202,100 @@
 
 ---
 
-### Entry #6-10: 예정 항목 (Phase E ~ K)
+### Entry #6: Phase E (Curved Roads) - P-002 위반과 회복
+
+**Phase**: Phase E (Curved Roads, 254D)
+
+**시도**: Phase D v3 체크포인트에서 초기화, 7개 커리큘럼 파라미터로 곡선 도로 학습
+- road_curvature: 0→0.3→0.6→1.0 (4단계)
+- curve_direction_variation: 0→1.0
+- num_active_npcs: 0→1→2
+- npc_speed_ratio: 0.4→0.7
+- goal_distance: 100→150→200
+- speed_zone_count: 1→2
+- npc_speed_variation: 0→0.2
+
+**문제**: Step 1.68M에서 4개 파라미터가 동시 전환 (P-002 위반)
+- **동시 전환**: npc_speed_ratio(→0.7), goal_distance(→150), speed_zone_count(→2), npc_speed_variation(→0.2)
+- 전환 직전 보상: +362
+- 전환 직후 보상: -3,863 (4,225 points 폭락)
+- **원인**: 4개 커리큘럼의 completion_criteria threshold가 유사 (280-300 범위)하여 거의 동시에 도달
+- 이전 Phase D v1/v2와 동일한 패턴의 커리큘럼 붕괴
+
+**회복**: Step 2.44M에서 양수 보상 복귀 (~800K steps 회복기간)
+- 2.44M: -158 → 양수 전환
+- 2.63M: goal_distance → LongGoal (200m)
+- 2.88M: num_active_npcs → OneNPC
+- 3.14M: num_active_npcs → TwoNPCs
+- 3.47M: road_curvature → GentleCurves (0.3)
+- 3.81M: road_curvature → ModerateCurves (0.6)
+- 4.15M: road_curvature → SharpCurves (1.0)
+- 3.58M: Peak +956, 이후 안정적 +920-940 유지
+
+**결과**: 최종 보상 +892.6, Peak +938.2 (SUCCESS)
+- 모든 7개 커리큘럼 최종 레슨 완료
+- Sharp curves (1.0) + Mixed directions + 2 NPCs + 200m goal
+
+**분석**: Phase D v1/v2와 Phase E의 차이
+- Phase D v1: 동시 전환 후 회복 실패 (+406 → -2,156)
+- Phase D v2: 동시 전환 후 회복 실패 (+447 → -756)
+- Phase E: 동시 전환 후 회복 성공 (+362 → -3,863 → +938)
+- **가설**: Phase E는 Phase D v3(254D, 고정 환경)에서 충분히 안정화된 정책을 기반으로 학습하여, 커리큘럼 충격에서 회복할 수 있는 기반이 존재했음
+- **결론**: P-002 위반은 여전히 위험하지만, 강건한 기반 정책이 있으면 회복 가능. 그러나 800K steps(~13%)의 학습 예산이 낭비되므로 P-002 준수를 권장
+
+**관련 표준**: P-002 (Staggered Curriculum) 보강, P-003 (능력 기반 체크포인트)의 유효성 재확인
+
+---
+
+### Entry #7: Phase F v1 (Multi-Lane) - Scene-Phase 불일치로 즉사
+
+**Phase**: Phase F v1 (Multi-Lane, 254D)
+
+**시도**: Phase E 체크포인트에서 초기화, 9개 커리큘럼으로 다차선 도로 학습
+- num_lanes: 1 -> 2 -> 3 -> 4 (핵심 신규 기능)
+- center_line_enabled: 0 -> 1
+- road_curvature, curve_direction_variation (Phase E 유지)
+- num_active_npcs, npc_speed_ratio, npc_speed_variation
+- goal_distance, speed_zone_count
+- P-002 준수: 임계값 300/350/400/450/500 분산 배치
+
+**문제**: Step 1520K에서 `num_lanes` 1->2 전환 시 즉사
+- 전환 직전 보상: +303 (안정적 학습 중)
+- 전환 직후 보상: -8.19 (20K steps 내 붕괴)
+- **4.27M steps (1520K~5820K) 동안 -8.15에 고착, 회복 불가**
+- Phase D v1/v2, E의 커리큘럼 붕괴와 달리, 완전히 다른 패턴 (구조적 불일치)
+
+**근본 원인**: **잘못된 Unity Scene 로딩**
+- 학습 시 로딩된 Scene: `PhaseE_CurvedRoads.unity` (단일 차선, 도로 폭 4.5m)
+- 필요한 Scene: `PhaseF_MultiLane.unity` (3차선 기본, 도로 폭 11.5m)
+- `num_lanes` 파라미터가 2로 전환 → WaypointManager가 2차선 waypoint 생성
+- 그러나 물리적 도로 표면은 4.5m (1차선) → Agent가 즉시 도로 이탈
+- 도로 표면 크기는 Scene 생성 시 결정 (`numLanes * 3.5f + 1.0f`), 런타임 변경 불가
+
+**결과**: 최종 보상 -8.15 (FAILED, 5.82M steps에서 수동 중단)
+
+**수정 (Phase F v2)**:
+1. Unity Editor에서 `PhaseF_MultiLane.unity` scene 로드 (build_index=4)
+2. Scene 검증: 도로 폭 11.5m (RoadSurface scale 1.15), 3차선 지원 확인
+3. Agent 검증: VectorObservationSize=254, enableLaneObservation=true 확인
+4. 이전 학습 결과 삭제 후 fresh start
+
+**발견한 원칙**:
+- **P-011 (Scene-Phase Matching)**: 학습 시작 전 반드시 해당 Phase의 전용 Scene이 로딩되어 있는지 확인한다.
+  - 각 Phase는 전용 Scene을 가짐 (PhaseA_DenseOvertaking, PhaseE_CurvedRoads, PhaseF_MultiLane 등)
+  - Scene의 물리적 도로 구조 (폭, 곡률, 교차로)는 Scene 생성 시 결정되며, 런타임에 변경 불가
+  - P-010 (Triple Consistency)의 확장: Scene-Config-Code에 더해 **Scene 파일 자체**의 일치도 검증 필요
+  - **Preflight Check 필수**: 학습 시작 전 `get_active` scene name과 config의 phase가 일치하는지 확인
+
+**관련 표준**: P-010 확장 (Scene-Config-Code 일관성 → Scene File 일관성), 환경 무결성 검증
+
+---
+
+### Entry #8-11: 예정 항목 (Phase F v2 ~ K)
 
 (향후 학습 완료 시 추가 예정 - 아래는 예상 시나리오)
 
-#### Entry #4: Phase E (예정) - 횡가속도 제한
+#### Entry #7: Phase E (예정) - 횡가속도 제한
 
 **예상 시도**: 곡선 도로에서 고속 주행
 
@@ -277,6 +368,7 @@ Staggered Curriculum (P-002)  ←→  SOTIF 점진적 복잡도
 보수적 페널티 설계 (P-004)     ←→  Reward Shaping Theory
 관측-환경 결합 금지 (P-009)   ←→  P-001 확장 + SOTIF 점진적 복잡도
 Scene-Config-Code 일관성(P-010)←→  Preflight Check (시스템 무결성)
+Scene-Phase 매칭 (P-011)    ←→  P-010 확장 (환경 무결성)
 횡가속도 제한 (P-005)         ←→  UN R157 (lat_accel < 0.3g)
 TTC 기반 반응 (P-006)        ←→  UN R171 (TTC 1.5-5.0s)
 곡률 변화율 대응 (P-007)      ←→  SOTIF FI + UN R157 dk/ds

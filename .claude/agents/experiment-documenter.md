@@ -247,11 +247,67 @@ forensic-analyst → 근본 원인 분석 + ROOT-CAUSE-ANALYSIS.md
 experiment-documenter → ANALYSIS.md에 통합
 ```
 
+## Audit Mode
+
+### 목적
+모든 실험 폴더의 문서 완성도를 검증하고 누락된 항목을 리포트한다.
+training-orchestrator의 DOCUMENT 단계에서 자동으로 호출되며, 독립적으로도 실행 가능.
+
+### 트리거
+- "문서 감사", "audit experiments", "doc audit", "문서 점검"
+- training-orchestrator의 COMPLETED 상태 진입 시 자동 호출
+
+### Audit Workflow
+
+```bash
+# 1. 모든 실험 폴더 스캔
+experiments/phase-*/
+
+# 2. 각 폴더에서 필수 파일 존재 여부 확인
+for each experiments/phase-{X}/:
+  - README.md      → 존재? Status 명시?
+  - DESIGN.md      → 존재?
+  - ANALYSIS.md    → 존재?
+  - config/*.yaml  → 존재? 표준 네이밍?
+  - results/       → training_status.json 존재?
+
+# 3. 결과를 테이블로 출력
+```
+
+### Audit Report Format
+
+```markdown
+## Experiment Documentation Audit
+
+| Experiment | README | DESIGN | ANALYSIS | Config | Results | Status |
+|-----------|--------|--------|----------|--------|---------|--------|
+| phase-A   | ✅     | ✅     | ✅       | ✅     | ✅      | COMPLETE |
+| phase-B   | ✅     | ✅     | ❌       | ✅     | ✅      | INCOMPLETE |
+| phase-D-v3| ✅     | ❌     | ❌       | ✅     | ✅      | INCOMPLETE |
+
+### Missing Items
+1. `experiments/phase-B/ANALYSIS.md` - 누락
+2. `experiments/phase-D-v3/DESIGN.md` - 누락
+3. `experiments/phase-D-v3/ANALYSIS.md` - 누락
+
+### Recommendation
+위 누락 항목을 즉시 생성하여 문서 완성도를 확보하세요.
+```
+
+### Auto-Enforcement Rule
+
+**다음 Phase 학습을 시작하기 전에 이전 Phase의 문서가 COMPLETE 상태여야 한다.**
+
+예외:
+- 학습 중인 Phase의 ANALYSIS.md는 학습 완료 후 작성 (PENDING 허용)
+- v1이 FAILED이고 v2로 즉시 재시도하는 경우, v1의 문서는 v2 학습 시작 전까지 완성
+
 ## Trigger Keywords
 
 - "실험 완료", "training completed", "학습 끝"
 - "결과 기록", "record results", "document experiment"
 - "문서 업데이트", "update docs"
+- "문서 감사", "audit experiments", "doc audit", "문서 점검"
 
 ## Model Requirements
 

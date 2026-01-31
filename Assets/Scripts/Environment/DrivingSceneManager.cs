@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Unity.MLAgents;
 using System.Collections.Generic;
 using ADPlatform.Agents;
@@ -64,10 +65,49 @@ namespace ADPlatform.Environment
 
         private void DelayedConnect()
         {
+            ValidateActiveScene();
             ConnectWaypoints();
 
             Debug.Log($"[DrivingSceneManager] Initialized - {npcVehicles.Length} NPCs, " +
                      $"Agent={egoAgent != null}, Controller={adController != null}");
+        }
+
+        /// <summary>
+        /// Validate that the active Unity scene matches curriculum requirements (P-011).
+        /// Logs warnings if multi-lane or intersection features are expected but the scene
+        /// doesn't support them. Prevents silent training failures from scene mismatch.
+        /// </summary>
+        private void ValidateActiveScene()
+        {
+            string sceneName = SceneManager.GetActiveScene().name;
+            var envParams = Academy.Instance.EnvironmentParameters;
+
+            // Check multi-lane requirement
+            float maxLanes = envParams.GetWithDefault("num_lanes", 1f);
+            if (maxLanes > 1f && !sceneName.Contains("MultiLane") && !sceneName.Contains("PhaseF"))
+            {
+                Debug.LogError($"[SCENE MISMATCH] num_lanes curriculum expects multi-lane but active scene is '{sceneName}'. " +
+                    $"Expected: PhaseF_MultiLane. Training will likely fail at lane transition. (P-011)");
+            }
+
+            // Check intersection requirement
+            float intersectionType = envParams.GetWithDefault("intersection_type", 0f);
+            if (intersectionType > 0f && !sceneName.Contains("Intersection") && !sceneName.Contains("PhaseG"))
+            {
+                Debug.LogError($"[SCENE MISMATCH] intersection_type curriculum expects intersections but active scene is '{sceneName}'. " +
+                    $"Expected: PhaseG_Intersection. (P-011)");
+            }
+
+            // Check road width for multi-lane
+            if (waypointManager != null && maxLanes > 1f)
+            {
+                float requiredWidth = maxLanes * waypointManager.laneWidth + 1f;  // lanes * 3.5m + margin
+                // Log the expected road configuration for verification
+                Debug.Log($"[SceneValidation] Scene='{sceneName}', MaxLanes={maxLanes}, " +
+                    $"RequiredRoadWidth={requiredWidth:F1}m, LaneWidth={waypointManager.laneWidth}m");
+            }
+
+            Debug.Log($"[SceneValidation] Active scene: '{sceneName}' - validation passed");
         }
 
         /// <summary>

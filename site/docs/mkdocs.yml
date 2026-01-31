@@ -1,3 +1,5 @@
+# DEPRECATED: MkDocs is no longer deployed. Site consolidated to Astro (site/portfolio/).
+# This config is retained as reference only. See .github/workflows/deploy-site.yml.
 site_name: AD ML Platform - Documentation
 site_url: https://tygwan.github.io/physical-unity/docs/
 site_description: Autonomous Driving ML Platform technical documentation
