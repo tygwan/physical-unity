@@ -21,7 +21,7 @@ Autonomous Driving ML Platform의 개발 단계별 기술 설계서입니다.
 │                                             v                                │
 │                                      ┌──────────┐                            │
 │                                      │ Phase 5  │ PRIMARY FOCUS              │
-│                                      │ Planning │ IN PROGRESS (~47%)         │
+│                                      │ Planning │ IN PROGRESS (~55%)         │
 │                                      │    <<    │                            │
 │                                      └────┬─────┘                            │
 │                                           │                                  │
@@ -43,7 +43,7 @@ Autonomous Driving ML Platform의 개발 단계별 기술 설계서입니다.
 | **Phase 2** | Data Infrastructure | COMPLETED | 2026-01-22 | nuPlan/Waymo pipeline, preprocessing |
 | **Phase 3** | Perception Models | SUSPENDED | - | Ground Truth method for simplification |
 | **Phase 4** | Prediction Models | SUSPENDED | - | Constant Velocity baseline for simplification |
-| **Phase 5** | Planning Models | IN PROGRESS | ~47% | RL/IL Motion Planner (PRIMARY FOCUS) |
+| **Phase 5** | Planning Models | IN PROGRESS | ~55% | RL/IL Motion Planner (PRIMARY FOCUS) |
 | **Phase 6** | Integration & Evaluation | NOT STARTED | - | E2E system integration, nuPlan benchmark |
 | **Phase 7** | Advanced Topics | NOT STARTED | - | World Model, LLM Planning, Sim-to-Real |
 
@@ -65,7 +65,10 @@ Phase 5 is the **primary focus** of this project. It is divided into macro stage
 | **Stage D v3** | Lane Obs (fixed env, 254D) | COMPLETED | +895 | 5M | P-009 적용, lane obs +7.2% 향상 |
 | **Stage E** | Curved Roads + Curves | COMPLETED | +938 | 6.0M | Sharp curves mastered, curriculum collapse recovery |
 | **Stage F v1** | Multi-Lane (Wrong Scene) | FAILED | -8 | 5.82M | Scene mismatch (P-011) |
-| **Stage F v2** | Multi-Lane Switching | IN PROGRESS | - | 6M | Correct scene loaded |
+| **Stage F v2** | Multi-Lane (Waypoint Destruction) | FAILED | -14 | 4.1M | Waypoint regeneration crash (P-009) |
+| **Stage F v3** | Multi-Lane (Shared Thresholds) | FAILED | +5 | 6M | 4 params at threshold 350 + linear LR decay |
+| **Stage F v4** | Multi-Lane (Strict P-002) | PARTIAL | +106 | 10M | P-002 strict validated, speed_zone bug found |
+| **Stage F v5** | Multi-Lane (Speed Zone Fix) | COMPLETED | +643 | 10M | P-013 validated, 10/15 curriculum transitions |
 | **Stage G** | Intersections | PLANNED | - | 6-8M | Crossing logic |
 | **Stage H-L** | Advanced Scenarios | PLANNED | - | TBD | Pending SOTIF redesign |
 
@@ -212,21 +215,55 @@ Phase 5 is the **primary focus** of this project. It is divided into macro stage
   - Agent policy locked to [0,0] action (entropy collapse, Std=0.08)
   - Speed=0 -> -0.2/step penalty -> -14.2 per episode (mathematically verified)
 - **Duration**: 4.1M steps before manual termination
-- **Key Events**:
-  - 0-2.78M: Successful single-lane training (+317)
-  - 2.78M: center_line_enabled -> 1.0 (smooth transition)
-  - 2.99M: num_lanes 1->2 (CATASTROPHIC: +317 -> -14.2)
-  - 2.99-4.1M: Stuck at -14.2 (entropy collapsed, no recovery)
-- **Fix for v3**: Pre-generate waypoints, shift positions without destruction
+- **Policy Discovered**: P-009 (Waypoint Persistence variant)
 
-#### Stage F v3: Multi-Lane (READY)
-- **Status**: Code fix applied, ready for training
+#### Stage F v3: Multi-Lane (FAILED - Shared Thresholds + Linear LR)
+- **Completion Date**: 2026-01-31
+- **Result**: FAILED - Simultaneous triple transition at step 4.38M
+- **Peak Reward**: +317 at 4.1M steps | Final: +4.7 at 6M
 - **Scene**: `PhaseF_MultiLane.unity`
-- **Key Fix**: WaypointManager.SetLaneCount() now shifts existing waypoint X positions instead of destroying/regenerating
-- **Secondary Fix**: GenerateWaypoints() reuses existing GameObjects (position update, no Destroy)
-- **Init Checkpoint**: Phase E (--initialize-from=phase-E)
-- **Config**: `python/configs/planning/vehicle_ppo_phase-F.yaml` (9 curriculum params, P-002 staggered)
-- **Scene Validation**: DrivingSceneManager now validates active scene at startup (P-011)
+- **Key Fix from v2**: WaypointManager.SetLaneCount() shifts positions instead of regenerating
+- **Root Cause**: Threshold 350 shared by 4 parameters (goal_distance, speed_zone, road_curvature, num_active_npcs)
+  - Three transitioned simultaneously at 4.38M: -2,480 reward crash
+  - `learning_rate_schedule: linear` decayed lr to ~0 by 5.5M, preventing recovery
+  - 2M extension at near-zero lr produced no meaningful learning
+- **Curriculum**: 7 of 15 transitions completed before crash
+- **Policy Discovered**: P-012 (No Shared Thresholds)
+
+#### Stage F v4: Multi-Lane (PARTIAL - Speed Zone Bug)
+- **Completion Date**: 2026-01-31
+- **Result**: PARTIAL SUCCESS - P-002 strict validated but speed zone implementation bug
+- **Peak Reward**: +483 at 3.65M steps | Final: +106 at 10M
+- **Scene**: `PhaseF_MultiLane.unity`
+- **Key Changes from v3**:
+  - Every threshold unique (15 values: 150-900, min 50-point gaps)
+  - `learning_rate_schedule: constant` (no decay)
+  - 10M step budget (v3 was 6M)
+- **Critical Event**: speed_zone 1→2 transition at step 3.78M caused -2,790 crash
+  - `GenerateSpeedZones()` placed Residential (30 km/h) as first zone
+  - Agent at 60 km/h gets -3.0/step penalty in 30 km/h zone
+  - Recovery: 6.22M steps, only reached +106 (22% of pre-crash peak)
+- **Staggered Curriculum**: SUCCESS - all 6 transitions occurred individually (no simultaneous)
+- **Policy Discovered**: P-013 (Speed Zone Curriculum Ordering)
+
+#### Stage F v5: Multi-Lane (COMPLETED - Speed Zone Fix)
+- **Completion Date**: 2026-01-31
+- **Result**: SUCCESSFUL
+- **Peak Reward**: ~655 at 9.76M steps | Final: +643 at 10M
+- **Scene**: `PhaseF_MultiLane.unity`
+- **Key Fix from v4**: `GenerateSpeedZones()` reordered zone types:
+  - Before: [Residential(30), UrbanNarrow(50), UrbanGeneral(60), Expressway(80)]
+  - After: [UrbanGeneral(60), UrbanNarrow(50), Residential(30), Expressway(80)]
+  - First zone now matches single-zone default (60 km/h)
+- **P-013 Validation**: speed_zone drop -262 (v4: -2,790, 10.7x improvement)
+- **Curriculum**: 10 of 15 transitions completed
+  - Completed: num_lanes (4), center_line, goal_distance (250m), speed_zone (2), road_curvature (0.6)
+  - Not reached: curve_direction (threshold 650, reward ~640), NPCs (threshold 700+)
+- **Plateau Analysis**: Reward stabilized at ~620-650 from step 8.2M to 10M
+  - ModerateCurves (0.6) + LongGoal (250m) + TwoZones caps achievable reward
+  - ~7 points short of curve_direction threshold (650)
+- **Duration**: 7,479 seconds (~2h 5m)
+- **Best Model**: `results/phase-F-v5/E2EDrivingAgent.onnx`
 
 #### Stage G: Intersections
 - **Status**: Planned
@@ -304,7 +341,8 @@ experiments/             # Training experiments by stage
 | M6 | Planning - Stage B v2 recovery | COMPLETED | 2026-01-29 |
 | M7 | Planning - Stage D v3 lane observation | COMPLETED | 2026-01-30 |
 | M8 | Planning - Stage E curved roads | COMPLETED | 2026-01-30 |
-| M9 | E2E integration system | PLANNED | - |
+| M9 | Planning - Stage F multi-lane roads | COMPLETED | 2026-01-31 |
+| M10 | E2E integration system | PLANNED | - |
 
 ## Success Criteria (Overall)
 
@@ -317,6 +355,7 @@ experiments/             # Training experiments by stage
 | Behavior | Overtaking skill | Demonstrated | Stage A (+3161 peak) | ACHIEVED |
 | Decision Making | Multi-agent handling | Stage D capable | Stage D v3 (+895) | ACHIEVED |
 | Curve Handling | Sharp curve navigation | Stage E capable | Stage E (+938 peak) | ACHIEVED |
+| Multi-Lane | 4-lane driving + speed zones | Stage F capable | Stage F v5 (+643) | ACHIEVED |
 
 ## Training Summary: Completed Stages
 
@@ -331,6 +370,10 @@ experiments/             # Training experiments by stage
 | Stage D v3 | COMPLETED | 895 | 895 | 5M | ~22m | 2026-01-30 |
 | Stage E | COMPLETED | 938 | 893 | 6.0M | ~35m | 2026-01-30 |
 | Stage F v1 | FAILED | 303 | -8 | 5.82M | ~40m | 2026-01-31 |
+| Stage F v2 | FAILED | 317 | -14 | 4.1M | ~30m | 2026-01-31 |
+| Stage F v3 | FAILED | 317 | +5 | 6M | ~40m | 2026-01-31 |
+| Stage F v4 | PARTIAL | 483 | +106 | 10M | ~127m | 2026-01-31 |
+| Stage F v5 | COMPLETED | 655 | +643 | 10M | ~125m | 2026-01-31 |
 
 * B v2 resumed from A at 2.5M; 1M new steps
 
@@ -358,8 +401,18 @@ experiments/             # Training experiments by stage
 ### Successful Completions (continued)
 - [Stage E Curved Roads](../../experiments/phase-E-curved-roads/) - COMPLETED
 
+### Phase F Multi-Lane (v1-v5)
+- [Stage F v2 Design](../../experiments/phase-F-multi-lane-v2/DESIGN.md) - FAILED (Waypoint Destruction)
+- [Stage F v2 Analysis](../../experiments/phase-F-multi-lane-v2/ANALYSIS.md)
+- [Stage F v3 Design](../../experiments/phase-F-multi-lane-v3/DESIGN.md) - FAILED (Shared Thresholds)
+- [Stage F v3 Analysis](../../experiments/phase-F-multi-lane-v3/ANALYSIS.md)
+- [Stage F v4 Design](../../experiments/phase-F-multi-lane-v4/DESIGN.md) - PARTIAL (Speed Zone Bug)
+- [Stage F v4 Analysis](../../experiments/phase-F-multi-lane-v4/ANALYSIS.md)
+- [Stage F v5 Design](../../experiments/phase-F-multi-lane-v5/DESIGN.md) - COMPLETED
+- [Stage F v5 Analysis](../../experiments/phase-F-multi-lane-v5/ANALYSIS.md)
+
 ### In Progress
-- Stage F Multi-Lane (NEXT)
+- Stage G Intersections (NEXT)
 
 ## Current Environment
 
@@ -389,9 +442,9 @@ tensorboard --logdir=experiments
 ## Phase 5 Progress Calculation
 
 ```
-Completed Stages: 5 (Stage 0, A, B v2, D v3, E)
+Completed Stages: 6 (Stage 0, A, B v2, D v3, E, F v5)
 Total Planned Stages: 12 (Stages 0-L)
-Progress = 5/12 = 42% + ~5% (design/analysis) = 47%
+Progress = 6/12 = 50% + ~5% (design/analysis) = 55%
 
 Key Milestones:
 - Foundation (Stage 0): 8% ✓
@@ -399,13 +452,13 @@ Key Milestones:
 - Decision Making (Stage B v2): 25% ✓
 - Lane Observation (Stage D v3): 37% ✓ (C 건너뛰고 D 완료)
 - Curves (Stage E): 47% ✓ (Sharp curves + 2 NPCs)
-- Lanes (Stage F): 57% (NEXT)
-- Intersections (Stage G): 67% (planned)
+- Lanes (Stage F v5): 55% ✓ (4-lane + curves + speed zones)
+- Intersections (Stage G): 67% (NEXT)
 - Advanced (H-L): 100% (planned)
 ```
 
 ---
 
-**Last Updated**: 2026-01-30
-**Current Status**: Phase 5 planning models at ~47% complete with Stages 0, A, B v2, D v3, E successful
-**Next Action**: Phase F (Multi-Lane) 학습 시작
+**Last Updated**: 2026-01-31
+**Current Status**: Phase 5 planning models at ~55% complete with Stages 0, A, B v2, D v3, E, F v5 successful
+**Next Action**: Phase G (Intersections) 설계 시작

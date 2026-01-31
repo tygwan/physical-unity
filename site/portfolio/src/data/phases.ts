@@ -151,20 +151,68 @@ export const phases: Phase[] = [
     version: 1,
   },
   {
-    id: 'phase-f',
+    id: 'phase-f-v2',
     name: 'Phase F v2',
-    subtitle: 'Multi-Lane',
-    reward: null,
-    status: 'in_progress',
-    tags: ['PPO', '254D', 'Multi-Lane', 'Center Line', 'P-002 Staggered', 'P-011'],
+    subtitle: 'Multi-Lane (Waypoint Bug)',
+    reward: -14,
+    status: 'failed',
+    tags: ['PPO', '254D', 'Waypoint Destruction', 'Entropy Collapse'],
     description:
-      'Multi-lane (1→4 lanes) with center line enforcement on correct PhaseF_MultiLane scene (11.5m road). 9 curriculum parameters with P-002 staggered thresholds.',
+      'Correct scene (PhaseF_MultiLane, 11.5m road) but WaypointManager.SetLaneCount() destroyed all waypoint GameObjects at num_lanes 1→2 transition. Agent observation references invalidated, entropy collapsed to Std=0.08, locked at -14.2 reward.',
+    observations: '254D',
+    steps: '4.1M',
+    keyInsight:
+      'Runtime object destruction breaks observation continuity. WaypointManager.GenerateWaypoints() must reuse existing GameObjects, not Destroy+Recreate. Mathematically verified: -0.2/step × 90 steps ≈ -18.0, observed -14.2.',
+    version: 2,
+    parentId: 'phase-f-v1',
+  },
+  {
+    id: 'phase-f-v3',
+    name: 'Phase F v3',
+    subtitle: 'Multi-Lane (Shared Thresholds)',
+    reward: 5,
+    status: 'failed',
+    tags: ['PPO', '254D', 'Shared Thresholds', 'Linear LR', 'P-012'],
+    description:
+      'Waypoint fix applied but threshold 350 shared by 4 curriculum parameters. Triple simultaneous transition at 4.38M caused -2,480 crash. Linear LR schedule decayed to near-zero, preventing recovery.',
     observations: '254D',
     steps: '6M',
     keyInsight:
-      'Correct scene verified via P-011. Road width 11.5m supports up to 3 lanes. Lane changes via steering with Korean traffic rules (drive on right).',
-    version: 2,
-    parentId: 'phase-f-v1',
+      'ML-Agents uses GLOBAL smoothed reward for ALL curriculum parameters. Same threshold = simultaneous transition. Led to P-012 (No Shared Thresholds). Linear LR decay compounds the problem by removing learning capacity when most needed.',
+    version: 3,
+    parentId: 'phase-f-v2',
+  },
+  {
+    id: 'phase-f-v4',
+    name: 'Phase F v4',
+    subtitle: 'Multi-Lane (Speed Zone Bug)',
+    reward: 106,
+    status: 'failed',
+    tags: ['PPO', '254D', 'Strict P-002', 'Constant LR', 'Speed Zone Bug', 'P-013'],
+    description:
+      'Strict P-002: all 15 thresholds unique (150-900, 50-point gaps). Constant LR schedule. Staggered curriculum WORKED (6 individual transitions). But GenerateSpeedZones() placed Residential(30 km/h) first, causing -2,790 crash when agent at 60 km/h entered 30 km/h zone.',
+    observations: '254D',
+    steps: '10M',
+    keyInsight:
+      'P-002 strict compliance validated (all transitions individual). But speed_zone implementation bug: first zone must match single-zone default speed. Led to P-013 (Speed Zone Ordering). Recovery: 6.22M steps to reach +106 (22% of pre-crash peak +483).',
+    version: 4,
+    parentId: 'phase-f-v3',
+  },
+  {
+    id: 'phase-f-v5',
+    name: 'Phase F v5',
+    subtitle: 'Multi-Lane (Success)',
+    reward: 643,
+    status: 'success',
+    tags: ['PPO', '254D', 'P-013 Validated', '4 Lanes', 'Speed Zones', 'Curves'],
+    description:
+      'Speed zone fix: reordered GenerateSpeedZones() so first zone matches 60 km/h default. P-013 validated: speed_zone drop -262 (v4: -2,790, 10.7x improvement). 10/15 curriculum transitions completed. Agent masters 4-lane curved roads with speed zones.',
+    observations: '254D',
+    steps: '10M',
+    keyInsight:
+      'P-013 confirmed: first speed zone must match default. Reward plateau at ~640 prevented curve_direction (650) and NPC (700+) transitions. 4-lane + curves(0.6) + speed zones + 250m goal achieved. Best model: results/phase-F-v5/E2EDrivingAgent.onnx.',
+    version: 5,
+    parentId: 'phase-f-v4',
   },
   {
     id: 'phase-g',
@@ -298,6 +346,34 @@ export const policyDiscoveries: PolicyDiscovery[] = [
       'Phase F v1: PhaseE_CurvedRoads scene (4.5m road) loaded instead of PhaseF_MultiLane (11.5m). num_lanes 1→2 caused instant off-road (-8.15 for 4.27M steps)',
     fixContext:
       'Phase F v2: Verified PhaseF_MultiLane.unity loaded via get_active before training. Road width 11.5m confirmed.',
+  },
+  {
+    id: 'P-012',
+    name: 'No Shared Thresholds',
+    nameEn: 'No Shared Curriculum Thresholds',
+    sourcePhase: 'Phase F v3 → v4',
+    status: 'verified',
+    matchingStandard: 'P-002 Reinforcement (ML-Agents Global Reward)',
+    description:
+      'No two curriculum parameters may share the same threshold value. ML-Agents uses a single global smoothed reward for all parameters, so identical thresholds trigger simultaneous transitions.',
+    failContext:
+      'Phase F v3: Threshold 350 shared by 4 params (goal_distance, speed_zone, road_curvature, NPCs). Triple simultaneous transition at 4.38M caused -2,480 crash.',
+    fixContext:
+      'Phase F v4: All 15 thresholds unique (150-900 range, minimum 50-point gaps). All 6 transitions occurred individually.',
+  },
+  {
+    id: 'P-013',
+    name: 'Speed Zone Ordering',
+    nameEn: 'Speed Zone Curriculum Ordering',
+    sourcePhase: 'Phase F v4 → v5',
+    status: 'verified',
+    matchingStandard: 'Curriculum Continuity + P-001 Extension',
+    description:
+      'When introducing multi-zone speed limits via curriculum, the first zone must match the previous single-zone default speed. Placing the slowest zone first causes catastrophic overspeed penalties.',
+    failContext:
+      'Phase F v4: GenerateSpeedZones() placed Residential(30 km/h) first. Agent at 60 km/h → speedRatio 2.0 → -3.0/step penalty → -2,790 crash.',
+    fixContext:
+      'Phase F v5: Reordered to [UrbanGeneral(60), UrbanNarrow(50), ...]. Drop reduced to -262 (10.7x improvement), recovery in ~500K steps (12x faster).',
   },
 ];
 
@@ -618,15 +694,15 @@ export const referenceCategories: { key: Reference['category']; label: string; i
 // ---------- Stats ----------
 export const stats = {
   maxReward: 2113,
-  totalPhases: 11,
-  completedPhases: 5,
-  failedAttempts: 5,
+  totalPhases: 14,
+  completedPhases: 6,
+  failedAttempts: 8,
   observationDim: 254,
   parallelAreas: 16,
-  successRate: '5/11',
+  successRate: '6/14',
   collisionRateTarget: '< 5%',
-  totalSteps: '40.3M',
-  totalPolicies: 7,
+  totalSteps: '76.4M',
+  totalPolicies: 9,
   techStack: ['Unity 6', 'ML-Agents 4.0', 'PyTorch 2.3+', 'PPO', 'ROS2 Humble'],
   hardware: {
     gpu: 'RTX 4090 (24GB VRAM)',

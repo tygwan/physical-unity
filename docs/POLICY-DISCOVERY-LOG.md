@@ -23,6 +23,8 @@
 | P-009 | 관측-환경 결합 금지 (Observation Coupling) | Phase D v2→v3 | P-001 확장, SOTIF 점진적 복잡도 | 검증 완료 |
 | P-010 | Scene-Config-Code 일관성 (Triple Consistency) | Phase D v3 254D | 시스템 무결성, Preflight Check | 검증 완료 |
 | P-011 | Scene-Phase 매칭 (Scene-Phase Matching) | Phase F v1 | P-010 확장, 환경 무결성 | 검증 완료 |
+| P-012 | 임계값 공유 금지 (No Shared Thresholds) | Phase F v3→v4 | P-002 강화, 커리큘럼 설계 | 검증 완료 |
+| P-013 | Speed Zone 순서 원칙 (Speed Zone Ordering) | Phase F v4→v5 | 커리큘럼 연속성, 환경 일관성 | 검증 완료 |
 
 ## 상세 기록
 
@@ -291,7 +293,108 @@
 
 ---
 
-### Entry #8-11: 예정 항목 (Phase F v2 ~ K)
+### Entry #8: Phase F v2 (Waypoint Destruction)
+
+**Phase**: Phase F v2 (Multi-Lane, 254D)
+
+**시도**: 올바른 Scene (PhaseF_MultiLane) 로딩 후, WaypointManager의 lane 전환 기능으로 다차선 학습
+- Scene: PhaseF_MultiLane.unity (11.5m 도로, 3차선 지원)
+- Config: 9개 커리큘럼 파라미터, P-002 적용
+- Init: Phase E 체크포인트 (--initialize-from=phase-E)
+
+**문제**: Step 2.99M에서 `num_lanes` 1→2 전환 시 영구 붕괴
+- WaypointManager.SetLaneCount()이 GenerateWaypoints()를 호출
+- GenerateWaypoints()가 기존 waypoint GameObject를 모두 Destroy()
+- Agent의 routeWaypoints 참조가 무효화 → observation 연속성 파괴
+- Agent 정책이 [0,0] (정지)에 고착, entropy 붕괴 (Std=0.08)
+- Speed=0 → -0.2/step penalty → -14.2 per episode (수학적 검증: -0.2 × 90 steps ≈ -18.0)
+
+**결과**: 최종 보상 -14.2 (FAILED, 4.1M steps에서 수동 중단)
+
+**수정 (Phase F v3)**:
+1. WaypointManager.SetLaneCount(): 기존 waypoint의 X 좌표만 shift (Destroy 제거)
+2. GenerateWaypoints(): 기존 GameObject 재활용 (position update only)
+
+**발견한 원칙**: P-009 확장 적용 (Waypoint Persistence) - 런타임에 참조 객체를 파괴하면 관측 연속성이 깨짐
+
+---
+
+### Entry #9: Phase F v3→v4 (임계값 공유 금지)
+
+**Phase**: Phase F v3 (Multi-Lane, Waypoint Fix 적용)
+
+**시도**: v2의 waypoint fix 적용 후, 9개 커리큘럼으로 다차선 학습
+- Config: `vehicle_ppo_phase-F.yaml` (P-002 staggered thresholds)
+- learning_rate_schedule: linear (v3에서 사용)
+- max_steps: 6,000,000
+
+**문제**: Step 4.38M에서 3개 파라미터 동시 전환 → -2,480 reward crash
+- **Threshold 350**이 4개 파라미터에 공유됨:
+  - goal_distance L0 (150→200m)
+  - speed_zone_count L0 (1→2)
+  - road_curvature L1 (0→0.3)
+  - num_active_npcs L2 (0→1)
+- 3개가 거의 동시에 전환: +317 → -2,163 (20K steps 내)
+- learning_rate_schedule: linear → 4.38M 시점에서 lr = 4.05e-5 (원래의 27%)
+- 5.5M 시점 lr = 1.25e-5 → 회복 학습 불가능
+- 6M까지 +4.7 도달 (사실상 0 수준)
+
+**결과**: 최종 보상 +4.7 (FAILED)
+
+**수정 (Phase F v4)**:
+1. **모든 threshold를 고유값으로**: 15개 threshold 전부 다른 값 (150-900, 최소 50-point 간격)
+2. **learning_rate_schedule: constant**: linear 폐지, 일정한 학습률 유지
+3. **3개 매크로 Phase**: Lane(150-300), Env(400-650), NPC(700-900)으로 구조화
+4. **max_steps: 10M**: 여유 있는 예산
+
+**발견한 원칙**:
+- **P-012 (임계값 공유 금지)**: 커리큘럼 파라미터 간 어떤 threshold도 공유해서는 안 된다. ML-Agents에서 모든 파라미터는 동일한 global smoothed reward를 사용하므로, 같은 threshold에 도달하면 동시 전환이 발생한다. P-002(Staggered Curriculum)의 강화 버전.
+
+**관련 표준**: P-002 강화, ML-Agents의 global reward signal 구조에 특화된 원칙
+
+---
+
+### Entry #10: Phase F v4→v5 (Speed Zone 순서 원칙)
+
+**Phase**: Phase F v4 (Multi-Lane, Strict P-002)
+
+**시도**: 모든 threshold를 고유값으로 설정, constant LR, 10M step budget
+- 15개 고유 threshold (150-900)
+- learning_rate_schedule: constant at 1.5e-4
+- Initialize from Phase E
+
+**문제**: Step 3.78M에서 speed_zone 1→2 전환 시 -2,790 crash
+- Staggered curriculum 자체는 성공: 6개 전환 모두 개별적으로 발생
+- 그러나 `GenerateSpeedZones()`의 zone 배열 순서 문제:
+  - `[Residential(30), UrbanNarrow(50), UrbanGeneral(60), Expressway(80)]`
+  - count=2일 때: Zone 0 = Residential(30 km/h), Zone 1 = UrbanNarrow(50 km/h)
+  - Agent는 60 km/h (single zone default)로 주행 중
+  - 갑자기 30 km/h 제한 → speedRatio = 2.0 → penalty = -3.0/step (max cap)
+- Recovery: 6.22M steps 동안 +481 → +106 (불완전 회복, 22% of peak)
+- NPC phase (threshold 700+) 도달 불가
+
+**결과**: 최종 보상 +106 (PARTIAL SUCCESS - P-002 검증, speed_zone bug 발견)
+
+**수정 (Phase F v5)**:
+1. `GenerateSpeedZones()` zone 순서 변경:
+   - `[UrbanGeneral(60), UrbanNarrow(50), Residential(30), Expressway(80)]`
+   - count=2: Zone 0 = UrbanGeneral(60), Zone 1 = UrbanNarrow(50)
+   - 첫 번째 zone이 single-zone default(60 km/h)와 일치
+
+**Phase F v5 결과**: **+643 reward (SUCCESS)**
+- speed_zone 전환 시 -262 drop (v4: -2,790, **10.7배 개선**)
+- Recovery: ~500K steps (v4: 6.22M, **12배 빠름**)
+- 10/15 curriculum 전환 완료
+- 4-lane + curves(0.6) + speed zones + 250m goal 마스터
+
+**발견한 원칙**:
+- **P-013 (Speed Zone 순서 원칙)**: 커리큘럼으로 speed zone을 도입할 때, 첫 번째 zone의 제한 속도는 이전 단계(single zone)의 기본 속도와 일치해야 한다. 가장 느린 zone을 먼저 배치하면 기존 정책과의 속도 불일치로 과속 페널티가 폭발한다.
+
+**관련 표준**: 커리큘럼 연속성 원칙 (환경 전환 시 이전 상태와의 연속성 보장), P-001 확장
+
+---
+
+### Entry #11-14: 예정 항목 (Phase G ~ K)
 
 (향후 학습 완료 시 추가 예정 - 아래는 예상 시나리오)
 
@@ -369,6 +472,8 @@ Staggered Curriculum (P-002)  ←→  SOTIF 점진적 복잡도
 관측-환경 결합 금지 (P-009)   ←→  P-001 확장 + SOTIF 점진적 복잡도
 Scene-Config-Code 일관성(P-010)←→  Preflight Check (시스템 무결성)
 Scene-Phase 매칭 (P-011)    ←→  P-010 확장 (환경 무결성)
+임계값 공유 금지 (P-012)     ←→  P-002 강화 (ML-Agents global reward)
+Speed Zone 순서 (P-013)     ←→  커리큘럼 연속성 + P-001 확장
 횡가속도 제한 (P-005)         ←→  UN R157 (lat_accel < 0.3g)
 TTC 기반 반응 (P-006)        ←→  UN R171 (TTC 1.5-5.0s)
 곡률 변화율 대응 (P-007)      ←→  SOTIF FI + UN R157 dk/ds

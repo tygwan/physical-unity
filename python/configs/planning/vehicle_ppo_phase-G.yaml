@@ -1,27 +1,43 @@
 # E2EDrivingAgent PPO v12 Phase G: Intersection Navigation
-# Strategy: Initialize from Phase F, add intersection handling curriculum
-# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-G.yaml --run-id=phase-G
+# Strategy: FRESH START (254D→260D dimension change prevents checkpoint transfer)
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-G.yaml --run-id=phase-G --force
 #
 # v12 Phase G Design:
 # - 260D observation (254D + 6D intersection info)
 # - Intersection type curriculum: None -> T-junction -> Cross -> Y-junction
-# - Turn direction curriculum: Straight -> Left -> Right -> Random
-# - Maintain all previous capabilities (lanes, curves, NPCs)
-# - Initialize from Phase F checkpoint
-# - Expected: 6-8M steps
+# - Turn direction curriculum: Straight -> Left -> Right
+# - Road curvature DISABLED (focus on intersection mastery)
+# - Speed zones DISABLED (single zone, 60 km/h default)
+# - Fresh start required: 254D→260D first-layer weight shape mismatch
+# - Expected: 10M steps (fresh start, generous budget)
+#
+# P-002 Strict Compliance (from Phase F v4 lesson):
+# - ALL thresholds are UNIQUE across ALL parameters
+# - Minimum 50-point gap between consecutive thresholds
+# - 3 macro phases: Intersection(150-400) → Environment(450-600) → NPC(650-800)
+#
+# P-012 Compliance (from Phase F v3 lesson):
+# - No two parameters share any threshold value
+# - ML-Agents uses single global smoothed reward → same threshold = simultaneous transition
+#
+# P-009 Note (Observation-Environment Coupling):
+# - 254D→260D (+6D intersection obs) is combined with new intersection environment
+# - Acceptable because: (1) fresh start (no existing policy to protect),
+#   (2) intersection obs directly useful for intersection task,
+#   (3) fixed-env-first approach would provide zero intersection signal
 #
 # Unity Environment Requirements:
-# - WaypointManager: Support intersection generation via 'intersection_type' parameter
-# - WaypointManager: Generate turn waypoints based on 'turn_direction' parameter
-# - E2EDrivingAgent: Intersection-aware observations (260D with intersection info)
-# - DrivingSceneManager: Read 'intersection_type', 'turn_direction' from environment_parameters
+# - Scene: PhaseG_Intersection.unity (MUST verify via P-011)
+# - WaypointManager: SetIntersection(type, direction) for waypoint generation
+# - E2EDrivingAgent: enableIntersectionObservation = true, VectorObservationSize = 260
+# - DrivingSceneManager: Read intersection_type, turn_direction from environment_parameters
 
 behaviors:
   E2EDrivingAgent:
     trainer_type: ppo
 
-    # Initialize from Phase F checkpoint
-    init_path: results/phase-F/E2EDrivingAgent/checkpoint.pt
+    # NO init_path: 254D→260D dimension change prevents checkpoint transfer
+    # Agent starts fresh, learning intersection navigation from zero
 
     hyperparameters:
       batch_size: 4096
@@ -31,7 +47,9 @@ behaviors:
       epsilon: 0.2
       lambd: 0.95
       num_epoch: 5
-      learning_rate_schedule: linear
+      learning_rate_schedule: constant   # CRITICAL: never use linear (Phase F v3 lesson)
+      beta_schedule: constant
+      epsilon_schedule: constant
 
     network_settings:
       normalize: false
@@ -43,16 +61,176 @@ behaviors:
         gamma: 0.99
         strength: 1.0
 
-    max_steps: 8000000
+    max_steps: 10000000
     time_horizon: 256
     summary_freq: 10000
+    keep_checkpoints: 5
+    checkpoint_interval: 500000
     threaded: false
 
 environment_parameters:
+  # ═══════════════════════════════════════════════════════
+  # MACRO PHASE 1: Intersection Core (thresholds 150-400)
+  # ═══════════════════════════════════════════════════════
+
   # Intersection type: 0=None, 1=T-junction, 2=Cross, 3=Y-junction
+  # P-012: Thresholds 150, 350, 550 (unique, interleaved with other params)
   intersection_type:
     curriculum:
       - name: NoIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1000
+          threshold: 150.0
+          signal_smoothing: true
+        value: 0.0
+      - name: TJunction
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1000
+          threshold: 350.0
+          signal_smoothing: true
+        value: 1.0
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1000
+          threshold: 550.0
+          signal_smoothing: true
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  # Turn direction: 0=Straight, 1=Left, 2=Right
+  # P-012: Thresholds 200, 400 (unique)
+  turn_direction:
+    curriculum:
+      - name: StraightOnly
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 200.0
+          signal_smoothing: true
+        value: 0.0
+      - name: LeftTurn
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 400.0
+          signal_smoothing: true
+        value: 1.0
+      - name: RightTurn
+        value: 2.0
+
+  # ═══════════════════════════════════════════════════════
+  # MACRO PHASE 2: Environment Complexity (thresholds 250-600)
+  # ═══════════════════════════════════════════════════════
+
+  # Lane count: 1→2 lanes
+  # P-012: Threshold 250 (unique)
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 250.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoLanes
+        value: 2.0
+
+  # Center line enforcement
+  # P-012: Threshold 300 (unique)
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 300.0
+          signal_smoothing: true
+        value: 0.0
+      - name: CenterLineEnforced
+        value: 1.0
+
+  # Goal distance: shorter for intersections (turn radius limits effective distance)
+  # P-012: Thresholds 450, 600 (unique)
+  goal_distance:
+    curriculum:
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 450.0
+          signal_smoothing: true
+        value: 120.0
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 600.0
+          signal_smoothing: true
+        value: 150.0
+      - name: LongGoal
+        value: 200.0
+
+  # ═══════════════════════════════════════════════════════
+  # MACRO PHASE 3: NPC Interaction (thresholds 500-800)
+  # ═══════════════════════════════════════════════════════
+
+  # NPC count: reduced for intersection complexity
+  # P-012: Thresholds 500, 700 (unique)
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 500.0
+          signal_smoothing: true
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 700.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoNPCs
+        value: 2.0
+
+  # NPC speed ratio
+  # P-012: Threshold 750 (unique)
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 750.0
+          signal_smoothing: true
+        value: 0.5
+      - name: MediumNPCs
+        value: 0.7
+
+  # NPC speed variation
+  # P-012: Threshold 800 (unique)
+  npc_speed_variation:
+    curriculum:
+      - name: Uniform
         completion_criteria:
           measure: reward
           behavior: E2EDrivingAgent
@@ -60,159 +238,30 @@ environment_parameters:
           threshold: 800.0
           signal_smoothing: true
         value: 0.0
-      - name: TJunction
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 500
-          threshold: 600.0
-          signal_smoothing: true
-        value: 1.0
-      - name: CrossIntersection
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 500
-          threshold: 500.0
-          signal_smoothing: true
-        value: 2.0
-      - name: YJunction
-        value: 3.0
+      - name: Varied
+        value: 0.15
 
-  # Turn direction: 0=Straight, 1=Left, 2=Right
-  turn_direction:
-    curriculum:
-      - name: StraightOnly
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 400
-          threshold: 700.0
-          signal_smoothing: true
-        value: 0.0
-      - name: LeftTurn
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 400
-          threshold: 500.0
-          signal_smoothing: true
-        value: 1.0
-      - name: RightTurn
-        value: 2.0
+  # ═══════════════════════════════════════════════════════
+  # DISABLED: Not relevant for intersection training
+  # ═══════════════════════════════════════════════════════
 
-  # Maintain Phase F capabilities
-  num_lanes:
-    curriculum:
-      - name: SingleLane
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 300
-          threshold: 600.0
-          signal_smoothing: true
-        value: 1.0
-      - name: TwoLanes
-        value: 2.0
-
-  center_line_enabled:
-    curriculum:
-      - name: NoCenterLine
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 300
-          threshold: 600.0
-          signal_smoothing: true
-        value: 0.0
-      - name: CenterLineEnforced
-        value: 1.0
-
-  # Disable curvature for intersection training (simplify)
+  # Road curvature: disabled (straight roads only for intersection focus)
   road_curvature:
     curriculum:
       - name: Straight
         value: 0.0
 
+  # Curve direction: disabled
   curve_direction_variation:
     curriculum:
       - name: SingleDirection
         value: 0.0
 
-  # NPC count (reduced for intersection complexity)
-  num_active_npcs:
-    curriculum:
-      - name: NoNPCs
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 400
-          threshold: 700.0
-          signal_smoothing: true
-        value: 0.0
-      - name: OneNPC
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 400
-          threshold: 500.0
-          signal_smoothing: true
-        value: 1.0
-      - name: TwoNPCs
-        value: 2.0
-
-  npc_speed_ratio:
-    curriculum:
-      - name: SlowNPCs
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 300
-          threshold: 500.0
-          signal_smoothing: true
-        value: 0.5
-      - name: MediumNPCs
-        value: 0.7
-
-  # Shorter goal distance for intersection training
-  goal_distance:
-    curriculum:
-      - name: ShortGoal
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 400
-          threshold: 600.0
-          signal_smoothing: true
-        value: 120.0
-      - name: MediumGoal
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 400
-          threshold: 500.0
-          signal_smoothing: true
-        value: 150.0
-      - name: LongGoal
-        value: 200.0
-
+  # Speed zones: disabled (single zone, 60 km/h)
   speed_zone_count:
     curriculum:
       - name: SingleZone
         value: 1.0
-
-  npc_speed_variation:
-    curriculum:
-      - name: Uniform
-        completion_criteria:
-          measure: reward
-          behavior: E2EDrivingAgent
-          min_lesson_length: 300
-          threshold: 500.0
-          signal_smoothing: true
-        value: 0.0
-      - name: Varied
-        value: 0.15
 
 env_settings:
   env_path: null
