@@ -1,0 +1,111 @@
+# Unity (루트에 위치)
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]serSettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ML-Agents
+results/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Keep structure but ignore contents
+models/*
+!models/.gitkeep
+
+# Datasets (large files)
+datasets/raw/*
+datasets/processed/*
+!datasets/raw/.gitkeep
+!datasets/processed/.gitkeep
+!datasets/splits/.gitkeep
+
+# Experiments (training artifacts)
+# Track config files and READMEs
+!experiments/*/config/*.yaml
+!experiments/*/README.md
+!experiments/README.md
+
+# Ignore large log files but keep structure
+experiments/*/logs/*.tfevents*
+experiments/*/logs/events.out.*
+
+# Keep checkpoint folder structure
+experiments/*/checkpoints/*
+!experiments/*/checkpoints/.gitkeep
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# TensorBoard
+*.tfevents*
+events.out.*
+
+# Large model files
+*.onnx
+*.pt
+*.pth
+*.h5
+*.pkl
+*.pickle
+
+# nuPlan / Dataset specific
+*.db
+*.parquet
+*.feather
+
+# Site build outputs
+site/docs/site/
+site/portfolio/node_modules/
+site/portfolio/dist/
+site/portfolio/.astro/
+
+# Claude Code ephemeral
+.claude.zip
+.claude/session.log
+nul
