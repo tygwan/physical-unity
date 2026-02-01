@@ -3,87 +3,114 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 using System.IO;
 
+/// <summary>
+/// Builds Unity training environments for ML-Agents multi-env training.
+/// Use: Build > Build [Phase] Training Environment
+///
+/// After building, set env_path in YAML config and increase num_envs.
+/// Example:
+///   env_settings:
+///     env_path: Builds/PhaseH/PhaseH.exe
+///     num_envs: 3
+///     no_graphics: true
+/// </summary>
 public class BuildHelper
 {
-    private const string BUILD_PATH = "Builds/DrivingEnv/DrivingEnv.exe";
-    private const string SCENE_PATH = "Assets/Scenes/DrivingScene.unity/DrivingScene.unity";
+    private const string BUILDS_ROOT = "Builds";
 
-    [MenuItem("Build/Build Training Environment")]
-    public static void BuildTrainingEnvironment()
+    // ====== Phase-specific builds ======
+
+    [MenuItem("Build/Build Phase H (NPC Intersection)")]
+    public static void BuildPhaseH()
     {
-        // Ensure build directory exists
-        string buildDir = Path.GetDirectoryName(BUILD_PATH);
-        if (!Directory.Exists(buildDir))
+        BuildPhase("PhaseH", "Assets/Scenes/PhaseH_NPCIntersection.unity");
+    }
+
+    [MenuItem("Build/Build Phase G (Intersection)")]
+    public static void BuildPhaseG()
+    {
+        BuildPhase("PhaseG", "Assets/Scenes/PhaseG_Intersection.unity");
+    }
+
+    [MenuItem("Build/Build Phase F (Multi-Lane)")]
+    public static void BuildPhaseF()
+    {
+        BuildPhase("PhaseF", "Assets/Scenes/PhaseF_MultiLane.unity");
+    }
+
+    // ====== Active Scene Build ======
+
+    [MenuItem("Build/Build Active Scene")]
+    public static void BuildActiveScene()
+    {
+        var activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        if (string.IsNullOrEmpty(activeScene.path))
         {
-            Directory.CreateDirectory(buildDir);
+            Debug.LogError("[BuildHelper] No active scene found. Save the scene first.");
+            return;
         }
 
-        // Build options
-        BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
+        string sceneName = Path.GetFileNameWithoutExtension(activeScene.path);
+        BuildPhase(sceneName, activeScene.path);
+    }
+
+    // ====== Core Build Method ======
+
+    private static void BuildPhase(string phaseName, string scenePath)
+    {
+        string buildDir = Path.Combine(BUILDS_ROOT, phaseName);
+        string buildPath = Path.Combine(buildDir, $"{phaseName}.exe");
+
+        if (!Directory.Exists(buildDir))
+            Directory.CreateDirectory(buildDir);
+
+        Debug.Log($"[BuildHelper] Building {phaseName}...");
+        Debug.Log($"[BuildHelper] Scene: {scenePath}");
+        Debug.Log($"[BuildHelper] Output: {Path.GetFullPath(buildPath)}");
+
+        BuildPlayerOptions options = new BuildPlayerOptions
         {
-            scenes = new[] { SCENE_PATH },
-            locationPathName = BUILD_PATH,
+            scenes = new[] { scenePath },
+            locationPathName = buildPath,
             target = BuildTarget.StandaloneWindows64,
             options = BuildOptions.None
         };
 
-        // Build
-        BuildReport report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+        BuildReport report = BuildPipeline.BuildPlayer(options);
         BuildSummary summary = report.summary;
 
         if (summary.result == BuildResult.Succeeded)
         {
-            Debug.Log($"Build succeeded: {summary.totalSize / (1024 * 1024)} MB");
-            Debug.Log($"Build path: {Path.GetFullPath(BUILD_PATH)}");
+            long sizeMB = (long)(summary.totalSize / (1024 * 1024));
+            Debug.Log($"[BuildHelper] Build SUCCEEDED: {sizeMB} MB");
+            Debug.Log($"[BuildHelper] Executable: {Path.GetFullPath(buildPath)}");
+            Debug.Log($"[BuildHelper] YAML config:");
+            Debug.Log($"  env_path: {buildPath.Replace('\\', '/')}");
+            Debug.Log($"  num_envs: 3");
+
+            EditorUtility.DisplayDialog("Build Succeeded",
+                $"{phaseName} build completed ({sizeMB} MB)\n\n" +
+                $"Path: {buildPath}\n\n" +
+                "Update YAML:\n" +
+                $"  env_path: {buildPath.Replace('\\', '/')}\n" +
+                "  num_envs: 3\n" +
+                "  no_graphics: true",
+                "OK");
         }
-        else if (summary.result == BuildResult.Failed)
+        else
         {
-            Debug.LogError("Build failed!");
+            Debug.LogError($"[BuildHelper] Build FAILED for {phaseName}");
             foreach (var step in report.steps)
             {
                 foreach (var message in step.messages)
                 {
                     if (message.type == LogType.Error)
-                        Debug.LogError(message.content);
+                        Debug.LogError($"  {message.content}");
                 }
             }
-        }
-    }
 
-    [MenuItem("Build/Build Training Environment (Server/Headless)")]
-    public static void BuildTrainingEnvironmentHeadless()
-    {
-        string buildPath = "Builds/DrivingEnvHeadless/DrivingEnv.exe";
-        
-        // Ensure build directory exists
-        string buildDir = Path.GetDirectoryName(buildPath);
-        if (!Directory.Exists(buildDir))
-        {
-            Directory.CreateDirectory(buildDir);
-        }
-
-        // Build options with server build (headless)
-        BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
-        {
-            scenes = new[] { SCENE_PATH },
-            locationPathName = buildPath,
-            target = BuildTarget.StandaloneWindows64,
-            subtarget = (int)StandaloneBuildSubtarget.Server,
-            options = BuildOptions.EnableHeadlessMode
-        };
-
-        // Build
-        BuildReport report = BuildPipeline.BuildPlayer(buildPlayerOptions);
-        BuildSummary summary = report.summary;
-
-        if (summary.result == BuildResult.Succeeded)
-        {
-            Debug.Log($"Headless build succeeded: {summary.totalSize / (1024 * 1024)} MB");
-            Debug.Log($"Build path: {Path.GetFullPath(buildPath)}");
-        }
-        else if (summary.result == BuildResult.Failed)
-        {
-            Debug.LogError("Headless build failed!");
+            EditorUtility.DisplayDialog("Build Failed",
+                $"{phaseName} build failed. Check Console for errors.", "OK");
         }
     }
 }

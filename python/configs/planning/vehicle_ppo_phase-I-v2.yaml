@@ -1,0 +1,145 @@
+# E2EDrivingAgent PPO Phase I v2: Curved Roads + NPC Recovery
+# Strategy: WARM START from Phase I v1 final checkpoint (reward ~623, all curriculum complete)
+# v1 completed all 17/17 curriculum transitions but had a ~760-point crash at 3.76M
+# when road_curvature/curve_direction/speed_zones unlocked simultaneously (thresholds too tight)
+# v1 recovered from -40 to 623 by 5M, still climbing (+40/100K steps)
+# v2 continues pure training with all params at final values
+#
+# Usage:
+#   mlagents-learn python/configs/planning/vehicle_ppo_phase-I-v2.yaml --run-id=phase-I-v2 --force
+#
+# Key changes from Phase I v1:
+# 1. WARM START: v1 5M checkpoint (reward ~623, recovering from curve crash)
+# 2. ALL PARAMS FINAL: No curriculum transitions, all at max values
+# 3. PURE RECOVERY: Agent just needs more time to stabilize curves+NPCs
+# 4. BUDGET: 5M steps (v1 was climbing at +40/100K, should reach 650+ easily)
+#
+# P-018 lesson: thresholds 700/702/705 were too tight, caused 3-param simultaneous transition
+# Future phases should space curve thresholds by >= 15 points
+#
+# Hardware: RTX 4090 (24GB VRAM) + 128GB RAM
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # WARM START from Phase I v1 final checkpoint
+    # reward ~623, all 17/17 curriculum complete, recovering from curve crash
+    init_path: results/phase-I/E2EDrivingAgent/E2EDrivingAgent-5000192.pt
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 5000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 5
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # ALL PARAMS AT FINAL VALUES (no curriculum transitions)
+  # v1 completed all 17/17 transitions, v2 is pure recovery
+  # =======================================================
+
+  num_lanes:
+    curriculum:
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: CenterLineEnforced
+        value: 1.0
+
+  goal_distance:
+    curriculum:
+      - name: FullGoal
+        value: 230.0
+
+  num_active_npcs:
+    curriculum:
+      - name: ThreeNPCs
+        value: 3.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: NormalNPCs
+        value: 0.85
+
+  npc_speed_variation:
+    curriculum:
+      - name: MildVariation
+        value: 0.15
+
+  road_curvature:
+    curriculum:
+      - name: FullCurve
+        value: 1.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: RandomDirections
+        value: 1.0
+
+  speed_zone_count:
+    curriculum:
+      - name: TwoZones
+        value: 2.0
+
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        value: 0.0
+
+  turn_direction:
+    curriculum:
+      - name: StraightOnly
+        value: 0.0
+
+# =======================================================
+# BUILD-BASED MULTI-ENV TRAINING
+# =======================================================
+
+env_settings:
+  env_path: Builds/PhaseH/PhaseH.exe
+  num_envs: 3
+  base_port: 5004
+  timeout_wait: 600
+
+checkpoint_settings:
+  run_id: phase-I-v2
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: true
+
+torch_settings:
+  device: cuda

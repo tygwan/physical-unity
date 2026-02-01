@@ -100,10 +100,10 @@ namespace ADPlatform.Environment
 
             // Check intersection requirement
             float intersectionType = envParams.GetWithDefault("intersection_type", 0f);
-            if (intersectionType > 0f && !sceneName.Contains("Intersection") && !sceneName.Contains("PhaseG"))
+            if (intersectionType > 0f && !sceneName.Contains("Intersection") && !sceneName.Contains("PhaseG") && !sceneName.Contains("PhaseH"))
             {
                 Debug.LogError($"[SCENE MISMATCH] intersection_type curriculum expects intersections but active scene is '{sceneName}'. " +
-                    $"Expected: PhaseG_Intersection. (P-011)");
+                    $"Expected: PhaseG_Intersection or PhaseH_NPCIntersection. (P-011)");
             }
 
             // Check road width for multi-lane
@@ -260,6 +260,7 @@ namespace ADPlatform.Environment
         /// Randomly place active NPCs on waypoints ahead of ego vehicle.
         /// Speed = speedLimit * baseRatio * (1.0 +/- variation).
         /// v12: baseRatio controls how slow NPCs are (0.3 = 30% of limit).
+        /// Phase H: Uses waypoint-index-based spawning for intersections.
         /// </summary>
         private void SpawnNPCsRandomly(float speedLimit, float speedVariation, float baseRatio = 1.0f)
         {
@@ -272,6 +273,17 @@ namespace ADPlatform.Environment
             Vector3 egoPosition = egoAgent != null
                 ? egoAgent.transform.position
                 : transform.position;
+
+            // Phase H: Use waypoint-index-based spawning for intersections
+            // Z-distance filtering breaks when waypoints turn at intersections
+            bool isIntersection = waypointManager != null && waypointManager.intersectionType > 0;
+            if (isIntersection && waypoints != null && waypoints.Length > 0)
+            {
+                SpawnNPCsOnWaypoints(waypoints, egoPosition, speedLimit, speedVariation, baseRatio);
+                return;
+            }
+
+            // ---- Original Z-distance-based logic (non-intersection) ----
 
             // Collect valid spawn positions (ahead of ego, on waypoints)
             List<Vector3> spawnPositions = new List<Vector3>();
@@ -376,6 +388,56 @@ namespace ADPlatform.Environment
 
                 Quaternion forward = Quaternion.LookRotation(Vector3.forward);
                 npcVehicles[i].SpawnAt(spawnPos, forward, npcSpeed);
+            }
+        }
+
+        /// <summary>
+        /// Spawn NPCs on waypoints using path-distance (waypoint index) instead of Z-distance.
+        /// Correct for intersections where waypoints turn and Z-distance is misleading.
+        /// NPCs are placed ahead of ego with minimum waypoint-index spacing.
+        /// </summary>
+        private void SpawnNPCsOnWaypoints(Transform[] waypoints, Vector3 egoPosition,
+            float speedLimit, float speedVariation, float baseRatio)
+        {
+            // Find ego's nearest waypoint index
+            int egoWpIndex = 0;
+            float minDist = float.MaxValue;
+            for (int i = 0; i < waypoints.Length; i++)
+            {
+                if (waypoints[i] == null) continue;
+                float dist = Vector3.Distance(egoPosition, waypoints[i].position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    egoWpIndex = i;
+                }
+            }
+
+            // Spawn NPCs at waypoint indices ahead of ego
+            // Min 3 waypoints ahead (~60m gap at 20m spacing) for first NPC
+            // Min 2 waypoints between NPCs (~40m spacing)
+            int minAheadWPs = 3;
+            int minSpacingWPs = 2;
+            int nextWpIndex = egoWpIndex + minAheadWPs;
+
+            for (int i = 0; i < activeNPCCount; i++)
+            {
+                if (npcVehicles[i] == null) continue;
+
+                // Check bounds
+                if (nextWpIndex >= waypoints.Length)
+                {
+                    // Not enough waypoints ahead — deactivate remaining NPCs
+                    npcVehicles[i].gameObject.SetActive(false);
+                    continue;
+                }
+
+                // NPC speed = speedLimit * baseRatio * (1.0 +/- variation)
+                float speedMultiplier = baseRatio + Random.Range(-speedVariation, speedVariation);
+                float npcSpeed = speedLimit * Mathf.Max(speedMultiplier, 0.2f);
+
+                npcVehicles[i].SpawnAtWaypoint(nextWpIndex, npcSpeed, waypoints);
+                nextWpIndex += minSpacingWPs;
             }
         }
 

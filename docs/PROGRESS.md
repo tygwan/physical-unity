@@ -10,10 +10,10 @@
 
 | Metric | Value |
 |--------|-------|
-| **Latest Completion** | Phase G v2 Intersection Navigation - 2026-02-01 |
-| **Next Training** | Phase H (NPC Interaction in Intersections) |
-| **Overall Progress** | Phase 0~G v2 complete (7 phases, 15 runs) |
-| **Latest Model** | E2EDrivingAgent-5000074.onnx (Phase G v2, +633 reward) |
+| **Latest Completion** | Phase I v2 Curved Roads + NPC - 2026-02-01 |
+| **Next Training** | Phase J (TBD) |
+| **Overall Progress** | Phase 0~I v2 complete (9 phases, 20 runs) |
+| **Latest Model** | E2EDrivingAgent-5000080.onnx (Phase I v2, +770 reward, PROJECT RECORD) |
 | **Last Updated** | 2026-02-01 |
 
 ---
@@ -32,7 +32,12 @@
 | Phase E | 6.0M | 956 | 924 | COMPLETE | A- | 2026-01-30 |
 | Phase F v5 | 10.0M | 913 | 643 | COMPLETE | B+ | 2026-01-31 |
 | Phase G v1 | 10.0M | 516 | 494 | PARTIAL | C+ | 2026-02-01 |
-| **Phase G v2** | **5.0M** | **633** | **628** | **COMPLETE** | **A-** | **2026-02-01** |
+| Phase G v2 | 5.0M | 633 | 628 | COMPLETE | A- | 2026-02-01 |
+| Phase H v1 | ~5.0M | 700 | ~550 | CRASHED | D | 2026-02-01 |
+| Phase H v2 | 5.0M | 706 | 681 | PARTIAL (9/11) | B | 2026-02-01 |
+| Phase H v3 | 5.0M | 708 | 701 | COMPLETE | A- | 2026-02-01 |
+| Phase I v1 | 5.0M | 724 | 623 | PARTIAL (crash) | B- | 2026-02-01 |
+| **Phase I v2** | **5.0M** | **775** | **770** | **COMPLETE** | **A+** | **2026-02-01** |
 
 ### Failed/Superseded Runs
 
@@ -43,6 +48,9 @@
 | Phase F v2 | 4.4M | 318 | Collapse to -14 | F v5 |
 | Phase F v3 | 7.1M | 407 | Collapse to 0 | F v5 |
 | Phase F v4 | 10.0M | 488 | Degraded to 106 | F v5 |
+| Phase H v1 | ~5.0M | 700 | Crash at variation=0.15 | H v3 |
+| Phase H v2 | 5.0M | 706 | Stuck at variation=0.05 | H v3 |
+| Phase I v1 | 5.0M | 724 | Triple-param crash (700/702/705) | I v2 |
 
 ---
 
@@ -156,50 +164,53 @@
 - Collision: 0% | All intersection types mastered
 - Curriculum: 7/7 lessons completed (all transitions successful)
 
-### v1 vs v2 Comparison
-
-| Metric | G v1 | G v2 | Change |
-|--------|------|------|--------|
-| Steps | 10M | 5M | -50% |
-| Peak Reward | 516 | 633 | +23% |
-| Curriculum | 4/7 | 7/7 | Full completion |
-| WrongWay rate | 32% | ~0% | Eliminated |
-| Y-junction | Not reached | Mastered | Unlocked |
-
-### Key Fixes (v1 → v2)
-1. **P-014**: WrongWay detection disabled in intersection zone
-2. **Warm start**: init_path from v1 10M checkpoint (same 260D obs)
-3. **Simplified curriculum**: NPCs deferred to Phase H
-4. **Lower thresholds**: Y-junction 550→450, goal_distance 450→400/500
-
-### Curriculum Transitions
-
-| Step | Event | Reward |
-|------|-------|--------|
-| 100K | T-junction + LeftTurn + TwoLanes | 497 |
-| 210K | CrossIntersection + RightTurn + CenterLine | 507 |
-| 320K | **Y-junction** (final intersection type) | 500 |
-| 430K | LongGoal (200m) | 502 |
-| 2.5M | Reward stabilizes ~600 | 600 |
-| 5.0M | Training complete | 628 |
-
 ### Artifacts
 - **Final Model**: `results/phase-G-v2/E2EDrivingAgent-5000074.onnx`
 - **Config**: `python/configs/planning/vehicle_ppo_phase-G-v2.yaml`
-- **Checkpoints**: 10 saved (500K intervals)
+
+---
+
+## Phase H v3: NPC Interaction in Intersections
+
+**COMPLETED 2026-02-01** | Grade: A-
+
+- Final Reward: +701 | Peak: +708 @ 1.55M
+- Steps: 5.0M (warm start from v2 3.5M checkpoint)
+- Training: Build-based, 3 parallel envs, ~26 min
+- Curriculum: **11/11 complete** (3 NPCs + speed_variation 0.15)
+
+### v1 → v2 → v3 Evolution
+
+| Metric | v1 | v2 | v3 |
+|--------|----|----|-----|
+| Final Reward | ~550 (crashed) | 681 | **701** |
+| Curriculum | 7/11 | 9/11 | **11/11** |
+| speed_variation | crash at 0.15 | stuck at 0.05 | **0.15 complete** |
+| Duration | ~90 min | ~26 min | ~26 min |
+
+### Key Innovations
+1. **Build Training (P-017)**: 헤드리스 빌드 + num_envs=3로 ~3x 속도 향상
+2. **Gradual Variation**: 0->0.05->0.10->0.15 (v1의 abrupt jump 수정)
+3. **Achievable Thresholds (P-016)**: 685/690/693 (v2의 710/720 도달 불가 수정)
+4. **CUDA Fix (P-018)**: threaded=false로 device mismatch 해결
+
+### Artifacts
+- **Final Model**: `results/phase-H-v3/E2EDrivingAgent-5000501.onnx`
+- **Config**: `python/configs/planning/vehicle_ppo_phase-H-v3.yaml`
+- **Build**: `Builds/PhaseH/PhaseH.exe` (118MB)
 
 ---
 
 ## Key Achievements
 
 ### Safety Record
-- **0% collision across all phases** (0 through G v2)
-- Perfect safety maintained even during intersection turns
+- **0% collision across all phases** (0 through H v3)
+- Perfect safety maintained with 3 NPCs in intersections
 
 ### Curriculum Progression
-- Phase 0: Basic driving -> Phase G v2: Full intersection mastery
-- 8 training phases completed (15 total runs including failures)
-- Agent handles: overtaking, multi-NPC, speed zones, curves, multi-lane, T/Cross/Y-junction intersections
+- Phase 0: Basic driving -> Phase H v3: NPC interaction in intersections
+- 8 training phases completed (18 total runs including failures)
+- Agent handles: overtaking, multi-NPC, speed zones, curves, multi-lane, T/Cross/Y-junction intersections, NPC speed variation
 
 ### Lessons Learned
 
@@ -212,8 +223,12 @@
 | P-013 | WrongWay rate dominates when turns are imprecise | Phase G v1 |
 | P-014 | Intersection zone requires WrongWay exemption | Phase G v1→v2 |
 | P-015 | DecisionRequester required after scene regeneration | Phase G v2 |
+| P-016 | Curriculum thresholds must be achievable under target conditions | Phase H v2 |
+| P-017 | Build training (num_envs=3, no_graphics) enables rapid iteration | Phase H v2 |
+| P-018 | threaded=false required with CUDA warm start (device mismatch) | Phase H v2 |
+| P-019 | min_lesson_length should scale with reward noise | Phase H v3 |
 
 ---
 
 *Document updated: 2026-02-01*
-*Phase G v2 Complete -- Phase H Planned*
+*Phase H v3 Complete -- Phase I Planned*

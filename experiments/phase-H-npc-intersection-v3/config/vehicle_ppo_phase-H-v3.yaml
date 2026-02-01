@@ -1,0 +1,287 @@
+# E2EDrivingAgent PPO Phase H v3: NPC Speed Variation Completion
+# Strategy: WARM START from Phase H v2 3.5M checkpoint (reward ~700, 3 NPCs + speed_ratio 0.85)
+# v2 completed: 3 NPCs, speed_ratio 0.85, but speed_variation stuck at 0.05/4
+# v3 fix: lower speed_variation thresholds (700/710/720 -> 685/690/693)
+#
+# Usage:
+#   mlagents-learn python/configs/planning/vehicle_ppo_phase-H-v3.yaml --run-id=phase-H-v3 --force
+#
+# Key changes from Phase H v2:
+# 1. WARM START: v2 3.5M checkpoint (peak ~700, pre-variation, Std <8)
+# 2. LOWER THRESHOLDS: speed_variation 685/690/693 (was 700/710/720)
+#    v2 data: agent averages ~690-700 with variation=0.05, so 710 was unreachable
+# 3. LONGER LESSONS: min_lesson_length 1500 for variation stability
+#
+# Hardware: RTX 4090 (24GB VRAM) + 128GB RAM
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # WARM START from Phase H v2 3.5M checkpoint
+    # Peak performance: reward ~700, Std ~5, 3 NPCs + speed_ratio 0.85, no variation yet
+    init_path: results/phase-H-v2/E2EDrivingAgent/E2EDrivingAgent-3499763.pt
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 5000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 5
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # PHASE G PARAMS: Fast unlock (thresholds 50-130)
+  # Warm start at ~700 means all unlock immediately
+  # =======================================================
+
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 50.0
+          signal_smoothing: true
+        value: 0.0
+      - name: TJunction
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 75.0
+          signal_smoothing: true
+        value: 1.0
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 100.0
+          signal_smoothing: true
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  turn_direction:
+    curriculum:
+      - name: StraightOnly
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 60.0
+          signal_smoothing: true
+        value: 0.0
+      - name: LeftTurn
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 85.0
+          signal_smoothing: true
+        value: 1.0
+      - name: RightTurn
+        value: 2.0
+
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 70.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 90.0
+          signal_smoothing: true
+        value: 0.0
+      - name: CenterLineEnforced
+        value: 1.0
+
+  goal_distance:
+    curriculum:
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 110.0
+          signal_smoothing: true
+        value: 150.0
+      - name: LongGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 130.0
+          signal_smoothing: true
+        value: 200.0
+      - name: FullGoal
+        value: 230.0
+
+  # =======================================================
+  # NPC PARAMS (thresholds 550-680)
+  # All unlock immediately from ~700 warm start
+  # =======================================================
+
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 550.0
+          signal_smoothing: true
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 620.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 680.0
+          signal_smoothing: true
+        value: 2.0
+      - name: ThreeNPCs
+        value: 3.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 600.0
+          signal_smoothing: true
+        value: 0.5
+      - name: MediumNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 660.0
+          signal_smoothing: true
+        value: 0.7
+      - name: NormalNPCs
+        value: 0.85
+
+  # =======================================================
+  # NPC SPEED VARIATION: Lowered thresholds (v2 fix)
+  # v2: thresholds 700/710/720 -> stuck at 0.05 (agent avg ~690-700 with variation)
+  # v3: thresholds 685/690/693 -> achievable even with variation active
+  # min_lesson_length 1500 for stability before advancing
+  # =======================================================
+
+  npc_speed_variation:
+    curriculum:
+      - name: NoVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1000
+          threshold: 685.0
+          signal_smoothing: true
+        value: 0.0
+      - name: TinyVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1500
+          threshold: 690.0
+          signal_smoothing: true
+        value: 0.05
+      - name: SmallVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 1500
+          threshold: 693.0
+          signal_smoothing: true
+        value: 0.10
+      - name: MildVariation
+        value: 0.15
+
+  # =======================================================
+  # LOCKED
+  # =======================================================
+
+  road_curvature:
+    curriculum:
+      - name: Straight
+        value: 0.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: SingleDirection
+        value: 0.0
+
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        value: 1.0
+
+# =======================================================
+# BUILD-BASED MULTI-ENV TRAINING
+# =======================================================
+
+env_settings:
+  env_path: Builds/PhaseH/PhaseH.exe
+  num_envs: 3
+  base_port: 5004
+  timeout_wait: 600
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: true
+
+torch_settings:
+  device: cuda

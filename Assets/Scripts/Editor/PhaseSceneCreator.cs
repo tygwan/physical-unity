@@ -41,6 +41,7 @@ public class PhaseSceneCreator
         CreatePhaseEScene();
         CreatePhaseFScene();
         CreatePhaseGScene();
+        CreatePhaseHScene();
 
         EditorUtility.DisplayDialog("Complete",
             "All Phase scenes created in Assets/Scenes/", "OK");
@@ -147,6 +148,26 @@ public class PhaseSceneCreator
             numLanes = 2,
             roadCurvature = 0f,
             intersectionType = 2, // Cross intersection
+            turnDirection = 0,    // Configurable at runtime
+            npcSpeedRatio = 0.6f,
+            roadLength = 300f,
+            observationSize = 260,
+            enableLaneObservation = true,
+            enableIntersectionObservation = true,
+        });
+    }
+
+    [MenuItem("Tools/Create Phase Scenes/Phase H - NPC Intersection")]
+    public static void CreatePhaseHScene()
+    {
+        CreatePhaseScene(new PhaseConfig
+        {
+            name = "PhaseH_NPCIntersection",
+            description = "NPC interaction in intersections",
+            numNPCs = 3,
+            numLanes = 2,
+            roadCurvature = 0f,
+            intersectionType = 2, // Cross intersection default
             turnDirection = 0,    // Configurable at runtime
             npcSpeedRatio = 0.6f,
             roadLength = 300f,
@@ -645,12 +666,20 @@ public class PhaseSceneCreator
         if (bp == null) return;
 
         var so = new SerializedObject(bp);
-        so.FindProperty("m_BehaviorName").stringValue = "E2EDrivingAgent";
+
+        var nameProp = so.FindProperty("m_BehaviorName");
+        if (nameProp != null) nameProp.stringValue = "E2EDrivingAgent";
 
         int obsSize = config.observationSize > 0 ? config.observationSize : 242;
-        so.FindProperty("m_BrainParameters.VectorObservationSize").intValue = obsSize;
-        so.FindProperty("m_BrainParameters.NumStackedVectorObservations").intValue = 1;
-        so.FindProperty("m_BrainParameters.ActionSpec.m_NumContinuousActions").intValue = 2;
+
+        var obsSizeProp = so.FindProperty("m_BrainParameters.VectorObservationSize");
+        if (obsSizeProp != null) obsSizeProp.intValue = obsSize;
+
+        var stackProp = so.FindProperty("m_BrainParameters.NumStackedVectorObservations");
+        if (stackProp != null) stackProp.intValue = 1;
+
+        var continuousProp = so.FindProperty("m_BrainParameters.ActionSpec.m_NumContinuousActions");
+        if (continuousProp != null) continuousProp.intValue = 2;
 
         // Clear discrete branches (set size to 0)
         var branchProp = so.FindProperty("m_BrainParameters.ActionSpec.BranchSizes");

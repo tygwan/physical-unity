@@ -5,39 +5,42 @@ title: Phase G - Intersection Navigation
 
 # Phase G: Intersection Navigation
 
-교차로 (T자/십자/Y자) 주행 학습
+T/Cross/Y-junction intersection driving
 
 ---
 
-## Overview
+## Training Summary
 
 | Item | Value |
 |------|-------|
-| **Status** | 🔄 In Progress |
-| **Start Date** | 2026-01-27 |
-| **Target Steps** | 8,000,000 |
-| **Current Steps** | ~3,560,000 (44.5%) |
-| **Current Reward** | **+792** (peak: +882 at 3.19M) |
-| **Initialize From** | Phase F (+988) |
-| **Current Curriculum** | **CrossIntersection** |
+| **Run ID** | phase-G-v2 |
+| **Status** | Completed |
+| **Date** | 2026-02-01 |
+| **Total Steps** | 5,000,074 |
+| **Training Time** | ~56 minutes |
+| **Final Reward** | **+628** |
+| **Peak Reward** | **+633** (at 4.72M steps) |
+| **Observation** | 260D (254D + 6D intersection) |
+| **Initialize From** | Phase G v1 (warm start from 10M checkpoint) |
 
 ---
 
 ## Objective
 
-Phase F에서 학습한 다차선 주행 능력을 유지하면서, 교차로에서의 방향 전환(직진/좌회전/우회전)을 학습합니다.
+Phase F multi-lane driving capabilities maintained while learning intersection navigation (turn decisions at T/Cross/Y-junctions).
 
 ### New Capabilities
-- T자 교차로 인식 및 통과
-- 십자 교차로 인식 및 통과
-- Y자 분기점 인식 및 통과
-- 좌회전/우회전 기동
+- T-junction recognition and navigation
+- Cross intersection recognition and navigation
+- Y-junction recognition and navigation
+- Left/Right turn maneuvers at intersections
+- WrongWay detection with dual-axis check (P-014)
 
 ---
 
 ## Observation Space
 
-**254D → 260D** (+6D intersection info)
+**254D -> 260D** (+6D intersection info)
 
 ```yaml
 intersection_info: 6D
@@ -53,32 +56,30 @@ intersection_info: 6D
 
 ## Curriculum Design
 
-### Intersection Type Curriculum
+### Full Curriculum Parameters (All 7/7 Completed)
 
-```
-Stage 1: NoIntersection (직선 도로만)
-    │ threshold: reward > 800
-    ▼
-Stage 2: T-Junction (T자 교차로)
-    │ threshold: reward > 600
-    ▼
-Stage 3: Cross (십자 교차로)
-    │ threshold: reward > 500
-    ▼
-Stage 4: Y-Junction (Y자 분기점)
-```
+| Parameter | Final Lesson | Final Value | Status |
+|-----------|--------------|-------------|--------|
+| intersection_type | Y-Junction | 3 | Completed |
+| turn_direction | RightTurn | 2 | Completed |
+| num_lanes | TwoLanes | 2 | Completed |
+| center_line_enabled | CenterLineEnforced | 1 | Completed |
+| goal_distance | LongGoal | 200m | Completed |
+| road_curvature | Straight | 0 | Locked |
+| num_active_npcs | NoNPCs | 0 | Deferred to Phase H |
 
-### Turn Direction Curriculum
+---
 
-```
-Stage 1: Straight Only (직진만)
-    │ threshold: reward > 700
-    ▼
-Stage 2: Left Turn (좌회전 추가)
-    │ threshold: reward > 500
-    ▼
-Stage 3: Right Turn (우회전 추가)
-```
+## Key Changes: v1 -> v2
+
+| Aspect | v1 | v2 | Impact |
+|--------|----|----|--------|
+| WrongWay detection | xPos only | xPos + zPos (P-014) | 32% -> 0% termination |
+| Initialization | Fresh start (260D) | Warm start from v1 10M | Immediate ~498 reward |
+| Curriculum | 9 params, NPCs included | 7 params, NPCs deferred | Focused learning |
+| Y-junction threshold | 550 | 450 | Achievable target |
+| Budget | 10M steps | 5M steps | Sufficient with warm start |
+| Final Reward | +494 (plateau) | **+628** | +27% improvement |
 
 ---
 
@@ -86,88 +87,159 @@ Stage 3: Right Turn (우회전 추가)
 
 ### Reward Curve
 
-![Phase G Reward Curve](../gallery/charts/phase-g-reward.png)
+```
+Reward
++633  |                                          * Peak
+      |                                    _____/
++600  |                           ________/
+      |                     _____/
++550  |               _____/
+      |         _____/
++500  |________/
+      |
+      +--------------------------------------------
+       0.5   1.0   1.5   2.0   2.5   3.0   3.5   4.0   4.5   5.0 M steps
+```
 
-*이미지 준비 중*
+### Reward Phases
+
+1. **Warm Start (0-100K)**: Instant ~498, matching v1 final performance
+2. **Curriculum Rush (100K-430K)**: All 7 lessons completed, brief dips during transitions
+3. **Consolidation (430K-2M)**: Steady climb from 502 to 589
+4. **Optimization (2M-5M)**: Gradual refinement from 589 to 628, peak 633
 
 ### Step-by-Step Progress
 
-| Step | Reward | Std | Curriculum State | Notes |
-|------|--------|-----|------------------|-------|
-| 10K | +423 | 14 | NoIntersection, Straight | Start |
-| 500K | +480 | 15 | NoIntersection, Straight | Checkpoint saved |
-| 800K | +521 | 30 | NoIntersection, Straight | - |
-| 1.0M | +615 | 91 | NoIntersection, Straight | Checkpoint saved |
-| 1.08M | +750 | 140 | **Curriculum transition** | **TwoLanes, CenterLine enabled** |
-| 1.25M | +722 | 11 | TwoLanes, CenterLine | Stable |
-| 1.33M | +720 | 15 | **Turn curriculum** | **LeftTurn, OneNPC** |
-| 1.44M | +683 | 195 | **Turn curriculum** | **RightTurn, TwoNPCs** |
-| 2.0M | +683 | 159 | RightTurn, TwoNPCs | Checkpoint saved |
-| 2.15M | +734 | 17 | RightTurn, TwoNPCs | Peak (no intersection) |
-| 2.78M | +750 | 172 | RightTurn, TwoNPCs | Rising |
-| 3.0M | +792 | 141 | RightTurn, TwoNPCs | Checkpoint saved |
-| 3.11M | +855 | 218 | RightTurn, TwoNPCs | Peak |
-| 3.19M | **+882** | 208 | RightTurn, TwoNPCs | **PEAK** |
-| 3.20M | +837 | 280 | **Curriculum transition** | **T-Junction entered** |
-| 3.40M | +763 | 193 | **Curriculum transition** | **CrossIntersection entered** |
-| **3.56M** | **+792** | 221 | **CrossIntersection** | **Current** |
+| Step | Reward | Event |
+|------|--------|-------|
+| 10K | 398 | Warm start baseline (v1 knowledge inherited) |
+| 50K | 500 | v1 peak matched |
+| 100K | 497 | Curriculum: T-junction + LeftTurn + TwoLanes |
+| 210K | 507 | Curriculum: Cross + RightTurn + CenterLine |
+| 230K | 472 | Dip from new curriculum complexity |
+| 320K | 500 | Curriculum: **Y-junction** (v1 never reached!) |
+| 430K | 502 | Curriculum: LongGoal (200m) -- **all 7/7 complete** |
+| 500K | 544 | First checkpoint saved |
+| 1.0M | 550 | Stable improvement |
+| 2.0M | 589 | 2M checkpoint |
+| 2.5M | 600 | **600 barrier broken** |
+| 4.0M | 612 | Continued improvement |
+| 4.72M | **633** | **PEAK REWARD** |
+| 5.0M | 628 | Training complete |
 
 ---
 
-## Screenshots
+## Curriculum Transitions
 
-### NoIntersection Stage (현재)
+All 7 curriculum parameters completed within the first 430K steps:
 
-![NoIntersection](../gallery/screenshots/phase-g-no-intersection.png)
-
-*스크린샷 준비 중*
-
-### T-Junction Stage (예정)
-
-| 진입 전 | 교차로 내 | 통과 후 |
-|---------|----------|---------|
-| ![](../gallery/screenshots/phase-g-t-approach.png) | ![](../gallery/screenshots/phase-g-t-inside.png) | ![](../gallery/screenshots/phase-g-t-exit.png) |
-
-*스크린샷 준비 중*
-
----
-
-## Environment Setup
-
-### Simplified Environment
-
-Phase G에서는 교차로 학습에 집중하기 위해 환경을 단순화했습니다:
-
-| Parameter | Phase F | Phase G | Reason |
-|-----------|---------|---------|--------|
-| road_curvature | 0~0.6 | **0** | 교차로 집중 |
-| num_npcs | 0~3 | **0~2** | 복잡도 제한 |
-| goal_distance | 200m | **120~200m** | 짧은 에피소드 |
+| Step | Parameter | From -> To | Reward Impact |
+|------|-----------|-----------|---------------|
+| 100K | intersection_type | None -> T-junction | Minimal dip |
+| 100K | turn_direction | Straight -> Left | Minimal dip |
+| 100K | num_lanes | Single -> Two | Minimal dip |
+| 210K | intersection_type | T-junction -> Cross | -35 temporary |
+| 210K | turn_direction | Left -> Right | Absorbed |
+| 210K | center_line_enabled | Off -> On | Absorbed |
+| 320K | intersection_type | Cross -> **Y-junction** | Minimal dip |
+| 430K | goal_distance | 150m -> 200m | +25 (longer episodes) |
 
 ---
 
-## Milestones (Actual vs Expected)
+## End Reasons
 
-| Milestone | Expected Step | Actual Step | Status |
-|-----------|---------------|-------------|--------|
-| TwoLanes transition | - | 1.08M | Completed |
-| LeftTurn introduced | - | 1.33M | Completed |
-| RightTurn introduced | - | 1.44M | Completed |
-| Pre-intersection peak | - | 3.19M (+882) | Completed |
-| **T-Junction 도입** | ~1-1.5M | **3.20M** | **Completed** |
-| **Cross 도입** | ~2-3M | **3.40M** | **Completed** |
-| Y-Junction 도입 | ~4-5M | TBD | Pending |
-| **Phase G 완료** | ~8M | TBD | In Progress |
+| Reason | v1 Rate | v2 Rate |
+|--------|---------|---------|
+| Goal Reached | 67.9% | **~95%+** |
+| WrongWay | **31.9%** | **~0%** |
+| Collision | 0% | 0% |
+| Timeout | ~0% | ~5% |
 
 ---
 
-## Notes
+## Key Achievements
 
-- Phase F checkpoint에서 초기화하여 기존 능력 (차선 유지, 추월 등) 유지
-- T-Junction과 Cross 교차로 진입 완료! (3.2M~3.4M steps)
-- 커리큘럼 전환 시에도 reward +700~800 유지 (curriculum shock 최소화)
-- Y-Junction 진입 전까지 Cross 교차로 안정화 중
+### 1. WrongWay Problem Solved
+- v1: 32% of episodes ended in WrongWay (xPos-only detection failed post-turn)
+- v2: ~0% WrongWay with dual-axis P-014 fix
+
+### 2. All Intersection Types Mastered
+```
+v1: None -> T-junction -> Cross (stuck, Y-junction never reached)
+v2: None -> T-junction -> Cross -> Y-junction (all completed by 320K!)
+```
+
+### 3. Warm Start Efficiency
+- v1: 2M steps relearning basics (254D->260D fresh start)
+- v2: Instant ~498 reward, curriculum rushing from step 100K
+
+### 4. Reward Comparison
+```
+Phase A: +937 (1 NPC, straight)
+Phase B: +903 (1 NPC, varied speed)
+Phase C: +961 (4 NPC, straight)
+Phase E: +931 (2 NPC, curves)
+Phase F: +988 (3 NPC, curves + 2 lanes)
+Phase G: +628 (0 NPC, intersections)  <- Different reward scale
+```
+
+Note: Phase G reward is lower in absolute value because intersection episodes involve turn maneuvers with temporary speed reduction, shorter effective distances, and additional complexity.
 
 ---
 
-[← Back to Phases](./index) | [Home](../)
+## v1 vs v2 Comparison
+
+| Metric | v1 | v2 |
+|--------|----|----|
+| Steps | 10,000,153 | 5,000,074 |
+| Final Reward | +494 | **+628** |
+| Peak Reward | +516 | **+633** |
+| Curriculum | 4/6 complete | **7/7 complete** |
+| WrongWay Rate | 31.9% | **~0%** |
+| Training Time | ~2 hours | **~56 min** |
+| Y-junction | Never reached | **Completed at 320K** |
+
+---
+
+## Checkpoints
+
+| File | Step | Reward |
+|------|------|--------|
+| E2EDrivingAgent-499842.onnx | 500K | ~544 |
+| E2EDrivingAgent-999786.onnx | 1.0M | ~550 |
+| E2EDrivingAgent-1999944.onnx | 2.0M | ~589 |
+| E2EDrivingAgent-2999948.onnx | 3.0M | ~602 |
+| E2EDrivingAgent-3999789.onnx | 4.0M | ~612 |
+| E2EDrivingAgent-4499771.onnx | 4.5M | ~626 |
+| **E2EDrivingAgent-5000074.onnx** | **5.0M** | **~628 (FINAL)** |
+
+---
+
+## Bugs Fixed
+
+1. **WrongWay Detection (P-014)**: xPos-only check failed after intersection turns where agent moved in Z direction. Fixed with dual-axis (xPos + zPos) wrongway detection.
+2. **Missing DecisionRequester (P-015)**: Scene regeneration created agent GameObjects without DecisionRequester. Fixed with ConfigurePhaseGAgents.cs utility.
+3. **BehaviorParameters Reset**: Scene regeneration reset observation size to 1. Fixed using direct API approach in ConfigurePhaseGAgents.cs.
+
+---
+
+## Lessons Learned
+
+1. **Warm start is critical**: 260D fresh start wasted 2M steps in v1; warm start gave instant ~498
+2. **WrongWay detection must be multi-axis**: Single-axis check fails at intersections
+3. **Defer unrelated complexity**: Removing NPCs from Phase G curriculum allowed focus on intersection geometry
+4. **Lower thresholds work**: Y-junction threshold 450 (vs v1's 550) was achievable
+5. **5M steps sufficient with warm start**: Half the budget of v1 with better results
+
+---
+
+## Next Phase
+
+**Phase H**: NPC Interaction in Intersections
+- Progressive NPC introduction: 0 -> 1 -> 2 -> 3 NPCs
+- NPC waypoint-following through intersections
+- Warm start from Phase G v2 checkpoint (+628)
+
+---
+
+[Phase F](./phase-f) | [Phase H](./phase-h) | [Home](../)

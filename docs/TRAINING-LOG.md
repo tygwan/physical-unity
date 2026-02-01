@@ -1,6 +1,6 @@
 # Training Log - E2EDrivingAgent RL Training History
 
-> Phase G v2 completed on 2026-02-01
+> Phase I v2 completed on 2026-02-01 (PROJECT RECORD: +770)
 
 ## Overview
 
@@ -15,6 +15,11 @@
 | **Phase F v5** | Multi-Lane Highway (3 lanes) | 10M | **913** | ✅ COMPLETED |
 | **Phase G v1** | Intersection Navigation | 10M | **516** | ⚠️ PARTIAL |
 | **Phase G v2** | Intersection (WrongWay Fix) | 5M | **633** | ✅ COMPLETED |
+| **Phase H v1** | NPC Intersection (abrupt variation) | 5M | **700** | ⚠️ CRASHED |
+| **Phase H v2** | NPC Intersection (gradual variation) | 5M | **706** | ⚠️ PARTIAL (9/11) |
+| **Phase H v3** | NPC Intersection (lowered thresholds) | 5M | **708** | ✅ COMPLETED |
+| **Phase I v1** | Curved Roads + NPC (triple crash) | 5M | **724** | ⚠️ PARTIAL (crash) |
+| **Phase I v2** | Curved Roads + NPC (recovery) | 5M | **775** | ✅ COMPLETED |
 
 ---
 
@@ -789,3 +794,152 @@ See `docs/phases/phase-g/ANALYSIS-v1.md` for full recommendations.
 
 *Phase G v2 Training Complete - 2026-02-01*
 *Ready for Phase H: NPC Interaction in Intersections*
+
+---
+
+## Phase H v1: NPC Interaction in Intersections (Abrupt Variation)
+
+### Status: ⚠️ CRASHED (2026-02-01) - V2 PLANNED
+
+**Run ID**: phase-H
+**Steps**: ~5M (halted)
+**Peak Reward**: +700 | **Final**: ~550 (crashed)
+
+Phase H v1 introduced NPC waypoint-following through intersections with curriculum for num_active_npcs (0->3), npc_speed_ratio (0.5->0.85), and npc_speed_variation (0->0.15).
+
+**Failure Mode**: Single-step jump from speed_variation=0 to 0.15 at threshold 700 caused reward crash from 700 to 550, with Std spiking to 300+. Agent couldn't adapt to sudden NPC speed unpredictability.
+
+**Key Achievement**: Successfully trained 3 NPCs + speed_ratio 0.85 before crash. Peak ~700 reward confirmed intersection + NPC interaction works.
+
+---
+
+## Phase H v2: NPC Intersection (Build Training, Gradual Variation)
+
+### Status: ⚠️ PARTIAL (2026-02-01) - 9/11 Curriculum
+
+**Run ID**: phase-H-v2
+**Steps**: 5,000,000
+**Peak Reward**: +706 @ 2.32M | **Final**: +681
+**Training Mode**: Build (PhaseH.exe) + 3 parallel envs, no_graphics
+**Training Duration**: ~26 minutes
+**Throughput**: ~183K steps/min
+
+### Key Changes from v1
+1. **Build Training**: Headless builds with 3 parallel Unity processes (~3x speedup)
+2. **Gradual Variation**: npc_speed_variation 0 -> 0.05 -> 0.10 -> 0.15 (was single jump)
+3. **Warm Start**: Phase G v2 5M checkpoint (+628)
+4. **threaded: false** (CUDA device mismatch fix)
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 10K | ~610 | Warm start from Phase G v2 |
+| 410K | ~700 | All Phase G params unlocked |
+| 800K | ~680 | 1 NPC introduced |
+| 1600K | ~690 | 2 NPCs |
+| 2320K | **706** | **Peak** - 3 NPCs, speed_ratio 0.85 |
+| 2480K | ~700 | 3 NPCs stable |
+| 3500K | ~700 | Pre-variation peak (best checkpoint) |
+| 3720K | ~690 | speed_variation -> 0.05 introduced |
+| 5000K | ~681 | Budget exhausted, variation stuck at 0.05 |
+
+### Curriculum Status
+
+| Parameter | Status | Note |
+|-----------|--------|------|
+| Phase G params (7) | All Complete | Unlocked by 410K |
+| num_active_npcs | 3/3 Complete | 0->1->2->3 by 2480K |
+| npc_speed_ratio | 3/3 Complete | 0.5->0.7->0.85 |
+| **npc_speed_variation** | **2/4 STUCK** | **0.05 stuck (threshold 710 unreachable)** |
+
+### Root Cause: Unreachable Thresholds
+- Thresholds: 700/710/720 for variation lessons
+- Agent averages ~690-700 with variation=0.05 active
+- Threshold 710 requires sustained performance above variation noise floor
+- **Fix for v3**: Lower thresholds to 685/690/693
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-H-v2.yaml`
+- **Best Checkpoint**: `results/phase-H-v2/E2EDrivingAgent/E2EDrivingAgent-3499763.pt` (~700, pre-variation)
+- **Final**: `results/phase-H-v2/E2EDrivingAgent/E2EDrivingAgent-4999989.pt`
+
+---
+
+## Phase H v3: NPC Intersection (Lowered Thresholds - FINAL)
+
+### Status: ✅ COMPLETED (2026-02-01) - 11/11 Curriculum
+
+**Run ID**: phase-H-v3
+**Steps**: 5,000,501
+**Peak Reward**: +708 @ 1.55M | **Final**: +701
+**Training Mode**: Build (PhaseH.exe) + 3 parallel envs, no_graphics
+**Training Duration**: 1,559 seconds (~26 minutes)
+**Throughput**: ~183K steps/min
+
+### Key Changes from v2
+1. **Warm Start**: v2 3.5M checkpoint (peak ~700, Std ~5, pre-variation noise)
+2. **Lowered Thresholds**: speed_variation 685/690/693 (was 700/710/720)
+3. **Longer Lessons**: min_lesson_length 1500 for variation stages (was 1000)
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 10K | ~630 | Warm start from v2 3.5M |
+| 150K | ~680 | Phase G params unlocking |
+| 340K | ~695 | All Phase G params complete |
+| 560K | ~700 | npc_speed_ratio -> 0.85 |
+| 800K | ~680 | 1 NPC |
+| 1030K | ~690 | 2 NPCs |
+| 1260K | ~700 | 3 NPCs |
+| 1550K | **708** | **Peak** - speed_variation -> 0.05 |
+| 1980K | ~690 | speed_variation -> 0.10 |
+| 3780K | ~670 | speed_variation -> 0.15 (dip to 641) |
+| 4200K | ~690 | Recovery from variation dip |
+| 5000K | **701** | Training complete, **11/11 curriculum** |
+
+### Curriculum Status (ALL COMPLETE)
+
+| Parameter | Lessons | Final Value |
+|-----------|---------|-------------|
+| intersection_type | 4/4 | Y-Junction (3) |
+| turn_direction | 3/3 | RightTurn (2) |
+| num_lanes | 2/2 | TwoLanes (2) |
+| center_line_enabled | 2/2 | CenterLineEnforced (1) |
+| goal_distance | 3/3 | FullGoal (230m) |
+| num_active_npcs | 4/4 | ThreeNPCs (3) |
+| npc_speed_ratio | 3/3 | NormalNPCs (0.85) |
+| **npc_speed_variation** | **4/4** | **MildVariation (0.15)** |
+
+### v1 vs v2 vs v3 Comparison
+
+| Metric | v1 | v2 | v3 |
+|--------|----|----|-----|
+| Steps | ~5M (crashed) | 5M | 5M |
+| Peak Reward | 700 | 706 | **708** |
+| Final Reward | ~550 | 681 | **701** |
+| Curriculum | 7/11 | 9/11 | **11/11** |
+| speed_variation | crash at 0.15 | stuck at 0.05 | **0.15 complete** |
+| Training Mode | Editor | Build x3 | Build x3 |
+| Duration | ~90 min | ~26 min | ~26 min |
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-H-v3.yaml`
+- **Final ONNX**: `results/phase-H-v3/E2EDrivingAgent/E2EDrivingAgent-5000501.onnx`
+- **Final PT**: `results/phase-H-v3/E2EDrivingAgent/E2EDrivingAgent-5000501.pt`
+- **TensorBoard**: `results/phase-H-v3/E2EDrivingAgent/events.out.tfevents.*`
+
+### Lessons Learned (New)
+
+| Lesson ID | Description | Phase |
+|-----------|-------------|-------|
+| P-016 | Curriculum thresholds must be achievable under target conditions (not pre-condition) | Phase H v2 |
+| P-017 | Build training (num_envs=3, no_graphics) enables rapid experiment iteration | Phase H v2 |
+| P-018 | threaded=false required with CUDA warm start (device mismatch) | Phase H v2 |
+| P-019 | min_lesson_length should scale with reward noise from active curriculum | Phase H v3 |
+
+---
+
+*Phase H v3 Training Complete - 2026-02-01*
+*Ready for Phase I: Curved Roads with NPCs*

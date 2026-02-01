@@ -15,6 +15,11 @@ experiments/
 ├── phase-E_curved_roads/ # Phase E: Curved road handling
 ├── phase-F_multi_lane/  # Phase F: Multi-lane navigation
 ├── phase-G_intersection/ # Phase G: Intersection navigation
+├── phase-H-npc-intersection/    # Phase H v1: NPC at intersections
+├── phase-H-npc-intersection-v2/ # Phase H v2: Multi-env, gradual variation
+├── phase-H-npc-intersection-v3/ # Phase H v3: Lowered thresholds, success
+├── phase-I-curved-npc/          # Phase I v1: Curved roads + NPC (crash)
+├── phase-I-curved-npc-v2/      # Phase I v2: Recovery training (+770 record)
 └── failed_experiments/     # Archived failed experiments
 ```
 
@@ -51,9 +56,9 @@ experiments/
 ## Training Flow
 
 ```
-Phase A (2M) ──> Phase B (2M) ──> Phase C (4M) ──> Phase E (6M) ──> Phase F (6M) ──> Phase G (6M)
-   │                │                 │                │               │               │
-   └─ Dense traffic └─ Decisions     └─ Multi-NPC    └─ Curves      └─ Lanes       └─ Intersections
+Phase A (2M) ──> Phase B (2M) ──> Phase C (4M) ──> Phase E (6M) ──> Phase F (6M) ──> Phase G (6M) ──> Phase H (13.5M) ──> Phase I (10M)
+   │                │                 │                │               │               │               │                    │
+   └─ Dense traffic └─ Decisions     └─ Multi-NPC    └─ Curves      └─ Lanes       └─ Intersections └─ NPC+Intersections └─ Curves+NPCs (+770)
 ```
 
 ## Scene-Phase Matching Rule (P-011)
@@ -68,6 +73,8 @@ Each training phase MUST use its designated Unity scene. Wrong scene = training 
 | E | PhaseE_CurvedRoads | 4.5m (1 lane) | Curved waypoints |
 | F | PhaseF_MultiLane | 11.5m (3 lane) | Multi-lane, center line |
 | G | PhaseG_Intersection | 14m (4 lane) | Intersections, turn logic |
+| H | PhaseH_NPCIntersection | 14m (4 lane) | NPC traffic at intersections |
+| I | PhaseH_NPCIntersection* | 14m (4 lane) | Curved roads + NPC traffic |
 
 **Pre-training checklist**:
 1. Open Unity Editor

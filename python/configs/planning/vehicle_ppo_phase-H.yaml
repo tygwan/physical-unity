@@ -1,0 +1,280 @@
+# E2EDrivingAgent PPO Phase H: NPC Interaction in Intersections
+# Strategy: WARM START from Phase G v2 checkpoint (reward 633, 260D obs, 5M steps)
+# Agent already masters all intersection geometry (T/Cross/Y-junction, all turns)
+# Phase H progressively introduces 1->2->3 NPCs that follow waypoints through intersections
+#
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-H.yaml --run-id=phase-H --force
+#
+# Key changes from Phase G v2:
+# 1. WARM START: init_path from Phase G v2 final checkpoint
+# 2. CODE CHANGE: NPCVehicleController now supports waypoint-following mode
+# 3. CODE CHANGE: DrivingSceneManager uses waypoint-index spawning for intersections
+# 4. NEW CURRICULUM: num_active_npcs (0->1->2->3), npc_speed_ratio, npc_speed_variation
+# 5. Phase G params unlock fast (thresholds 50-130) since already mastered
+# 6. NPC params delayed (thresholds 550-700) to preserve intersection skills
+# 7. BUDGET: 8M steps (60% margin over expected 5M for NPC curriculum)
+#
+# P-002/P-012 Compliance:
+# All 15 threshold values unique: 50,60,70,75,85,90,100,110,130,550,600,620,660,680,700
+# Minimum gap maintained between thresholds
+#
+# Scene: PhaseH_NPCIntersection (16 areas x 3 NPCs = 48 NPC GameObjects)
+# After scene generation, run Tools > Configure Agents > Phase G (260D) for DecisionRequester
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # WARM START from Phase G v2 final checkpoint
+    init_path: results/phase-G-v2/E2EDrivingAgent/E2EDrivingAgent-5000074.pt
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 8000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 5
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # PHASE G PARAMS: Fast unlock (thresholds 50-130)
+  # Already mastered from warm start, should unlock quickly
+  # =======================================================
+
+  # Intersection type: 0=None, 1=T-junction, 2=Cross, 3=Y-junction
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 50.0
+          signal_smoothing: true
+        value: 0.0
+      - name: TJunction
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 75.0
+          signal_smoothing: true
+        value: 1.0
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 100.0
+          signal_smoothing: true
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  # Turn direction: 0=Straight, 1=Left, 2=Right
+  turn_direction:
+    curriculum:
+      - name: StraightOnly
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 60.0
+          signal_smoothing: true
+        value: 0.0
+      - name: LeftTurn
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 85.0
+          signal_smoothing: true
+        value: 1.0
+      - name: RightTurn
+        value: 2.0
+
+  # Lane count: 1->2 lanes
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 70.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoLanes
+        value: 2.0
+
+  # Center line enforcement
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 90.0
+          signal_smoothing: true
+        value: 0.0
+      - name: CenterLineEnforced
+        value: 1.0
+
+  # Goal distance: progressive increase
+  goal_distance:
+    curriculum:
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 110.0
+          signal_smoothing: true
+        value: 150.0
+      - name: LongGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 130.0
+          signal_smoothing: true
+        value: 200.0
+      - name: FullGoal
+        value: 230.0
+
+  # =======================================================
+  # PHASE H NEW PARAMS: NPC Interaction (thresholds 550-700)
+  # Delayed introduction to preserve intersection geometry skills
+  # =======================================================
+
+  # Number of active NPC vehicles: 0->1->2->3
+  # NPCs follow waypoints through intersections (waypoint-following mode)
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 550.0
+          signal_smoothing: true
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 620.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 800
+          threshold: 680.0
+          signal_smoothing: true
+        value: 2.0
+      - name: ThreeNPCs
+        value: 3.0
+
+  # NPC speed as ratio of speed limit: 0.5->0.7->0.85
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 600.0
+          signal_smoothing: true
+        value: 0.5
+      - name: MediumNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 660.0
+          signal_smoothing: true
+        value: 0.7
+      - name: NormalNPCs
+        value: 0.85
+
+  # NPC speed variation: 0.0->0.15 (adds unpredictability)
+  npc_speed_variation:
+    curriculum:
+      - name: NoVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 700.0
+          signal_smoothing: true
+        value: 0.0
+      - name: MildVariation
+        value: 0.15
+
+  # =======================================================
+  # LOCKED: Not relevant for Phase H
+  # =======================================================
+
+  road_curvature:
+    curriculum:
+      - name: Straight
+        value: 0.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: SingleDirection
+        value: 0.0
+
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        value: 1.0
+
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+checkpoint_settings:
+  run_id: phase-H
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda
