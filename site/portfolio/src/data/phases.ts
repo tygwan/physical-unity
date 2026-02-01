@@ -215,18 +215,35 @@ export const phases: Phase[] = [
     parentId: 'phase-f-v4',
   },
   {
-    id: 'phase-g',
-    name: 'Phase G',
-    subtitle: 'Intersections',
-    reward: null,
-    status: 'planned',
-    tags: ['PPO', 'T/Cross Junction', 'Right-of-way'],
+    id: 'phase-g-v1',
+    name: 'Phase G v1',
+    subtitle: 'Intersections (WrongWay Bug)',
+    reward: 494,
+    status: 'failed',
+    tags: ['PPO', '260D', 'T/Cross/Y Junction', 'WrongWay Bug', 'P-014'],
     description:
-      'T-intersections, cross-roads, and Y-junctions. Agent must learn turn decisions, right-of-way rules, and intersection navigation.',
-    observations: '254D+',
-    steps: 'TBD',
+      'First intersection training: T-junction, cross-road, Y-junction with 260D observation space (+6D intersection info). Plateaued at reward ~494 (target: 550 for Y-junction). Root cause: IsWrongWayDriving() triggered during left turns (xPos < -0.5 but left turn exits at X=-8.25), causing 32% WrongWay termination rate.',
+    observations: '260D',
+    steps: '10M',
     keyInsight:
-      'Pending Phase F completion. Most complex planned phase requiring fundamentally different policy from highway driving.',
+      'WrongWay detection designed for straight roads (Phase F) was incompatible with intersection turns. 32% of episodes terminated by WrongWay, making Y-junction curriculum unreachable. Led to P-014 (Intersection Zone WrongWay Exemption).',
+    version: 1,
+  },
+  {
+    id: 'phase-g-v2',
+    name: 'Phase G v2',
+    subtitle: 'Intersections (WrongWay Fix)',
+    reward: 633,
+    status: 'success',
+    tags: ['PPO', '260D', 'Warm Start', 'P-014 Applied', 'P-015 DecisionRequester', '7/7 Curriculum'],
+    description:
+      'Phase G retry with WrongWay intersection zone fix (P-014), warm start from v1 checkpoint, simplified curriculum (NPCs deferred to Phase H). All 7/7 curriculum lessons completed in 5M steps (v1: 4/7 in 10M). T-junction, Cross, Y-junction all mastered with 0% collision. DecisionRequester bug (P-015) discovered and fixed during setup.',
+    observations: '260D',
+    steps: '5M',
+    keyInsight:
+      'P-014 WrongWay fix eliminated 32% termination rate. Warm start halved training budget (5M vs 10M) while improving reward 28% (633 vs 494). P-015 discovered: scene regeneration removes DecisionRequester, causing silent training hang.',
+    version: 2,
+    parentId: 'phase-g-v1',
   },
 ];
 
@@ -375,6 +392,34 @@ export const policyDiscoveries: PolicyDiscovery[] = [
     fixContext:
       'Phase F v5: Reordered to [UrbanGeneral(60), UrbanNarrow(50), ...]. Drop reduced to -262 (10.7x improvement), recovery in ~500K steps (12x faster).',
   },
+  {
+    id: 'P-014',
+    name: 'Intersection Zone WrongWay Exemption',
+    nameEn: 'Intersection Zone Detection Exemption',
+    sourcePhase: 'Phase G v1 → v2',
+    status: 'verified',
+    matchingStandard: 'Context-Aware Safety Checks',
+    description:
+      'WrongWay detection must be context-aware. Straight-road checks (xPos < -0.5) are invalid in intersection zones where turns produce negative X positions by design. Disable WrongWay check when agent is within intersection zone (Z >= intersectionDistance - intersectionWidth).',
+    failContext:
+      'Phase G v1: IsWrongWayDriving(xPos) checked xPos < -0.5. Left turns exit at X=-8.25, always triggering WrongWay. 32% termination rate, reward plateau at 494.',
+    fixContext:
+      'Phase G v2: IsWrongWayDriving(xPos, zPos) with intersection zone awareness. WrongWay check disabled when intersectionType > 0 AND zPos >= intersectionDistance - intersectionWidth.',
+  },
+  {
+    id: 'P-015',
+    name: 'DecisionRequester Required',
+    nameEn: 'DecisionRequester Component Required After Scene Regeneration',
+    sourcePhase: 'Phase G v2',
+    status: 'verified',
+    matchingStandard: 'P-010 Extension (Component Integrity)',
+    description:
+      'After scene regeneration (PhaseSceneCreator), DecisionRequester component may be missing from agents. Without it, agents never request decisions and training hangs silently at _reset_env with zero steps produced.',
+    failContext:
+      'Phase G v2 setup: Scene regenerated for visual enhancements. All 16 agents lost DecisionRequester. Training connected to Unity but produced 0 steps for 10+ minutes.',
+    fixContext:
+      'Added DecisionRequester (period=5, TakeActionsBetweenDecisions=true) to all agents. Updated ConfigurePhaseGAgents.cs to auto-add DecisionRequester during configuration.',
+  },
 ];
 
 // ---------- SOTIF quadrant data ----------
@@ -401,7 +446,7 @@ export const sotifQuadrants: SotifQuadrant[] = [
     label: 'Known Unsafe',
     description: 'Targeted verification. Known hazardous scenarios with planned mitigation.',
     phases: ['Phase D', 'Phase E', 'Phase F', 'Phase G'],
-    examples: ['Lane observation', 'Sharp curves', 'Multi-lane merging'],
+    examples: ['Lane observation', 'Sharp curves', 'Multi-lane merging', 'Intersection turns'],
     strategy: 'Specialized scenario training with P-009 isolation',
   },
   {
@@ -694,15 +739,15 @@ export const referenceCategories: { key: Reference['category']; label: string; i
 // ---------- Stats ----------
 export const stats = {
   maxReward: 2113,
-  totalPhases: 14,
-  completedPhases: 6,
-  failedAttempts: 8,
-  observationDim: 254,
+  totalPhases: 16,
+  completedPhases: 7,
+  failedAttempts: 9,
+  observationDim: 260,
   parallelAreas: 16,
-  successRate: '6/14',
+  successRate: '7/16',
   collisionRateTarget: '< 5%',
-  totalSteps: '76.4M',
-  totalPolicies: 9,
+  totalSteps: '91.4M',
+  totalPolicies: 11,
   techStack: ['Unity 6', 'ML-Agents 4.0', 'PyTorch 2.3+', 'PPO', 'ROS2 Humble'],
   hardware: {
     gpu: 'RTX 4090 (24GB VRAM)',

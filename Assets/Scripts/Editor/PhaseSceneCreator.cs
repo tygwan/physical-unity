@@ -13,6 +13,23 @@ public class PhaseSceneCreator
     private const int NUM_TRAINING_AREAS = 16;  // 1x16 linear layout
     private const float AREA_SPACING = 100f;    // 100m between areas (X axis)
 
+    // Intersection geometry constants
+    private const float INTERSECTION_Z = 100f;           // Intersection center Z (from WaypointManager)
+    private const float INTERSECTION_WIDTH = 14f;         // Intersection zone width
+    private const float INTERSECTION_ZONE_START = 93f;    // Z start of intersection zone
+    private const float INTERSECTION_ZONE_END = 107f;     // Z end of intersection zone
+    private const float ROAD_WIDTH = 8f;                  // 2 lanes * 3.5 + 1m margin
+    private const float ARM_LENGTH = 25f;                 // Length of intersection arms
+    private const float CURB_WIDTH = 0.3f;
+    private const float CURB_HEIGHT = 0.15f;
+
+    // Shared material cache (reused across training areas)
+    private static Material s_asphaltMaterial;
+    private static Material s_lightAsphaltMaterial;
+    private static Material s_curbMaterial;
+    private static Material s_whiteLineMaterial;
+    private static Material s_yellowLineMaterial;
+
     #region Menu Items
 
     [MenuItem("Tools/Create Phase Scenes/Create All Phase Scenes")]
@@ -41,7 +58,8 @@ public class PhaseSceneCreator
             roadCurvature = 0f,
             intersectionType = 0,
             npcSpeedRatio = 0.3f,
-            roadLength = 300f
+            roadLength = 300f,
+            observationSize = 242,
         });
     }
 
@@ -57,7 +75,8 @@ public class PhaseSceneCreator
             roadCurvature = 0f,
             intersectionType = 0,
             npcSpeedRatio = 0.5f,
-            roadLength = 300f
+            roadLength = 300f,
+            observationSize = 242,
         });
     }
 
@@ -74,7 +93,8 @@ public class PhaseSceneCreator
             intersectionType = 0,
             npcSpeedRatio = 0.6f,
             numSpeedZones = 2,
-            roadLength = 400f
+            roadLength = 400f,
+            observationSize = 242,
         });
     }
 
@@ -91,7 +111,9 @@ public class PhaseSceneCreator
             curveDirectionVariation = 0.5f,
             intersectionType = 0,
             npcSpeedRatio = 0.7f,
-            roadLength = 500f
+            roadLength = 500f,
+            observationSize = 254,
+            enableLaneObservation = true,
         });
     }
 
@@ -108,7 +130,9 @@ public class PhaseSceneCreator
             roadCurvature = 0.2f,
             intersectionType = 0,
             npcSpeedRatio = 0.8f,
-            roadLength = 500f
+            roadLength = 500f,
+            observationSize = 254,
+            enableLaneObservation = true,
         });
     }
 
@@ -125,7 +149,10 @@ public class PhaseSceneCreator
             intersectionType = 2, // Cross intersection
             turnDirection = 0,    // Configurable at runtime
             npcSpeedRatio = 0.6f,
-            roadLength = 300f
+            roadLength = 300f,
+            observationSize = 260,
+            enableLaneObservation = true,
+            enableIntersectionObservation = true,
         });
     }
 
@@ -147,6 +174,10 @@ public class PhaseSceneCreator
         public float npcSpeedRatio;
         public int numSpeedZones;
         public float roadLength;
+        // Observation configuration
+        public int observationSize;            // 242, 254, or 260
+        public bool enableLaneObservation;     // true for Phase D+
+        public bool enableIntersectionObservation; // true for Phase G+
     }
 
     private static void CreatePhaseScene(PhaseConfig config)
@@ -157,6 +188,9 @@ public class PhaseSceneCreator
             Directory.CreateDirectory(SCENES_PATH);
             AssetDatabase.Refresh();
         }
+
+        // Reset material cache for fresh scene
+        InitMaterialCache();
 
         // Create new scene
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -212,14 +246,17 @@ public class PhaseSceneCreator
         trainingArea.transform.SetParent(parent);
         trainingArea.transform.position = offset;
 
-        // Ground for this area
+        // Ground for this area (wider for intersection phases with arms)
         var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
         ground.name = "Ground";
         ground.transform.SetParent(trainingArea.transform);
         ground.transform.localPosition = Vector3.zero;
 
-        float width = Mathf.Max(50f, config.numLanes * 5f + 30f);
-        ground.transform.localScale = new Vector3(width / 10f, 1, config.roadLength / 10f + 10f);
+        float width = config.intersectionType > 0
+            ? 80f  // Wide ground for intersection arms
+            : Mathf.Max(50f, config.numLanes * 5f + 30f);
+        float depth = config.roadLength + 20f;
+        ground.transform.localScale = new Vector3(width / 10f, 1, depth / 10f);
 
         var groundRenderer = ground.GetComponent<Renderer>();
         var groundMaterial = new Material(Shader.Find("Standard"));
@@ -233,7 +270,7 @@ public class PhaseSceneCreator
         var sceneManager = CreateDrivingSceneManagerForArea(config, trainingArea.transform);
 
         // Agent Vehicle
-        var agent = CreateAgentVehicleForArea(config.roadLength, areaIndex, trainingArea.transform);
+        var agent = CreateAgentVehicleForArea(config.roadLength, areaIndex, trainingArea.transform, config);
 
         // NPC Vehicles
         var npcs = CreateNPCVehiclesForArea(config.numNPCs, config.roadLength, trainingArea.transform);
@@ -509,19 +546,15 @@ public class PhaseSceneCreator
         road.transform.SetParent(parent);
         road.transform.localPosition = Vector3.zero;
 
-        // Road surface
+        // Main road surface
         var roadSurface = GameObject.CreatePrimitive(PrimitiveType.Plane);
-        roadSurface.name = "RoadSurface";
+        roadSurface.name = "MainRoadSurface";
         roadSurface.transform.SetParent(road.transform);
         roadSurface.transform.localPosition = new Vector3(0, 0.01f, 0);
 
         float roadWidth = config.numLanes * 3.5f + 1f;
         roadSurface.transform.localScale = new Vector3(roadWidth / 10f, 1, config.roadLength / 10f);
-
-        var renderer = roadSurface.GetComponent<Renderer>();
-        var material = new Material(Shader.Find("Standard"));
-        material.color = new Color(0.25f, 0.25f, 0.25f);
-        renderer.material = material;
+        roadSurface.GetComponent<Renderer>().sharedMaterial = GetAsphaltMaterial();
 
         // Add WaypointManager
         var wpManagerType = System.Type.GetType("ADPlatform.Agents.WaypointManager, Assembly-CSharp");
@@ -537,6 +570,12 @@ public class PhaseSceneCreator
             SetProperty(wpManager, "turnDirection", config.turnDirection);
             if (config.numSpeedZones > 0)
                 SetProperty(wpManager, "numSpeedZones", config.numSpeedZones);
+        }
+
+        // Add intersection road visuals for intersection phases
+        if (config.intersectionType > 0)
+        {
+            CreateIntersectionRoadVisuals(road.transform, config);
         }
 
         return road;
@@ -562,7 +601,7 @@ public class PhaseSceneCreator
         return manager;
     }
 
-    private static GameObject CreateAgentVehicleForArea(float roadLength, int areaIndex, Transform parent)
+    private static GameObject CreateAgentVehicleForArea(float roadLength, int areaIndex, Transform parent, PhaseConfig config)
     {
         var agent = GameObject.CreatePrimitive(PrimitiveType.Cube);
         agent.name = "E2EDrivingAgent";
@@ -588,17 +627,37 @@ public class PhaseSceneCreator
         var agentType = System.Type.GetType("ADPlatform.Agents.E2EDrivingAgent, Assembly-CSharp");
         if (agentType != null)
         {
-            agent.AddComponent(agentType);
+            var agentComponent = agent.AddComponent(agentType);
+            // Set observation flags
+            SetProperty(agentComponent, "enableLaneObservation", config.enableLaneObservation);
+            SetProperty(agentComponent, "enableIntersectionObservation", config.enableIntersectionObservation);
         }
 
-        // Configure BehaviorParameters for ML-Agents training
-        var behaviorParams = agent.GetComponent("BehaviorParameters");
-        if (behaviorParams != null)
-        {
-            SetProperty(behaviorParams, "m_BehaviorName", "E2EDrivingAgent");
-        }
+        // Configure BehaviorParameters for ML-Agents training via SerializedObject
+        ConfigureBehaviorParameters(agent, config);
 
         return agent;
+    }
+
+    private static void ConfigureBehaviorParameters(GameObject agent, PhaseConfig config)
+    {
+        var bp = agent.GetComponent("BehaviorParameters") as UnityEngine.Component;
+        if (bp == null) return;
+
+        var so = new SerializedObject(bp);
+        so.FindProperty("m_BehaviorName").stringValue = "E2EDrivingAgent";
+
+        int obsSize = config.observationSize > 0 ? config.observationSize : 242;
+        so.FindProperty("m_BrainParameters.VectorObservationSize").intValue = obsSize;
+        so.FindProperty("m_BrainParameters.NumStackedVectorObservations").intValue = 1;
+        so.FindProperty("m_BrainParameters.ActionSpec.m_NumContinuousActions").intValue = 2;
+
+        // Clear discrete branches (set size to 0)
+        var branchProp = so.FindProperty("m_BrainParameters.ActionSpec.BranchSizes");
+        if (branchProp != null)
+            branchProp.ClearArray();
+
+        so.ApplyModifiedPropertiesWithoutUndo();
     }
 
     private static GameObject[] CreateNPCVehiclesForArea(int count, float roadLength, Transform parent)
@@ -687,6 +746,25 @@ public class PhaseSceneCreator
             }
             SetProperty(managerComponent, "npcVehicles", array);
         }
+
+        // Wire intersection visual references
+        Transform roadTransform = road.transform;
+        Transform intersectionArea = roadTransform.Find("IntersectionArea");
+        Transform leftArm = roadTransform.Find("LeftArm");
+        Transform rightArm = roadTransform.Find("RightArm");
+        Transform leftAngledArm = roadTransform.Find("LeftAngledArm");
+        Transform rightAngledArm = roadTransform.Find("RightAngledArm");
+
+        if (intersectionArea != null)
+            SetProperty(managerComponent, "intersectionArea", intersectionArea.gameObject);
+        if (leftArm != null)
+            SetProperty(managerComponent, "leftArm", leftArm.gameObject);
+        if (rightArm != null)
+            SetProperty(managerComponent, "rightArm", rightArm.gameObject);
+        if (leftAngledArm != null)
+            SetProperty(managerComponent, "leftAngledArm", leftAngledArm.gameObject);
+        if (rightAngledArm != null)
+            SetProperty(managerComponent, "rightAngledArm", rightAngledArm.gameObject);
     }
 
     private static void WireReferences(GameObject manager, GameObject agent,
@@ -732,6 +810,370 @@ public class PhaseSceneCreator
             SetProperty(followCamera, "target", agent.transform);
         }
     }
+
+    #region Material Factory
+
+    private static void InitMaterialCache()
+    {
+        s_asphaltMaterial = null;
+        s_lightAsphaltMaterial = null;
+        s_curbMaterial = null;
+        s_whiteLineMaterial = null;
+        s_yellowLineMaterial = null;
+    }
+
+    private static Material GetAsphaltMaterial()
+    {
+        if (s_asphaltMaterial == null)
+        {
+            s_asphaltMaterial = new Material(Shader.Find("Standard"));
+            s_asphaltMaterial.color = new Color(0.25f, 0.25f, 0.25f);
+        }
+        return s_asphaltMaterial;
+    }
+
+    private static Material GetLightAsphaltMaterial()
+    {
+        if (s_lightAsphaltMaterial == null)
+        {
+            s_lightAsphaltMaterial = new Material(Shader.Find("Standard"));
+            s_lightAsphaltMaterial.color = new Color(0.28f, 0.28f, 0.28f);
+        }
+        return s_lightAsphaltMaterial;
+    }
+
+    private static Material GetCurbMaterial()
+    {
+        if (s_curbMaterial == null)
+        {
+            s_curbMaterial = new Material(Shader.Find("Standard"));
+            s_curbMaterial.color = new Color(0.5f, 0.5f, 0.5f);
+        }
+        return s_curbMaterial;
+    }
+
+    private static Material GetWhiteLineMaterial()
+    {
+        if (s_whiteLineMaterial == null)
+        {
+            s_whiteLineMaterial = new Material(Shader.Find("Standard"));
+            s_whiteLineMaterial.color = Color.white;
+            s_whiteLineMaterial.EnableKeyword("_EMISSION");
+            s_whiteLineMaterial.SetColor("_EmissionColor", Color.white * 0.3f);
+        }
+        return s_whiteLineMaterial;
+    }
+
+    private static Material GetYellowLineMaterial()
+    {
+        if (s_yellowLineMaterial == null)
+        {
+            s_yellowLineMaterial = new Material(Shader.Find("Standard"));
+            s_yellowLineMaterial.color = Color.yellow;
+            s_yellowLineMaterial.EnableKeyword("_EMISSION");
+            s_yellowLineMaterial.SetColor("_EmissionColor", Color.yellow * 0.3f);
+        }
+        return s_yellowLineMaterial;
+    }
+
+    #endregion
+
+    #region Geometry Helpers
+
+    private static GameObject CreateCurb(Transform parent, string name, Vector3 pos, Vector3 scale)
+    {
+        var curb = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        curb.name = name;
+        curb.transform.SetParent(parent);
+        curb.transform.localPosition = pos;
+        curb.transform.localScale = scale;
+        curb.GetComponent<Renderer>().sharedMaterial = GetCurbMaterial();
+        Object.DestroyImmediate(curb.GetComponent<Collider>());
+        return curb;
+    }
+
+    private static GameObject CreateDash(Transform parent, Vector3 pos, Vector3 scale, Material mat)
+    {
+        var dash = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        dash.name = "Dash";
+        dash.transform.SetParent(parent);
+        dash.transform.localPosition = pos;
+        dash.transform.localScale = scale;
+        dash.GetComponent<Renderer>().sharedMaterial = mat;
+        Object.DestroyImmediate(dash.GetComponent<Collider>());
+        return dash;
+    }
+
+    private static GameObject CreateStopLine(Transform parent, string name, Vector3 pos, Vector3 scale)
+    {
+        var line = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        line.name = name;
+        line.transform.SetParent(parent);
+        line.transform.localPosition = pos;
+        line.transform.localScale = scale;
+        line.GetComponent<Renderer>().sharedMaterial = GetWhiteLineMaterial();
+        Object.DestroyImmediate(line.GetComponent<Collider>());
+        return line;
+    }
+
+    private static GameObject CreateSolidEdgeLine(Transform parent, string name, float xPos, float zStart, float zEnd)
+    {
+        float zCenter = (zStart + zEnd) / 2f;
+        float zLength = Mathf.Abs(zEnd - zStart);
+
+        var line = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        line.name = name;
+        line.transform.SetParent(parent);
+        line.transform.localPosition = new Vector3(xPos, 0.02f, zCenter);
+        line.transform.localScale = new Vector3(0.12f, 0.01f, zLength);
+        line.GetComponent<Renderer>().sharedMaterial = GetWhiteLineMaterial();
+        Object.DestroyImmediate(line.GetComponent<Collider>());
+        return line;
+    }
+
+    #endregion
+
+    #region Intersection Road Visuals
+
+    private static void CreateIntersectionRoadVisuals(Transform roadParent, PhaseConfig config)
+    {
+        float halfRoad = config.roadLength / 2f;
+        float halfWidth = ROAD_WIDTH / 2f;
+
+        // Main road curbs (split at intersection zone)
+        CreateMainRoadCurbs(roadParent, halfRoad, halfWidth);
+
+        // Main road markings (center line + edge lines)
+        CreateMainRoadMarkings(roadParent, halfRoad, halfWidth, config.roadLength);
+
+        // Intersection area (inactive by default)
+        CreateIntersectionArea(roadParent, halfWidth);
+
+        // Left arm (Cross intersection)
+        CreateLeftArm(roadParent, halfWidth);
+
+        // Right arm (T-junction + Cross)
+        CreateRightArm(roadParent, halfWidth);
+
+        // Angled arms (Y-junction)
+        CreateLeftAngledArm(roadParent, halfWidth);
+        CreateRightAngledArm(roadParent, halfWidth);
+    }
+
+    private static void CreateMainRoadCurbs(Transform roadParent, float halfRoad, float halfWidth)
+    {
+        var curbParent = new GameObject("MainRoadCurbs");
+        curbParent.transform.SetParent(roadParent);
+        curbParent.transform.localPosition = Vector3.zero;
+
+        float curbOffset = halfWidth + CURB_WIDTH / 2f;
+
+        // Left curbs (negative X side)
+        float preLength = INTERSECTION_ZONE_START + halfRoad;
+        float preCenter = (-halfRoad + INTERSECTION_ZONE_START) / 2f;
+        CreateCurb(curbParent.transform, "LeftCurb_Pre",
+            new Vector3(-curbOffset, CURB_HEIGHT / 2f, preCenter),
+            new Vector3(CURB_WIDTH, CURB_HEIGHT, preLength));
+
+        float postLength = halfRoad - INTERSECTION_ZONE_END;
+        float postCenter = (INTERSECTION_ZONE_END + halfRoad) / 2f;
+        CreateCurb(curbParent.transform, "LeftCurb_Post",
+            new Vector3(-curbOffset, CURB_HEIGHT / 2f, postCenter),
+            new Vector3(CURB_WIDTH, CURB_HEIGHT, postLength));
+
+        // Right curbs (positive X side)
+        CreateCurb(curbParent.transform, "RightCurb_Pre",
+            new Vector3(curbOffset, CURB_HEIGHT / 2f, preCenter),
+            new Vector3(CURB_WIDTH, CURB_HEIGHT, preLength));
+
+        CreateCurb(curbParent.transform, "RightCurb_Post",
+            new Vector3(curbOffset, CURB_HEIGHT / 2f, postCenter),
+            new Vector3(CURB_WIDTH, CURB_HEIGHT, postLength));
+    }
+
+    private static void CreateMainRoadMarkings(Transform roadParent, float halfRoad, float halfWidth, float roadLength)
+    {
+        var markingsParent = new GameObject("MainRoadMarkings");
+        markingsParent.transform.SetParent(roadParent);
+        markingsParent.transform.localPosition = Vector3.zero;
+
+        // Yellow dashed center line (skip intersection zone)
+        var centerLine = new GameObject("CenterLine");
+        centerLine.transform.SetParent(markingsParent.transform);
+        centerLine.transform.localPosition = Vector3.zero;
+
+        float dashLength = 3f;
+        float dashSpacing = 10f;
+
+        for (float z = -halfRoad; z < halfRoad; z += dashSpacing)
+        {
+            // Skip intersection zone
+            if (z + dashLength > INTERSECTION_ZONE_START && z < INTERSECTION_ZONE_END)
+                continue;
+
+            CreateDash(centerLine.transform,
+                new Vector3(0f, 0.02f, z),
+                new Vector3(0.15f, 0.01f, dashLength),
+                GetYellowLineMaterial());
+        }
+
+        // White solid edge lines (split at intersection zone)
+        float edgeX = halfWidth - 0.1f;
+
+        CreateSolidEdgeLine(markingsParent.transform, "LeftEdge_Pre",
+            -edgeX, -halfRoad, INTERSECTION_ZONE_START);
+        CreateSolidEdgeLine(markingsParent.transform, "LeftEdge_Post",
+            -edgeX, INTERSECTION_ZONE_END, halfRoad);
+        CreateSolidEdgeLine(markingsParent.transform, "RightEdge_Pre",
+            edgeX, -halfRoad, INTERSECTION_ZONE_START);
+        CreateSolidEdgeLine(markingsParent.transform, "RightEdge_Post",
+            edgeX, INTERSECTION_ZONE_END, halfRoad);
+    }
+
+    private static void CreateIntersectionArea(Transform roadParent, float halfWidth)
+    {
+        var intersectionArea = new GameObject("IntersectionArea");
+        intersectionArea.transform.SetParent(roadParent);
+        intersectionArea.transform.localPosition = Vector3.zero;
+
+        // Intersection surface (14x14m, slightly above main road)
+        var surface = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        surface.name = "IntersectionSurface";
+        surface.transform.SetParent(intersectionArea.transform);
+        surface.transform.localPosition = new Vector3(0f, 0.015f, INTERSECTION_Z);
+        surface.transform.localScale = new Vector3(INTERSECTION_WIDTH / 10f, 1f, INTERSECTION_WIDTH / 10f);
+        surface.GetComponent<Renderer>().sharedMaterial = GetLightAsphaltMaterial();
+        Object.DestroyImmediate(surface.GetComponent<Collider>());
+
+        // Stop line at approach (south side of intersection, Z=93)
+        CreateStopLine(intersectionArea.transform, "StopLine_Approach",
+            new Vector3(halfWidth / 2f, 0.02f, INTERSECTION_ZONE_START),
+            new Vector3(halfWidth, 0.02f, 0.5f));
+
+        // Stop line for left arm (east side, X = -halfWidth at intersection)
+        CreateStopLine(intersectionArea.transform, "StopLine_LeftArm",
+            new Vector3(-INTERSECTION_WIDTH / 2f, 0.02f, INTERSECTION_Z - halfWidth / 4f),
+            new Vector3(0.5f, 0.02f, halfWidth));
+
+        // Stop line for right arm (west side)
+        CreateStopLine(intersectionArea.transform, "StopLine_RightArm",
+            new Vector3(INTERSECTION_WIDTH / 2f, 0.02f, INTERSECTION_Z + halfWidth / 4f),
+            new Vector3(0.5f, 0.02f, halfWidth));
+
+        intersectionArea.SetActive(false);
+    }
+
+    private static void CreateArmRoad(Transform parent, float halfWidth, float armLength)
+    {
+        // Arm road surface
+        var surface = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        surface.name = "ArmSurface";
+        surface.transform.SetParent(parent);
+        surface.transform.localPosition = Vector3.zero;
+        surface.transform.localScale = new Vector3(armLength / 10f, 1f, ROAD_WIDTH / 10f);
+        surface.GetComponent<Renderer>().sharedMaterial = GetAsphaltMaterial();
+        Object.DestroyImmediate(surface.GetComponent<Collider>());
+
+        // Top curb (positive Z relative to arm)
+        float curbOffset = halfWidth + CURB_WIDTH / 2f;
+        CreateCurb(parent, "TopCurb",
+            new Vector3(0f, CURB_HEIGHT / 2f, curbOffset),
+            new Vector3(armLength, CURB_HEIGHT, CURB_WIDTH));
+
+        // Bottom curb (negative Z relative to arm)
+        CreateCurb(parent, "BottomCurb",
+            new Vector3(0f, CURB_HEIGHT / 2f, -curbOffset),
+            new Vector3(armLength, CURB_HEIGHT, CURB_WIDTH));
+
+        // Center line dashes (along arm X-axis, mapped to local Z)
+        var centerLine = new GameObject("CenterLine");
+        centerLine.transform.SetParent(parent);
+        centerLine.transform.localPosition = Vector3.zero;
+
+        float dashLength = 3f;
+        float dashSpacing = 10f;
+        float armHalf = armLength / 2f;
+
+        for (float x = -armHalf + 2f; x < armHalf - 2f; x += dashSpacing)
+        {
+            CreateDash(centerLine.transform,
+                new Vector3(x, 0.02f, 0f),
+                new Vector3(dashLength, 0.01f, 0.15f),
+                GetYellowLineMaterial());
+        }
+
+        // Edge lines
+        float edgeZ = halfWidth - 0.1f;
+        var topEdge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        topEdge.name = "TopEdgeLine";
+        topEdge.transform.SetParent(parent);
+        topEdge.transform.localPosition = new Vector3(0f, 0.02f, edgeZ);
+        topEdge.transform.localScale = new Vector3(armLength, 0.01f, 0.12f);
+        topEdge.GetComponent<Renderer>().sharedMaterial = GetWhiteLineMaterial();
+        Object.DestroyImmediate(topEdge.GetComponent<Collider>());
+
+        var bottomEdge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        bottomEdge.name = "BottomEdgeLine";
+        bottomEdge.transform.SetParent(parent);
+        bottomEdge.transform.localPosition = new Vector3(0f, 0.02f, -edgeZ);
+        bottomEdge.transform.localScale = new Vector3(armLength, 0.01f, 0.12f);
+        bottomEdge.GetComponent<Renderer>().sharedMaterial = GetWhiteLineMaterial();
+        Object.DestroyImmediate(bottomEdge.GetComponent<Collider>());
+    }
+
+    private static void CreateLeftArm(Transform roadParent, float halfWidth)
+    {
+        var leftArm = new GameObject("LeftArm");
+        leftArm.transform.SetParent(roadParent);
+        // Center of arm: X = -(INTERSECTION_WIDTH/2 + ARM_LENGTH/2), Z = intersection center
+        float armCenterX = -(INTERSECTION_WIDTH / 2f + ARM_LENGTH / 2f);
+        leftArm.transform.localPosition = new Vector3(armCenterX, 0.01f, INTERSECTION_Z);
+
+        CreateArmRoad(leftArm.transform, halfWidth, ARM_LENGTH);
+
+        leftArm.SetActive(false);
+    }
+
+    private static void CreateRightArm(Transform roadParent, float halfWidth)
+    {
+        var rightArm = new GameObject("RightArm");
+        rightArm.transform.SetParent(roadParent);
+        float armCenterX = INTERSECTION_WIDTH / 2f + ARM_LENGTH / 2f;
+        rightArm.transform.localPosition = new Vector3(armCenterX, 0.01f, INTERSECTION_Z);
+
+        CreateArmRoad(rightArm.transform, halfWidth, ARM_LENGTH);
+
+        rightArm.SetActive(false);
+    }
+
+    private static void CreateLeftAngledArm(Transform roadParent, float halfWidth)
+    {
+        var leftAngled = new GameObject("LeftAngledArm");
+        leftAngled.transform.SetParent(roadParent);
+        // 45 degree angle, offset from intersection center
+        float offset = (INTERSECTION_WIDTH / 2f + ARM_LENGTH / 2f) * Mathf.Cos(45f * Mathf.Deg2Rad);
+        leftAngled.transform.localPosition = new Vector3(-offset, 0.01f, INTERSECTION_Z + offset);
+        leftAngled.transform.localRotation = Quaternion.Euler(0f, -45f, 0f);
+
+        CreateArmRoad(leftAngled.transform, halfWidth, ARM_LENGTH);
+
+        leftAngled.SetActive(false);
+    }
+
+    private static void CreateRightAngledArm(Transform roadParent, float halfWidth)
+    {
+        var rightAngled = new GameObject("RightAngledArm");
+        rightAngled.transform.SetParent(roadParent);
+        float offset = (INTERSECTION_WIDTH / 2f + ARM_LENGTH / 2f) * Mathf.Cos(45f * Mathf.Deg2Rad);
+        rightAngled.transform.localPosition = new Vector3(offset, 0.01f, INTERSECTION_Z + offset);
+        rightAngled.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
+
+        CreateArmRoad(rightAngled.transform, halfWidth, ARM_LENGTH);
+
+        rightAngled.SetActive(false);
+    }
+
+    #endregion
 
     private static void SetProperty(object target, string propertyName, object value)
     {

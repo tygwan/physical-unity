@@ -330,19 +330,29 @@ namespace ADPlatform.Agents
 
         /// <summary>
         /// Check if position violates center line rule (Phase F)
-        /// In Korean traffic, driving on left side of center is wrong-way
+        /// In Korean traffic, driving on left side of center is wrong-way.
+        /// Phase G: Disabled in/after intersection zone where turns require negative X positions.
         /// </summary>
-        public bool IsWrongWayDriving(float xPos)
+        public bool IsWrongWayDriving(float xPos, float zPos)
         {
             if (!centerLineEnabled || numLanes <= 1)
                 return false;
 
-            // Center line is at X = 0
-            // Wrong-way = driving on the opposite side (X < 0 for Korean right-side traffic)
-            // Actually for our lane setup, wrong-way would be negative lanes
-            // Let's define: positive X = right side (correct), negative X = wrong way
-            float tolerance = 0.5f;  // Small tolerance
+            // Phase G (P-013): Disable WrongWay check in intersection zone and beyond.
+            // Left turns exit at negative X, which is valid post-intersection.
+            if (intersectionType > 0 && zPos >= intersectionDistance - intersectionWidth)
+                return false;
+
+            float tolerance = 0.5f;
             return xPos < -tolerance;
+        }
+
+        /// <summary>
+        /// Legacy overload for backward compatibility (no Z position).
+        /// </summary>
+        public bool IsWrongWayDriving(float xPos)
+        {
+            return IsWrongWayDriving(xPos, float.MinValue);
         }
 
         /// <summary>

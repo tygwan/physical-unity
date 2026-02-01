@@ -956,19 +956,17 @@ namespace ADPlatform.Agents
         }
 
         /// <summary>
-        /// Check if vehicle is driving on wrong side of road (Phase F)
-        /// Uses WaypointManager to check center line rules
+        /// Check if vehicle is driving on wrong side of road (Phase F).
+        /// Phase G (P-013): Passes Z position for intersection zone awareness.
         /// </summary>
         private bool IsWrongWayDriving()
         {
             if (waypointManager == null)
                 return false;
 
-            // Get vehicle's local X position relative to road
             Vector3 localPos = waypointManager.transform.InverseTransformPoint(transform.position);
 
-            // Check with WaypointManager if this violates center line
-            return waypointManager.IsWrongWayDriving(localPos.x);
+            return waypointManager.IsWrongWayDriving(localPos.x, localPos.z);
         }
 
         private bool IsNearCollision()

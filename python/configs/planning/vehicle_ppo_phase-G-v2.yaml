@@ -1,0 +1,229 @@
+# E2EDrivingAgent PPO v12 Phase G v2: Intersection Navigation (WrongWay Fix)
+# Strategy: WARM START from v1 checkpoint + WrongWay bug fix + simplified curriculum
+# Usage: mlagents-learn python/configs/planning/vehicle_ppo_phase-G-v2.yaml --run-id=phase-G-v2 --force
+#
+# v2 Changes from v1:
+# 1. WARM START: init_path from v1 10M checkpoint (same 260D obs, no dimension change)
+# 2. CODE FIX: IsWrongWayDriving() now has intersection zone awareness (P-013)
+#    - WrongWay check disabled when agent Z >= intersectionDistance - intersectionWidth
+#    - This eliminates the 32% WrongWay termination rate that caused v1 plateau
+# 3. SIMPLIFIED CURRICULUM: Removed NPC params (num_active_npcs, npc_speed_ratio, npc_speed_variation)
+#    - Phase G focuses purely on intersection geometry mastery
+#    - NPCs deferred to Phase H
+# 4. LOWER THRESHOLDS: Y-junction 550->450, goal_distance 450->400/500
+#    - Provides safety margin for curriculum completion
+# 5. HIGHER INITIAL GOAL: 120m->150m (more room for turn exits)
+# 6. REDUCED BUDGET: 10M->5M steps (warm start + bug fix = faster convergence)
+#
+# P-002/P-012 Compliance:
+# All 7 thresholds unique: 150, 200, 250, 300, 350, 400, 450
+# Minimum 50-point gap maintained
+#
+# Required CODE changes before running:
+# - WaypointManager.cs: IsWrongWayDriving(xPos, zPos) with intersection zone check
+# - E2EDrivingAgent.cs: Pass zPos to IsWrongWayDriving call
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # WARM START from v1 final checkpoint
+    init_path: results/phase-G/E2EDrivingAgent/E2EDrivingAgent-10000153.pt
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 5000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 5
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # MACRO PHASE 1: Intersection Core (thresholds 150-350)
+  # =======================================================
+
+  # Intersection type: 0=None, 1=T-junction, 2=Cross, 3=Y-junction
+  # P-012: Thresholds 150, 300, 450 (unique, lowered from v1 150/350/550)
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 150.0
+          signal_smoothing: true
+        value: 0.0
+      - name: TJunction
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 300.0
+          signal_smoothing: true
+        value: 1.0
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 450.0
+          signal_smoothing: true
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  # Turn direction: 0=Straight, 1=Left, 2=Right
+  # P-012: Thresholds 200, 350 (unique)
+  turn_direction:
+    curriculum:
+      - name: StraightOnly
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 200.0
+          signal_smoothing: true
+        value: 0.0
+      - name: LeftTurn
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 350.0
+          signal_smoothing: true
+        value: 1.0
+      - name: RightTurn
+        value: 2.0
+
+  # =======================================================
+  # MACRO PHASE 2: Environment (thresholds 250-400)
+  # =======================================================
+
+  # Lane count: 1->2 lanes
+  # P-012: Threshold 250 (unique)
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 250.0
+          signal_smoothing: true
+        value: 1.0
+      - name: TwoLanes
+        value: 2.0
+
+  # Center line enforcement
+  # P-012: Threshold 400 (unique, moved from 300 to avoid cluster)
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 400.0
+          signal_smoothing: true
+        value: 0.0
+      - name: CenterLineEnforced
+        value: 1.0
+
+  # Goal distance: start higher for turns
+  # P-012: Threshold 500 (unique)
+  goal_distance:
+    curriculum:
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          min_lesson_length: 500
+          threshold: 500.0
+          signal_smoothing: true
+        value: 150.0
+      - name: LongGoal
+        value: 200.0
+
+  # =======================================================
+  # FIXED: No NPC interaction (deferred to Phase H)
+  # =======================================================
+
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        value: 0.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: Default
+        value: 0.6
+
+  npc_speed_variation:
+    curriculum:
+      - name: None
+        value: 0.0
+
+  # =======================================================
+  # DISABLED: Not relevant for intersection training
+  # =======================================================
+
+  road_curvature:
+    curriculum:
+      - name: Straight
+        value: 0.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: SingleDirection
+        value: 0.0
+
+  speed_zone_count:
+    curriculum:
+      - name: SingleZone
+        value: 1.0
+
+env_settings:
+  env_path: null
+  num_envs: 1
+  base_port: 5004
+  timeout_wait: 600
+
+checkpoint_settings:
+  run_id: phase-G-v2
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: false
+
+torch_settings:
+  device: cuda

@@ -24,6 +24,13 @@ namespace ADPlatform.Environment
         [Header("NPC Vehicles")]
         public NPCVehicleController[] npcVehicles;
 
+        [Header("Intersection Visuals")]
+        public GameObject intersectionArea;
+        public GameObject leftArm;
+        public GameObject rightArm;
+        public GameObject leftAngledArm;
+        public GameObject rightAngledArm;
+
         [Header("NPC Spawning")]
         public float npcMinSpawnDistance = 20f;    // Min distance ahead of ego (meters)
         public float npcMaxSpawnDistance = 150f;   // Max distance ahead of ego (meters)
@@ -65,6 +72,7 @@ namespace ADPlatform.Environment
 
         private void DelayedConnect()
         {
+            FindIntersectionVisuals();
             ValidateActiveScene();
             ConnectWaypoints();
 
@@ -229,6 +237,9 @@ namespace ADPlatform.Environment
                 waypointManager.SetIntersection(intersectionType, turnDirection);
             }
 
+            // Toggle intersection road visuals to match current type
+            UpdateIntersectionVisuals(intersectionType);
+
             // NPC speed variation range (curriculum: 0.0 -> 0.3)
             float speedVariation = envParams.GetWithDefault("npc_speed_variation", 0.0f);
 
@@ -366,6 +377,64 @@ namespace ADPlatform.Environment
                 Quaternion forward = Quaternion.LookRotation(Vector3.forward);
                 npcVehicles[i].SpawnAt(spawnPos, forward, npcSpeed);
             }
+        }
+
+        /// <summary>
+        /// Auto-discover intersection visual GameObjects by name in the Road hierarchy.
+        /// Called once in Start() as a fallback if not wired by PhaseSceneCreator.
+        /// </summary>
+        private void FindIntersectionVisuals()
+        {
+            Transform areaRoot = transform.parent;
+            if (areaRoot == null) return;
+
+            Transform road = areaRoot.Find("Road");
+            if (road == null) return;
+
+            if (intersectionArea == null)
+            {
+                Transform t = road.Find("IntersectionArea");
+                if (t != null) intersectionArea = t.gameObject;
+            }
+            if (leftArm == null)
+            {
+                Transform t = road.Find("LeftArm");
+                if (t != null) leftArm = t.gameObject;
+            }
+            if (rightArm == null)
+            {
+                Transform t = road.Find("RightArm");
+                if (t != null) rightArm = t.gameObject;
+            }
+            if (leftAngledArm == null)
+            {
+                Transform t = road.Find("LeftAngledArm");
+                if (t != null) leftAngledArm = t.gameObject;
+            }
+            if (rightAngledArm == null)
+            {
+                Transform t = road.Find("RightAngledArm");
+                if (t != null) rightAngledArm = t.gameObject;
+            }
+        }
+
+        /// <summary>
+        /// Toggle intersection arm visuals based on intersection type.
+        /// 0=None, 1=T-junction(right only), 2=Cross(left+right), 3=Y-junction(angled arms).
+        /// </summary>
+        private void UpdateIntersectionVisuals(int intersectionType)
+        {
+            bool showIntersection = intersectionType > 0;
+            bool showLeftArm = intersectionType == 2;           // Cross only
+            bool showRightArm = intersectionType == 1 || intersectionType == 2;  // T-junction + Cross
+            bool showLeftAngled = intersectionType == 3;        // Y-junction
+            bool showRightAngled = intersectionType == 3;       // Y-junction
+
+            if (intersectionArea != null) intersectionArea.SetActive(showIntersection);
+            if (leftArm != null) leftArm.SetActive(showLeftArm);
+            if (rightArm != null) rightArm.SetActive(showRightArm);
+            if (leftAngledArm != null) leftAngledArm.SetActive(showLeftAngled);
+            if (rightAngledArm != null) rightAngledArm.SetActive(showRightAngled);
         }
 
         /// <summary>

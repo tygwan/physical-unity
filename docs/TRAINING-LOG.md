@@ -1,14 +1,20 @@
 # Training Log - E2EDrivingAgent RL Training History
 
-> Phase A completed successfully on 2026-01-28
-> **Note**: Phase 0 = Phase 0 (Foundation) - see version mapping below
+> Phase G v2 completed on 2026-02-01
 
 ## Overview
 
 | Version | Focus | Steps | Best Reward | Status |
 |---------|-------|-------|-------------|--------|
-| **Phase 0** | Lane Keeping + NPC Coexistence | 8M | **1018.43** | **✅ COMPLETED** |
-| **Phase A** | Dense Overtaking (Single NPC) | 2.5M | **2113.75** | **✅ COMPLETED** |
+| **Phase 0** | Lane Keeping + NPC Coexistence | 8M | **1018** | ✅ COMPLETED |
+| **Phase A** | Dense Overtaking (Single NPC) | 2.5M | **3161** | ✅ COMPLETED |
+| **Phase B v2** | Decision Learning (Multi-Agent) | 3.5M | **897** | ✅ COMPLETED |
+| **Phase C** | Multi-NPC Generalization (4-8 NPCs) | 3.6M | **1390** | ✅ COMPLETED |
+| **Phase D v3** | Speed Zones + 254D Observation | 5M | **912** | ✅ COMPLETED |
+| **Phase E** | Curved Roads | 6M | **956** | ✅ COMPLETED |
+| **Phase F v5** | Multi-Lane Highway (3 lanes) | 10M | **913** | ✅ COMPLETED |
+| **Phase G v1** | Intersection Navigation | 10M | **516** | ⚠️ PARTIAL |
+| **Phase G v2** | Intersection (WrongWay Fix) | 5M | **633** | ✅ COMPLETED |
 
 ---
 
@@ -542,3 +548,244 @@ Steps    Reward    Event
 ---
 
 *Phase D v1 Training Halted - 2026-01-29 20:47 UTC*
+
+---
+
+## Phase D v3-254d: Speed Zones + Observation Expansion (254D)
+
+### Status: ✅ COMPLETED (2026-01-30) - APPROVED FOR PHASE E
+
+**Run ID**: phase-D-v3-254d
+**Steps**: 5,000,000
+**Final Reward**: +904 | **Peak**: +912 @ 4.87M
+
+After v1 (collapse at -2156) and v2 (stuck at -690), v3 solved the observation expansion problem by redesigning the lane observation encoding and using staggered single-parameter curriculum progression (lesson from P-002).
+
+**Key Changes from v1/v2**:
+- Observation space redesign: 242D -> 254D with improved lane boundary encoding
+- Single-parameter curriculum transitions (never two at same time)
+- Extended budget and patience
+
+**Curriculum**: All parameters completed successfully.
+
+**Artifacts**: `results/phase-D-v3-254d/`
+
+---
+
+## Phase E: Curved Roads
+
+### Status: ✅ COMPLETED (2026-01-30) - APPROVED FOR PHASE F
+
+**Run ID**: phase-E
+**Steps**: 6,000,000
+**Final Reward**: +924 | **Peak**: +956 @ 3.58M
+
+Agent learned to navigate curved roads with varying curvature and direction changes. Built on Phase D v3-254d checkpoint.
+
+**Skills Acquired**:
+- Curved road following with smooth steering
+- Direction variation handling
+- Maintained speed compliance on curves
+
+**Artifacts**: `results/phase-E/`
+
+---
+
+## Phase F v5: Multi-Lane Highway
+
+### Status: ✅ COMPLETED (2026-01-31)
+
+**Run ID**: phase-F-v5
+**Steps**: 10,000,000
+**Final Reward**: +643 | **Peak**: +913 @ 3.46M
+
+Phase F required 5 attempts (v1 never started, v2-v4 collapsed). v5 succeeded by applying P-002 (unique thresholds) and P-012 (no shared threshold values).
+
+**Failed Attempts**:
+| Version | Steps | Peak | Failure Mode |
+|---------|-------|------|-------------|
+| v2 | 4.4M | 318 | Collapse to -14 |
+| v3 | 7.1M | 407 | Collapse to 0 (shared thresholds) |
+| v4 | 10M | 488 | Degraded to 106 |
+
+**v5 Key Fixes**:
+- P-002: All curriculum thresholds unique across all parameters
+- P-012: No two parameters share any threshold value
+- learning_rate_schedule: constant (linear caused late-stage collapse)
+
+**Curriculum Progress**:
+- num_lanes: 3/3 (reached 3 lanes)
+- road_curvature: 2/2 (completed)
+- goal_distance: 2/2 (completed)
+- num_active_npcs: 0/2 (never reached -- reward insufficient)
+
+**Artifacts**: `results/phase-F-v5/`
+
+---
+
+## Phase G v1: Intersection Navigation
+
+### Status: ⚠️ PARTIAL (2026-02-01) - V2 PLANNED
+
+**Run ID**: phase-G
+**Steps**: 10,000,153 / 10,000,000 (budget exhausted)
+**Final Reward**: +494 | **Peak**: +516 @ 9.12M
+**Observation**: 260D (254D + 6D intersection info -- fresh start required)
+
+**Detailed Analysis**: `docs/phases/phase-g/ANALYSIS-v1.md`
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 0.5M | -107 | Random exploration |
+| 2.0M | +143 | Breakthrough -- lane keeping acquired |
+| 2.1M | -- | Curriculum: intersection_type 0->1 (T-junction) |
+| 3.4M | +373 | Curriculum: intersection_type 1->2 (Cross) |
+| 3.9M | -- | Curriculum: turn_direction 1->2 (Right) |
+| 4.0M | +403 | Growth slowing |
+| 5.0M | +406 | **Plateau begins** |
+| 8.0M | +446 | Plateau continues (+40 over 4M steps) |
+| 8.7M | -- | Curriculum: goal_distance 0->1 |
+| 8.9M | -- | Curriculum: num_active_npcs 0->1 |
+| 9.1M | +516 | **Peak reward** |
+| 10.0M | +494 | Budget exhausted |
+
+### End Reasons (final)
+
+| Reason | Rate |
+|--------|------|
+| Goal Reached | 67.9% |
+| **WrongWay** | **31.9%** |
+| Collision | 0.0% |
+
+### Curriculum Achieved
+
+| Parameter | Final Lesson | Max Lesson | Status |
+|-----------|-------------|------------|--------|
+| intersection_type | 2 (Cross) | 3 (Y-junction) | MISS |
+| turn_direction | 2 (Right) | 2 | DONE |
+| num_lanes | 1 (2-lane) | 1 | DONE |
+| center_line_enabled | 1 (On) | 1 | DONE |
+| goal_distance | 1 (Medium) | 2 (Long) | MISS |
+| num_active_npcs | 1 (1 NPC) | 2 (2 NPCs) | MISS |
+
+### Root Cause: Plateau at ~500
+
+1. **WrongWay termination (32%)** -- agent overshoots turns, fails heading check post-intersection
+2. **Fresh start penalty** -- 254D->260D prevented checkpoint transfer, 2M steps relearning basics
+3. **Overcrowded curriculum** -- 9 parameters across reward range 150-800
+4. **Goal distance too short** -- 120m initial, only 20m past intersection center
+
+### Phase G v2 Strategy
+
+See `docs/phases/phase-g/ANALYSIS-v1.md` for full recommendations.
+
+**Artifacts**: `results/phase-G/`
+
+---
+
+## Phase G v2: Intersection Navigation (WrongWay Fix + Warm Start)
+
+### Status: ✅ COMPLETED (2026-02-01) - APPROVED FOR PHASE H
+
+**Run ID**: phase-G-v2
+**Steps**: 5,000,074 / 5,000,000
+**Final Reward**: +628 | **Peak**: +633 @ 4.72M
+**Observation**: 260D (warm start from v1 checkpoint)
+**Training Duration**: 3,392 seconds (~56 minutes)
+**Throughput**: 1.47M steps/min
+
+### Key Changes from v1
+
+| Change | v1 | v2 | Impact |
+|--------|----|----|--------|
+| WrongWay detection | xPos only | xPos + zPos (P-014) | 32% → 0% termination |
+| Initialization | Fresh start (260D) | Warm start from v1 10M | Immediate ~498 reward |
+| Curriculum | 9 params, NPCs included | 7 params, NPCs deferred | Focused learning |
+| Y-junction threshold | 550 | 450 | Achievable target |
+| Budget | 10M steps | 5M steps | Sufficient with warm start |
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 10K | 398 | Warm start baseline (v1 knowledge inherited) |
+| 50K | 500 | v1 peak matched |
+| 100K | 497 | Curriculum: T-junction + LeftTurn + TwoLanes |
+| 210K | 507 | Curriculum: Cross + RightTurn + CenterLine |
+| 230K | 472 | Dip from new curriculum complexity |
+| 320K | 500 | Curriculum: **Y-junction** (v1 never reached) |
+| 430K | 502 | Curriculum: LongGoal (200m) -- **all 7/7 complete** |
+| 500K | 544 | First checkpoint saved |
+| 1.0M | 550 | Stable improvement |
+| 1.5M | 570 | Growing consistently |
+| 2.0M | 589 | 2M checkpoint |
+| 2.5M | 600 | **600 barrier broken** |
+| 3.0M | 602 | Stabilizing at 600+ |
+| 3.5M | 604 | Gradual optimization |
+| 4.0M | 612 | Continued improvement |
+| 4.5M | 626 | Late-stage gains |
+| 4.72M | **633** | **PEAK REWARD** |
+| 5.0M | 628 | Training complete |
+
+### Reward Phases
+
+1. **Warm Start (0-100K)**: Instant ~498, matching v1 final performance
+2. **Curriculum Rush (100K-430K)**: All 7 lessons completed, brief dips during transitions
+3. **Consolidation (430K-2M)**: Steady climb from 502 to 589
+4. **Optimization (2M-5M)**: Gradual refinement from 589 to 628, peak 633
+
+### Curriculum Transitions (All Successful)
+
+| Step | Parameter | From → To | Threshold | Reward Impact |
+|------|-----------|-----------|-----------|---------------|
+| 100K | intersection_type | NoIntersection → T-junction | 150 | Minimal dip |
+| 100K | turn_direction | Straight → Left | 200 | Minimal dip |
+| 100K | num_lanes | Single → Two | 250 | Minimal dip |
+| 210K | intersection_type | T-junction → Cross | 300 | -35 temporary |
+| 210K | turn_direction | Left → Right | 350 | Absorbed |
+| 210K | center_line_enabled | Off → On | 400 | Absorbed |
+| 320K | intersection_type | Cross → **Y-junction** | 450 | Minimal dip |
+| 430K | goal_distance | 150m → 200m | 500 | +25 (longer episodes) |
+
+### End Reasons (Estimated Final)
+
+| Reason | Rate |
+|--------|------|
+| Goal Reached | ~95%+ |
+| WrongWay | ~0% (P-014 fix) |
+| Collision | 0% |
+| Timeout | ~5% |
+
+### Saved Checkpoints
+
+| File | Step | Reward |
+|------|------|--------|
+| E2EDrivingAgent-499842.onnx | 500K | ~544 |
+| E2EDrivingAgent-999786.onnx | 1.0M | ~550 |
+| E2EDrivingAgent-1499759.onnx | 1.5M | ~570 |
+| E2EDrivingAgent-1999944.onnx | 2.0M | ~589 |
+| E2EDrivingAgent-2499782.onnx | 2.5M | ~600 |
+| E2EDrivingAgent-2999948.onnx | 3.0M | ~602 |
+| E2EDrivingAgent-3499913.onnx | 3.5M | ~604 |
+| E2EDrivingAgent-3999789.onnx | 4.0M | ~612 |
+| E2EDrivingAgent-4499771.onnx | 4.5M | ~626 |
+| **E2EDrivingAgent-5000074.onnx** | **5.0M** | **~628 (FINAL)** |
+
+### Bugs Fixed During Training
+
+1. **Missing DecisionRequester (P-015)**: Scene regeneration (visual enhancement) created new agent GameObjects without DecisionRequester component. Training connected to Unity but produced zero steps. Fixed by adding DecisionRequester (period=5) to all 16 agents via MCP and updating ConfigurePhaseGAgents.cs utility.
+
+2. **BehaviorParameters Reset**: Scene regeneration also reset BehaviorParameters to defaults (BehaviorName="My Behavior", VectorObservationSize=1). Fixed using ConfigurePhaseGAgents.cs utility (direct API approach, not SerializedObject).
+
+### Artifacts
+
+- **Final Model**: `results/phase-G-v2/E2EDrivingAgent-5000074.onnx`
+- **Config**: `python/configs/planning/vehicle_ppo_phase-G-v2.yaml`
+- **TensorBoard**: `results/phase-G-v2/E2EDrivingAgent/events.out.tfevents.*`
+
+---
+
+*Phase G v2 Training Complete - 2026-02-01*
+*Ready for Phase H: NPC Interaction in Intersections*
