@@ -245,6 +245,84 @@ export const phases: Phase[] = [
     version: 2,
     parentId: 'phase-g-v1',
   },
+  {
+    id: 'phase-h-v1',
+    name: 'Phase H v1',
+    subtitle: 'NPC Intersection (Abrupt)',
+    reward: 550,
+    status: 'failed',
+    tags: ['PPO', '260D', 'NPC Waypoints', 'Abrupt Variation', 'P-016'],
+    description:
+      'First NPC intersection training. Agent mastered 3 NPCs + speed_ratio 0.85 but crashed at speed_variation=0.15 (single-step jump from 0). Reward dropped from 700 to 550 with Std 300+.',
+    observations: '260D',
+    steps: '~5M',
+    keyInsight:
+      'P-016 discovered: Never introduce high variation in a single step. npc_speed_variation must be graduated (0->0.05->0.10->0.15), not jumped (0->0.15).',
+    version: 1,
+  },
+  {
+    id: 'phase-h-v2',
+    name: 'Phase H v2',
+    subtitle: 'NPC Intersection (High Thresholds)',
+    reward: 681,
+    status: 'failed',
+    tags: ['PPO', '260D', 'Build Training', 'Gradual Variation', 'Unreachable Thresholds'],
+    description:
+      'Gradual speed_variation (0->0.05->0.10->0.15) fixed the crash, but thresholds 710/720 were unreachable: agent averages ~690-700 with variation active. Stuck at variation=0.05 (9/11 curriculum).',
+    observations: '260D',
+    steps: '5M',
+    keyInsight:
+      'Thresholds must be achievable under active conditions. Agent reward with variation=0.05 averages ~690-700, so threshold 710 is unreachable. First phase using build-based multi-env training (3x speedup).',
+    version: 2,
+    parentId: 'phase-h-v1',
+  },
+  {
+    id: 'phase-h-v3',
+    name: 'Phase H v3',
+    subtitle: 'NPC Intersection (Success)',
+    reward: 701,
+    status: 'success',
+    tags: ['PPO', '260D', 'Build Training', 'Lowered Thresholds', 'P-016', 'P-017', '11/11 Curriculum'],
+    description:
+      'Lowered speed_variation thresholds to 685/690/693 (achievable under variation). All 11/11 curriculum completed. 3 NPCs with speed_ratio 0.85 and speed_variation 0.15 through T/Cross/Y-junction intersections.',
+    observations: '260D',
+    steps: '5M',
+    keyInsight:
+      'P-016 (gradual variation) + P-017 (achievable thresholds under active conditions) together solved the NPC speed variation problem. Build training enabled rapid v2->v3 iteration (~26 min per 5M run).',
+    version: 3,
+    parentId: 'phase-h-v2',
+  },
+  {
+    id: 'phase-i-v1',
+    name: 'Phase I v1',
+    subtitle: 'Curved Roads + NPC (Crash)',
+    reward: 623,
+    status: 'failed',
+    tags: ['PPO', '260D', 'Curves+NPC', 'Triple-Param Crash', 'P-018'],
+    description:
+      'Combined Phase E curves with Phase H NPCs. All 17/17 curriculum transitions completed, but thresholds 700/702/705 too tight: road_curvature, curve_direction_variation, speed_zone_count unlocked simultaneously at 3.76M. Reward crashed 724 -> -40, recovered to 623 by 5M.',
+    observations: '260D',
+    steps: '5M',
+    keyInsight:
+      'P-018 discovered: Threshold spacing must be >= 15 points. Spacing of 2-5 points (700/702/705) caused 3-parameter simultaneous transition and 760-point reward crash. Despite crash, all curriculum completed and recovery was underway.',
+    version: 1,
+  },
+  {
+    id: 'phase-i-v2',
+    name: 'Phase I v2',
+    subtitle: 'Curved Roads + NPC (Record)',
+    reward: 770,
+    status: 'success',
+    tags: ['PPO', '260D', 'Project Record', 'Recovery Training', 'Curves+NPC+S-Curves'],
+    description:
+      'Pure recovery training from v1 crash. All parameters fixed at final values (no curriculum). Agent recovered from 623 to 770 (project-wide record). Full curvature 1.0 + random S-curves + 3 NPCs + speed variation + 2 speed zones + 2 lanes.',
+    observations: '260D',
+    steps: '5M',
+    keyInsight:
+      'Recovery training works: crashed policy (623) reached new project high (770) with fixed-param continuation. No curriculum transitions needed. Proves curves + NPCs are compatible when learned together.',
+    version: 2,
+    parentId: 'phase-i-v1',
+  },
 ];
 
 // Convenience: only canonical (latest version) phases for the main card view
@@ -419,6 +497,48 @@ export const policyDiscoveries: PolicyDiscovery[] = [
       'Phase G v2 setup: Scene regenerated for visual enhancements. All 16 agents lost DecisionRequester. Training connected to Unity but produced 0 steps for 10+ minutes.',
     fixContext:
       'Added DecisionRequester (period=5, TakeActionsBetweenDecisions=true) to all agents. Updated ConfigurePhaseGAgents.cs to auto-add DecisionRequester during configuration.',
+  },
+  {
+    id: 'P-016',
+    name: 'Gradual Variation',
+    nameEn: 'Gradual Variation Introduction',
+    sourcePhase: 'Phase H v1 → v3',
+    status: 'verified',
+    matchingStandard: 'P-002 Extension (Curriculum Smoothness)',
+    description:
+      'Parameters introducing randomness/variation must be graduated (e.g., 0->0.05->0.10->0.15), never jumped in a single step (0->0.15). Abrupt variation invalidates the learned policy.',
+    failContext:
+      'Phase H v1: npc_speed_variation jumped 0->0.15 at threshold 700. Reward crashed 700->550, Std spiked to 300+.',
+    fixContext:
+      'Phase H v2/v3: Gradual variation (0->0.05->0.10->0.15) with per-step thresholds. Smooth transition maintained reward stability.',
+  },
+  {
+    id: 'P-017',
+    name: 'Achievable Thresholds',
+    nameEn: 'Thresholds Must Be Achievable Under Active Conditions',
+    sourcePhase: 'Phase H v2 → v3',
+    status: 'verified',
+    matchingStandard: 'P-002 Extension (Threshold Calibration)',
+    description:
+      'Curriculum thresholds must be set BELOW the expected average reward when the current lesson is active. Variation/noise lowers average reward, making higher thresholds unreachable.',
+    failContext:
+      'Phase H v2: Thresholds 710/720 set above agent average (~690-700) with variation=0.05 active. Curriculum stuck at lesson 2/4.',
+    fixContext:
+      'Phase H v3: Lowered to 685/690/693 (5-10 points below observed average). All 4 lessons completed.',
+  },
+  {
+    id: 'P-018',
+    name: 'Minimum Threshold Spacing',
+    nameEn: 'Minimum Threshold Spacing >= 15 Points',
+    sourcePhase: 'Phase I v1 → v2',
+    status: 'verified',
+    matchingStandard: 'P-012 Extension (Threshold Separation)',
+    description:
+      'Adjacent curriculum thresholds must be spaced at least 15 points apart. Tighter spacing causes near-simultaneous transitions of multiple parameters, resulting in catastrophic reward collapse.',
+    failContext:
+      'Phase I v1: Thresholds 700/702/705 (spacing 2-3 points). Three params (curvature, direction, zones) unlocked within ~20K steps. Reward crashed 724->-40 (760-point drop).',
+    fixContext:
+      'Phase I v2: All params at final values (no transitions). Agent recovered from 623 to 770. Future configs should use >= 15-point spacing.',
   },
 ];
 
@@ -738,16 +858,16 @@ export const referenceCategories: { key: Reference['category']; label: string; i
 
 // ---------- Stats ----------
 export const stats = {
-  maxReward: 2113,
-  totalPhases: 16,
-  completedPhases: 7,
-  failedAttempts: 9,
+  maxReward: 770,
+  totalPhases: 21,
+  completedPhases: 9,
+  failedAttempts: 12,
   observationDim: 260,
   parallelAreas: 16,
-  successRate: '7/16',
+  successRate: '9/21',
   collisionRateTarget: '< 5%',
-  totalSteps: '91.4M',
-  totalPolicies: 11,
+  totalSteps: '111.4M',
+  totalPolicies: 14,
   techStack: ['Unity 6', 'ML-Agents 4.0', 'PyTorch 2.3+', 'PPO', 'ROS2 Humble'],
   hardware: {
     gpu: 'RTX 4090 (24GB VRAM)',

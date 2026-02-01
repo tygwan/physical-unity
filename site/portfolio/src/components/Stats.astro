@@ -2,7 +2,7 @@
 import { stats } from '../data/phases';
 
 const dashboardItems = [
-  { value: `+${stats.maxReward.toLocaleString()}`, label: 'Peak Reward', sub: 'Phase C: Multi-NPC', color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/15' },
+  { value: `+${stats.maxReward.toLocaleString()}`, label: 'Peak Reward', sub: 'Phase I: Curves+NPC', color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/15' },
   { value: `${stats.completedPhases}/${stats.totalPhases}`, label: 'Phases Complete', sub: `${stats.failedAttempts} failed attempts`, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/15' },
   { value: `${stats.observationDim}D`, label: 'Observation Space', sub: 'ego + route + NPC + lane', color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/15' },
   { value: `${stats.parallelAreas}`, label: 'Parallel Envs', sub: 'simultaneous training', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/15' },
