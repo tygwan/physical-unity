@@ -1,0 +1,193 @@
+# E2EDrivingAgent PPO Phase J v3: Traffic Signals (warm start from v2)
+# Strategy: WARM START from v2 best checkpoint (same 268D obs = no mismatch)
+#
+# v3 changes vs v2:
+#   - init_path: v2 best checkpoint at 9.5M steps (~652 reward)
+#   - batch_size: 2048 -> 4096 (larger batches for fine-tuning)
+#   - buffer_size: 20480 -> 40960 (matched to batch_size)
+#   - num_epoch: 3 -> 5 (more gradient steps per batch)
+#   - max_steps: 10M -> 5M (warm start needs fewer steps)
+#   - Curriculum: 13 params -> 3 remaining (10 locked at final values)
+#
+# v2 achieved 9/13 curriculum (reward 632, peak 660):
+#   - COMPLETED: goal_distance, num_lanes, center_line, NPCs, speed, variation,
+#                intersection_type (T/Cross), turn_direction (Left/Right)
+#   - MISSED: Y-Junction (threshold 650), traffic signals (threshold 670+)
+#
+# v3 targets remaining curriculum:
+#   - intersection_type: Cross(2) -> Y-Junction(3) @ 580
+#   - traffic_signal_enabled: Off(0) -> On(1) @ 600
+#   - signal_green_ratio: 0.7 -> 0.5 -> 0.4 @ 620/640
+#
+# P-018 compliance: All thresholds spaced by >= 20 points
+# P-019 compliance: No Unicode special characters
+# P-020: obs dim change (260->268) = fresh start required (v1 lesson)
+# P-021: from-scratch training needs lower thresholds than warm start
+#
+# Hardware: RTX 4090 (24GB VRAM) + 128GB RAM
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    init_path: results/phase-J-v2/E2EDrivingAgent/E2EDrivingAgent-9499888.pt
+    max_steps: 5000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 5
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # LOCKED PARAMETERS (final values from v2, no curriculum)
+  # All these reached their targets during v2 training
+  # =======================================================
+
+  goal_distance:
+    curriculum:
+      - name: FullGoal
+        value: 230.0
+
+  num_lanes:
+    curriculum:
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: CenterLineEnforced
+        value: 1.0
+
+  num_active_npcs:
+    curriculum:
+      - name: ThreeNPCs
+        value: 3.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: NormalNPCs
+        value: 0.85
+
+  npc_speed_variation:
+    curriculum:
+      - name: FullVariation
+        value: 0.15
+
+  turn_direction:
+    curriculum:
+      - name: AllDirections
+        value: 2.0
+
+  road_curvature:
+    curriculum:
+      - name: NoCurve
+        value: 0.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: NoVariation
+        value: 0.0
+
+  speed_zone_count:
+    curriculum:
+      - name: OneZone
+        value: 1.0
+
+  # =======================================================
+  # REMAINING CURRICULUM (3 params, 4 transitions)
+  # v2 stopped at Cross intersection (9/13 curriculum)
+  # v3 picks up: Y-Junction, traffic signals, green ratio
+  # P-018: 20-point spacing between thresholds
+  # =======================================================
+
+  intersection_type:
+    curriculum:
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 580.0
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  traffic_signal_enabled:
+    curriculum:
+      - name: NoSignal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 600.0
+        value: 0.0
+      - name: SignalActive
+        value: 1.0
+
+  signal_green_ratio:
+    curriculum:
+      - name: EasyGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 620.0
+        value: 0.7
+      - name: BalancedGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 640.0
+        value: 0.5
+      - name: HardGreen
+        value: 0.4
+
+# =======================================================
+# BUILD-BASED MULTI-ENV TRAINING
+# =======================================================
+
+env_settings:
+  env_path: Builds/PhaseJ/PhaseJ.exe
+  num_envs: 3
+  base_port: 5010
+  timeout_wait: 600
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: true
+
+torch_settings:
+  device: cuda

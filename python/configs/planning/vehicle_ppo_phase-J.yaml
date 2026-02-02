@@ -1,0 +1,331 @@
+# E2EDrivingAgent PPO Phase J: Traffic Signals + Stop Lines
+# Strategy: WARM START from Phase I v2 final checkpoint (reward 770, 268D obs)
+# Phase I v2 mastered curves + NPCs. Phase J adds traffic signal compliance.
+# Agent must re-learn intersections (locked during Phase I) then learn red/green.
+#
+# Usage:
+#   mlagents-learn python/configs/planning/vehicle_ppo_phase-J.yaml --run-id=phase-J --force
+#
+# Key features:
+# 1. WARM START: Phase I v2 final (reward 770, all curves+NPCs mastered)
+# 2. INTERSECTION RE-ENABLE: Gradually unlock intersections (T->Cross->Y)
+# 3. TRAFFIC SIGNALS: New - agent learns to stop at red, proceed on green
+# 4. 268D OBSERVATION: 260D (Phase G) + 8D traffic signal info
+# 5. BUDGET: 7M steps (intersection re-learning + new signal concept)
+#
+# P-018 compliance: All thresholds spaced by >= 15 points
+#   Intersection: 695/710/725, Traffic: 740/750/760
+#
+# Hardware: RTX 4090 (24GB VRAM) + 128GB RAM
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    # NOTE: init_path removed - 268D obs (Phase J) incompatible with 260D (Phase I v2)
+    # Tensor size mismatch (260 vs 268) causes Adam optimizer crash at first update.
+    # Training from scratch with curriculum re-learning.
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    max_steps: 7000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 5
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # TIER 1: Quick-unlock (warm start ~770, previously mastered)
+  # =======================================================
+
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 70.0
+        value: 1.0
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 90.0
+        value: 0.0
+      - name: CenterLineEnforced
+        value: 1.0
+
+  goal_distance:
+    curriculum:
+      - name: ShortGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 110.0
+        value: 150.0
+      - name: MediumGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 130.0
+        value: 200.0
+      - name: FullGoal
+        value: 230.0
+
+  # =======================================================
+  # TIER 2: NPC params (previously mastered, unlock quickly)
+  # =======================================================
+
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 550.0
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 620.0
+        value: 1.0
+      - name: TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 680.0
+        value: 2.0
+      - name: ThreeNPCs
+        value: 3.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 600.0
+        value: 0.5
+      - name: MediumNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 660.0
+        value: 0.7
+      - name: NormalNPCs
+        value: 0.85
+
+  npc_speed_variation:
+    curriculum:
+      - name: NoVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 685.0
+        value: 0.0
+      - name: LowVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 690.0
+        value: 0.05
+      - name: MediumVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 100
+          threshold: 693.0
+        value: 0.10
+      - name: MildVariation
+        value: 0.15
+
+  # =======================================================
+  # TIER 3: Intersection re-enable (P-018: 15-point spacing)
+  # Agent has Phase G/H intersection weights, needs re-activation
+  # =======================================================
+
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 695.0
+        value: 0.0
+      - name: TJunction
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 710.0
+        value: 1.0
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 725.0
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  turn_direction:
+    curriculum:
+      - name: StraightOnly
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 700.0
+        value: 0.0
+      - name: LeftTurn
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 715.0
+        value: 1.0
+      - name: RightTurn
+        value: 2.0
+
+  # =======================================================
+  # TIER 4: Traffic signals (NEW - Phase J)
+  # P-018: 15 points above last intersection threshold (725)
+  # =======================================================
+
+  traffic_signal_enabled:
+    curriculum:
+      - name: NoSignal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 740.0
+        value: 0.0
+      - name: SignalActive
+        value: 1.0
+
+  signal_green_ratio:
+    curriculum:
+      - name: EasyGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 750.0
+        value: 0.7
+      - name: BalancedGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 2000
+          threshold: 760.0
+        value: 0.5
+      - name: HardGreen
+        value: 0.4
+
+  # =======================================================
+  # LOCKED: Curves disabled (mutually exclusive with intersections)
+  # =======================================================
+
+  road_curvature:
+    curriculum:
+      - name: NoCurve
+        value: 0.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: NoVariation
+        value: 0.0
+
+  speed_zone_count:
+    curriculum:
+      - name: OneZone
+        value: 1.0
+
+# =======================================================
+# BUILD-BASED MULTI-ENV TRAINING
+# =======================================================
+
+env_settings:
+  env_path: Builds/PhaseJ/PhaseJ.exe
+  num_envs: 3
+  base_port: 5010
+  timeout_wait: 600
+
+checkpoint_settings:
+  run_id: phase-J
+  resume: false
+  force: false
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: true
+
+torch_settings:
+  device: cuda

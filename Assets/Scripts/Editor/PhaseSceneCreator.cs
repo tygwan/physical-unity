@@ -42,6 +42,7 @@ public class PhaseSceneCreator
         CreatePhaseFScene();
         CreatePhaseGScene();
         CreatePhaseHScene();
+        CreatePhaseJScene();
 
         EditorUtility.DisplayDialog("Complete",
             "All Phase scenes created in Assets/Scenes/", "OK");
@@ -177,6 +178,27 @@ public class PhaseSceneCreator
         });
     }
 
+    [MenuItem("Tools/Create Phase Scenes/Phase J - Traffic Signals")]
+    public static void CreatePhaseJScene()
+    {
+        CreatePhaseScene(new PhaseConfig
+        {
+            name = "PhaseJ_TrafficSignals",
+            description = "Traffic signals + stop lines at intersections",
+            numNPCs = 3,
+            numLanes = 2,
+            roadCurvature = 0f,
+            intersectionType = 2, // Cross intersection default
+            turnDirection = 0,    // Configurable at runtime
+            npcSpeedRatio = 0.6f,
+            roadLength = 300f,
+            observationSize = 268,
+            enableLaneObservation = true,
+            enableIntersectionObservation = true,
+            enableTrafficSignalObservation = true,
+        });
+    }
+
     #endregion
 
     #region Scene Creation
@@ -196,9 +218,10 @@ public class PhaseSceneCreator
         public int numSpeedZones;
         public float roadLength;
         // Observation configuration
-        public int observationSize;            // 242, 254, or 260
+        public int observationSize;            // 242, 254, 260, or 268
         public bool enableLaneObservation;     // true for Phase D+
         public bool enableIntersectionObservation; // true for Phase G+
+        public bool enableTrafficSignalObservation; // true for Phase J+
     }
 
     private static void CreatePhaseScene(PhaseConfig config)
@@ -299,8 +322,15 @@ public class PhaseSceneCreator
         // Goal Target
         var goal = CreateGoalTargetForArea(config.roadLength, trainingArea.transform);
 
+        // Traffic Light (Phase J)
+        GameObject trafficLightObj = null;
+        if (config.enableTrafficSignalObservation)
+        {
+            trafficLightObj = CreateTrafficLightForArea(trainingArea.transform);
+        }
+
         // Wire up references within this training area
-        WireAreaReferences(sceneManager, agent, road, goal, npcs);
+        WireAreaReferences(sceneManager, agent, road, goal, npcs, trafficLightObj);
 
         return trainingArea;
     }
@@ -652,10 +682,20 @@ public class PhaseSceneCreator
             // Set observation flags
             SetProperty(agentComponent, "enableLaneObservation", config.enableLaneObservation);
             SetProperty(agentComponent, "enableIntersectionObservation", config.enableIntersectionObservation);
+            SetProperty(agentComponent, "enableTrafficSignalObservation", config.enableTrafficSignalObservation);
         }
 
         // Configure BehaviorParameters for ML-Agents training via SerializedObject
         ConfigureBehaviorParameters(agent, config);
+
+        // Add DecisionRequester (required for agents to send observations to Python trainer)
+        var drType = System.Type.GetType("Unity.MLAgents.DecisionRequester, Unity.ML-Agents");
+        if (drType != null)
+        {
+            var dr = agent.AddComponent(drType);
+            SetProperty(dr, "DecisionPeriod", 5);
+            SetProperty(dr, "TakeActionsBetweenDecisions", true);
+        }
 
         return agent;
     }
@@ -678,11 +718,11 @@ public class PhaseSceneCreator
         var stackProp = so.FindProperty("m_BrainParameters.NumStackedVectorObservations");
         if (stackProp != null) stackProp.intValue = 1;
 
-        var continuousProp = so.FindProperty("m_BrainParameters.ActionSpec.m_NumContinuousActions");
+        var continuousProp = so.FindProperty("m_BrainParameters.m_ActionSpec.m_NumContinuousActions");
         if (continuousProp != null) continuousProp.intValue = 2;
 
         // Clear discrete branches (set size to 0)
-        var branchProp = so.FindProperty("m_BrainParameters.ActionSpec.BranchSizes");
+        var branchProp = so.FindProperty("m_BrainParameters.m_ActionSpec.BranchSizes");
         if (branchProp != null)
             branchProp.ClearArray();
 
@@ -751,8 +791,91 @@ public class PhaseSceneCreator
         return goal;
     }
 
+    /// <summary>
+    /// Create a traffic light with pole and 3 signal spheres for Phase J.
+    /// Positioned at the stop line (Z=93) on the right side of the road.
+    /// </summary>
+    private static GameObject CreateTrafficLightForArea(Transform parent)
+    {
+        var trafficLight = new GameObject("TrafficLight");
+        trafficLight.transform.SetParent(parent);
+        // Position: right side of road at stop line Z
+        trafficLight.transform.localPosition = new Vector3(ROAD_WIDTH / 2f + 1.5f, 0f, 0f);
+
+        // Pole (tall cylinder)
+        var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        pole.name = "Pole";
+        pole.transform.SetParent(trafficLight.transform);
+        pole.transform.localPosition = new Vector3(0f, 3f, INTERSECTION_ZONE_START);
+        pole.transform.localScale = new Vector3(0.15f, 3f, 0.15f);
+        Object.DestroyImmediate(pole.GetComponent<Collider>());
+        var poleMat = new Material(Shader.Find("Standard"));
+        poleMat.color = new Color(0.3f, 0.3f, 0.3f);
+        pole.GetComponent<Renderer>().material = poleMat;
+
+        // Signal housing (box)
+        var housing = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        housing.name = "SignalHousing";
+        housing.transform.SetParent(trafficLight.transform);
+        housing.transform.localPosition = new Vector3(0f, 6.5f, INTERSECTION_ZONE_START);
+        housing.transform.localScale = new Vector3(0.6f, 1.8f, 0.4f);
+        Object.DestroyImmediate(housing.GetComponent<Collider>());
+        var housingMat = new Material(Shader.Find("Standard"));
+        housingMat.color = new Color(0.2f, 0.2f, 0.2f);
+        housing.GetComponent<Renderer>().material = housingMat;
+
+        // Red light (top)
+        var redLight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        redLight.name = "RedLight";
+        redLight.transform.SetParent(trafficLight.transform);
+        redLight.transform.localPosition = new Vector3(0f, 7.1f, INTERSECTION_ZONE_START - 0.15f);
+        redLight.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
+        Object.DestroyImmediate(redLight.GetComponent<Collider>());
+        var redMat = new Material(Shader.Find("Standard"));
+        redMat.color = new Color(0.15f, 0.15f, 0.15f);
+        redMat.EnableKeyword("_EMISSION");
+        redLight.GetComponent<Renderer>().material = redMat;
+
+        // Yellow light (middle)
+        var yellowLight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        yellowLight.name = "YellowLight";
+        yellowLight.transform.SetParent(trafficLight.transform);
+        yellowLight.transform.localPosition = new Vector3(0f, 6.5f, INTERSECTION_ZONE_START - 0.15f);
+        yellowLight.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
+        Object.DestroyImmediate(yellowLight.GetComponent<Collider>());
+        var yellowMat = new Material(Shader.Find("Standard"));
+        yellowMat.color = new Color(0.15f, 0.15f, 0.15f);
+        yellowMat.EnableKeyword("_EMISSION");
+        yellowLight.GetComponent<Renderer>().material = yellowMat;
+
+        // Green light (bottom)
+        var greenLight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        greenLight.name = "GreenLight";
+        greenLight.transform.SetParent(trafficLight.transform);
+        greenLight.transform.localPosition = new Vector3(0f, 5.9f, INTERSECTION_ZONE_START - 0.15f);
+        greenLight.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
+        Object.DestroyImmediate(greenLight.GetComponent<Collider>());
+        var greenMat = new Material(Shader.Find("Standard"));
+        greenMat.color = new Color(0.15f, 0.15f, 0.15f);
+        greenMat.EnableKeyword("_EMISSION");
+        greenLight.GetComponent<Renderer>().material = greenMat;
+
+        // Add TrafficLightController component
+        var tlType = System.Type.GetType("ADPlatform.Environment.TrafficLightController, Assembly-CSharp");
+        if (tlType != null)
+        {
+            var tlComponent = trafficLight.AddComponent(tlType);
+            SetProperty(tlComponent, "redLight", redLight.GetComponent<Renderer>());
+            SetProperty(tlComponent, "yellowLight", yellowLight.GetComponent<Renderer>());
+            SetProperty(tlComponent, "greenLight", greenLight.GetComponent<Renderer>());
+            SetProperty(tlComponent, "stopLineZ", INTERSECTION_ZONE_START);
+        }
+
+        return trafficLight;
+    }
+
     private static void WireAreaReferences(GameObject manager, GameObject agent,
-        GameObject road, GameObject goal, GameObject[] npcs)
+        GameObject road, GameObject goal, GameObject[] npcs, GameObject trafficLightObj = null)
     {
         var managerComponent = manager.GetComponent("DrivingSceneManager");
         if (managerComponent == null) return;
@@ -794,6 +917,19 @@ public class PhaseSceneCreator
             SetProperty(managerComponent, "leftAngledArm", leftAngledArm.gameObject);
         if (rightAngledArm != null)
             SetProperty(managerComponent, "rightAngledArm", rightAngledArm.gameObject);
+
+        // Wire traffic light (Phase J)
+        if (trafficLightObj != null)
+        {
+            var tlComponent = trafficLightObj.GetComponent("TrafficLightController");
+            if (tlComponent != null)
+            {
+                SetProperty(managerComponent, "trafficLight", tlComponent);
+                // Also wire to agent
+                if (agentComponent != null)
+                    SetProperty(agentComponent, "trafficLight", tlComponent);
+            }
+        }
     }
 
     private static void WireReferences(GameObject manager, GameObject agent,

@@ -12,10 +12,11 @@ title: Training Phases
 ## Phase Overview
 
 ```
-Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase G --> Phase H --> Phase I
- (v10-v11)     (추월)      (판단)      (일반화)     (곡선)      (다차선)    (교차로)    (NPC교차로)  (곡선+NPC)
-   +40~51      +937        +994        +1086       +931        +988        +628        +701        +770
+Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase G --> Phase H --> Phase I --> Phase J
+ (v10-v11)     (추월)      (판단)      (일반화)     (곡선)      (다차선)    (교차로)    (NPC교차로)  (곡선+NPC)   (신호등)
+   +40~51      +937        +994        +1086       +931        +988        +628        +701        +770       +497*
 ```
+*Phase J v4 with signals ON + green_ratio=0.5, 3/4 green_ratio curriculum
 
 ---
 
@@ -67,7 +68,11 @@ Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase
 
 ## In Progress
 
-(No active training)
+### [Phase J: Traffic Signals](./phase-j)
+- **Goal**: 신호등 인식 + 정지선 준수 + 268D observation
+- **Result (v4)**: +616 peak, +497 final (3/4 green_ratio, signal-first)
+- **Key**: P-022 fix validated (no signal crash), green_ratio 0.8->0.5 completed
+- **Issue**: Plateau at ~490-500 with green_ratio=0.5, threshold 540 unreachable (P-023)
 
 ---
 
@@ -75,7 +80,7 @@ Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase
 
 | Phase | Focus | Observation | Status |
 |-------|-------|-------------|--------|
-| J | 신호등 + 정지선 | +8D | 📋 Planned |
+| J | 신호등 + 정지선 | +8D (268D) | 🔄 In Progress (v4 done 3/4, v5 or Phase K next) |
 | K | U턴 + 특수 기동 | +4D | 📋 Planned |
 | L | 횡단보도 + 보행자 | +12D | 📋 Planned |
 | M | 장애물 + 긴급 상황 | +10D | 📋 Planned |
@@ -117,6 +122,23 @@ See [Failed Experiments](./failed-experiments) for detailed analysis.
 - **Result**: +623 (17/17 curriculum complete, but reward crashed 724->-40 then recovered)
 - **Lesson**: Threshold 간격 >= 15 포인트 유지 필수 (P-018)
 
+### Phase J v1: Observation Dimension Mismatch
+- **Problem**: 260D checkpoint -> 268D observation, Adam optimizer tensor crash
+- **Result**: ~40K steps (immediate crash)
+- **Lesson**: Observation 차원 변경 시 warm start 불가, fresh start 필수 (P-020)
+
+### Phase J v3: Signal Ordering Conflict
+- **Problem**: signal_green_ratio threshold < signal_enabled threshold -> green_ratio changed before signals ON
+- **Result**: +477 (12/13 curriculum, signal crash 647->470 never recovered)
+- **Lesson**: 독립 커리큘럼 파라미터 간 순서 보장 불가, 단일 파라미터 커리큘럼 필요 (P-022)
+
+### Phase J v4: Green Ratio Plateau
+- **Problem**: Reward compression at green_ratio=0.5, threshold 540 unreachable (plateau ~490-500)
+- **Result**: +497 (3/4 green_ratio, missed 0.5->0.4)
+- **Lesson**: 신호 대기 시간 증가로 보상 범위 축소, threshold 또는 보상 구조 조정 필요 (P-023)
+
 ---
+
+*Last Updated: 2026-02-02 (Phase J v4 3/4 green_ratio)*
 
 [<- Back to Home](../)

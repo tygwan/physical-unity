@@ -1,6 +1,6 @@
 # Training Log - E2EDrivingAgent RL Training History
 
-> Phase I v2 completed on 2026-02-01 (PROJECT RECORD: +770)
+> Phase J v4 completed on 2026-02-02 (PARTIAL 3/4 green_ratio)
 
 ## Overview
 
@@ -20,6 +20,10 @@
 | **Phase H v3** | NPC Intersection (lowered thresholds) | 5M | **708** | ✅ COMPLETED |
 | **Phase I v1** | Curved Roads + NPC (triple crash) | 5M | **724** | ⚠️ PARTIAL (crash) |
 | **Phase I v2** | Curved Roads + NPC (recovery) | 5M | **775** | ✅ COMPLETED |
+| **Phase J v1** | Traffic Signals (tensor mismatch) | ~40K | **N/A** | ❌ FAILED |
+| **Phase J v2** | Traffic Signals (from scratch 268D) | 10M | **660.6** | ⚠️ PARTIAL (9/13) |
+| **Phase J v3** | Traffic Signals (warm start, signal ordering) | 5M | **658** | ⚠️ PARTIAL (12/13) |
+| **Phase J v4** | Traffic Signals (signal-first, green_ratio) | 5M | **616** | ⚠️ PARTIAL (3/4) |
 
 ---
 
@@ -943,3 +947,271 @@ Phase H v1 introduced NPC waypoint-following through intersections with curricul
 
 *Phase H v3 Training Complete - 2026-02-01*
 *Ready for Phase I: Curved Roads with NPCs*
+
+---
+
+## Phase I v1: Curved Roads + NPC (Triple-Param Crash)
+
+### Status: ⚠️ PARTIAL (2026-02-01) - V2 PLANNED
+
+**Run ID**: phase-I
+**Steps**: 5,000,000
+**Peak Reward**: +724 @ ~3.7M | **Final**: +623
+**Training Mode**: Build (PhaseH.exe) + 3 parallel envs
+
+Phase I v1 combined Phase E curves with Phase H NPC traffic. All 17/17 curriculum transitions completed, but thresholds 700/702/705 were too tight -- `road_curvature=1.0`, `curve_direction_variation=1.0`, and `speed_zone_count=2` all unlocked within ~20K steps, crashing reward from 724 to -40. Recovered to 623 by 5M.
+
+---
+
+## Phase I v2: Curved Roads + NPC (Recovery Training)
+
+### Status: ✅ COMPLETED (2026-02-01) - PROJECT RECORD
+
+**Run ID**: phase-I-v2
+**Steps**: 5,000,000
+**Peak Reward**: +775 @ 4.83M | **Final**: +770
+**Training Mode**: Build (PhaseH.exe) + 3 parallel envs
+
+Pure recovery training with all parameters fixed at final values. No curriculum needed (v1 completed all 17/17). Agent stabilized and reached +770, setting the project-wide reward record.
+
+### Artifacts
+- **Final ONNX**: `results/phase-I-v2/E2EDrivingAgent/E2EDrivingAgent-5000080.onnx`
+- **Config**: `python/configs/planning/vehicle_ppo_phase-I-v2.yaml`
+
+---
+
+## Phase J v1: Traffic Signals (Tensor Mismatch)
+
+### Status: ❌ FAILED (2026-02-02) - V2 PLANNED
+
+**Run ID**: phase-J
+**Steps**: ~40,000 (crashed immediately)
+
+Phase J introduced traffic signal observation (+8D), expanding observation space from 260D to 268D. Attempted warm start from Phase I v2 checkpoint (260D).
+
+### Root Cause: Adam Optimizer State Mismatch
+- Phase I v2 checkpoint contains Adam optimizer states sized for 260D input
+- Phase J scene provides 268D observation (+8D traffic signal)
+- ML-Agents loads checkpoint, then encounters 268D tensor where 260D was expected
+- `RuntimeError: Adam optimizer state tensor size mismatch`
+
+### Lesson P-020
+**Observation dimension change = fresh start required.** Unlike adding new curriculum parameters (which reuse existing observation slots), adding new observation dimensions changes the fundamental tensor shapes that the optimizer tracks.
+
+---
+
+## Phase J v2: Traffic Signals (From Scratch, 268D)
+
+### Status: ⚠️ PARTIAL (2026-02-02) - 9/13 Curriculum
+
+**Run ID**: phase-J-v2
+**Steps**: 10,000,000
+**Peak Reward**: +660.6 @ ~7.5M | **Final**: +632.2
+**Observation**: 268D (260D + 8D traffic signal)
+**Training Mode**: Build (PhaseJ.exe) + 3 parallel envs, no_graphics
+
+### Strategy: From Scratch
+
+Since warm start was impossible (P-020), v2 trained from scratch with the full 268D observation space. This meant rebuilding all skills from Phase 0 through Phase G within a single training run.
+
+### Key Changes from v1
+1. **No init_path**: Training from scratch
+2. **goal_distance starts at 50m**: Like Phase 0, build fundamentals first
+3. **Lower curriculum thresholds**: Achievable from scratch (P-021)
+4. **Smaller batch_size (2048)**: Faster initial gradient updates
+5. **10M step budget**: Double the typical warm-start budget
+
+### Mid-Training Resume (at 3.7M steps)
+
+| Parameter | Before | After |
+|-----------|--------|-------|
+| learning_rate | 3e-4 | 1.5e-4 |
+| intersection thresholds | 620/650/680 | 590/620/650 |
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 500K | ~30 | Basic driving from scratch |
+| 1.0M | ~100 | goal_distance, lanes |
+| 2.0M | ~350 | NPCs introduced |
+| 3.0M | ~550 | Speed variation |
+| 3.7M | ~600 | Resume: LR + thresholds adjusted |
+| 5.0M | ~610 | T-junction unlocked |
+| 6.0M | ~630 | Cross intersection, turns |
+| 7.5M | **660.6** | **PEAK** |
+| 10.0M | 632.2 | Budget exhausted |
+
+### Curriculum Status (9/13 Complete)
+
+| Parameter | Status | Note |
+|-----------|--------|------|
+| goal_distance (5 lessons) | DONE | 50m -> 230m |
+| num_lanes | DONE | 1 -> 2 |
+| center_line_enabled | DONE | Off -> On |
+| num_active_npcs (4 lessons) | DONE | 0 -> 3 |
+| npc_speed_ratio (3 lessons) | DONE | 0.5 -> 0.85 |
+| npc_speed_variation (4 lessons) | DONE | 0 -> 0.15 |
+| intersection_type (T/Cross) | DONE | 0 -> 2 |
+| turn_direction | DONE | 0 -> 2 |
+| **intersection_type (Y-Junction)** | **MISS** | **Threshold 650 not reached** |
+| **traffic_signal_enabled** | **MISS** | **Threshold 670 not reached** |
+| **signal_green_ratio (0.5)** | **MISS** | **Blocked by signals** |
+| **signal_green_ratio (0.4)** | **MISS** | **Blocked by signals** |
+
+### Key Findings
+
+1. **268D from scratch is viable**: Agent rebuilt 9 phases of skills within 10M steps
+2. **Reward ceiling lower than warm start**: From-scratch peaks at ~660 vs warm-start Phase H ~700+
+3. **Threshold lowering at resume helped**: -30 points on intersection thresholds enabled 590/620 transitions
+4. **10M budget insufficient for all 13 params**: Need v3 warm start for remaining 4 transitions
+
+### Lessons Learned
+
+| Lesson ID | Description | Phase |
+|-----------|-------------|-------|
+| P-020 | Observation dimension change requires fresh start (optimizer state mismatch) | Phase J v1 |
+| P-021 | From-scratch training reaches lower reward ceiling, needs lower thresholds | Phase J v2 |
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-J-v2.yaml`
+- **Best Checkpoint**: `results/phase-J-v2/E2EDrivingAgent/E2EDrivingAgent-9499888.pt` (9.5M, ~652)
+- **Build**: `Builds/PhaseJ/PhaseJ.exe`
+
+### v3 Plan
+- Warm start from v2 9.5M checkpoint (same 268D = no mismatch)
+- 3 remaining curriculum params: intersection_type Y-Junction, traffic_signal_enabled, signal_green_ratio
+- Thresholds: 580, 600, 620, 640 (20-point spacing)
+- batch_size 4096, num_epoch 5, max_steps 5M
+- Config: `python/configs/planning/vehicle_ppo_phase-J-v3.yaml`
+
+---
+
+*Phase J v2 Training Complete - 2026-02-02*
+
+---
+
+## Phase J v3: Traffic Signals (Warm Start, Signal Ordering Issue)
+
+### Status: ⚠️ PARTIAL (2026-02-02) - 12/13 Curriculum
+
+**Run ID**: phase-J-v3
+**Steps**: 5,000,000
+**Peak Reward (pre-signal)**: +658 @ ~900K | **Peak (with signal)**: +538 @ ~1.94M
+**Final Reward**: +477
+**Training Mode**: Build (PhaseJ.exe) + 3 parallel envs, no_graphics
+**Training Duration**: ~25.5 minutes (1,530 seconds)
+
+### Strategy: Warm Start Remaining Curriculum
+
+Warm start from v2 best checkpoint (9.5M, ~652 reward). Only 3 remaining curriculum params:
+- intersection_type: Cross(2) -> Y-Junction(3) @ threshold 580
+- traffic_signal_enabled: Off(0) -> On(1) @ threshold 600
+- signal_green_ratio: 0.7 -> 0.5 -> 0.4 @ thresholds 620/640
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 30K | 643 | Warm start stabilized |
+| 520K | 651 | **Y-Junction unlocked** |
+| 900K | **658** | **Pre-signal peak** |
+| 1.04M | 645 | signal_green_ratio -> 0.5 (no effect, signals OFF) |
+| 1.84M | 647 | **traffic_signal_enabled -> ON** |
+| 1.86M | 470 | **SIGNAL CRASH (-177 points)** |
+| 2.0M | 489 | Post-signal plateau |
+| 3.0M | 500 | Oscillating |
+| 5.0M | 477 | Budget exhausted |
+
+### Curriculum Status (12/13)
+
+| Parameter | Transition | Status |
+|-----------|-----------|--------|
+| intersection_type Cross -> Y-Junction | threshold 580 | DONE |
+| signal_green_ratio 0.7 -> 0.5 | threshold 620 | DONE (no effect, signals OFF) |
+| traffic_signal_enabled Off -> On | threshold 600 | DONE |
+| signal_green_ratio 0.5 -> 0.4 | threshold 640 | MISSED |
+
+### Root Cause: Curriculum Ordering Problem (P-022)
+
+Independent curriculum parameters cannot enforce ordering. `signal_green_ratio` threshold (620) was lower than the reward level (~650), so it changed to 0.5 while signals were OFF (no effect). When signals finally turned ON at 1.84M, the green ratio was already at the harder 0.5 instead of the intended easy 0.7.
+
+### Lesson P-022
+**Feature activation must precede parameter tuning.** When parameter B only has meaning when parameter A is active, use single-parameter curriculum with the feature locked ON from start.
+
+### v4 Design (Fix)
+- Lock traffic_signal_enabled=ON and intersection_type=Y-Junction from step 0
+- Only curriculum: signal_green_ratio 0.8 -> 0.7 -> 0.6 -> 0.5 -> 0.4
+- Thresholds: 450/480/510/540 (post-signal reward range)
+- Config: `python/configs/planning/vehicle_ppo_phase-J-v4.yaml`
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-J-v3.yaml`
+- **Results**: `results/phase-J-v3/E2EDrivingAgent/`
+- **Experiment Archive**: `experiments/phase-J-traffic-signals-v3/`
+
+---
+
+*Phase J v3 Training Complete - 2026-02-02*
+
+---
+
+## Phase J v4: Traffic Signals (Signal-First, Green Ratio Curriculum)
+
+### Status: ⚠️ PARTIAL (2026-02-02) - 3/4 Green Ratio
+
+**Run ID**: phase-J-v4
+**Steps**: 5,000,000
+**Peak Reward**: +616 @ ~680K (green_ratio=0.8) | **Final**: +497 (green_ratio=0.5)
+**Training Mode**: Build (PhaseJ.exe) + 3 parallel envs, no_graphics
+**Training Duration**: 1,689 seconds (~28 minutes)
+
+### Strategy: Signal-First Single-Param Curriculum
+
+Fix for P-022 (signal ordering conflict). Lock signals ON and Y-Junction from step 0. Only curriculum parameter: signal_green_ratio (0.8 -> 0.7 -> 0.6 -> 0.5 -> 0.4).
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 30K | ~570 | Warm start stabilized (signals ON from start) |
+| 680K | **616** | **Peak** (green_ratio=0.8, pre-curriculum) |
+| 700K | ~570 | signal_green_ratio -> 0.7 (threshold 450) |
+| 1.0M | ~540 | Recovering at 0.7 |
+| 1.4M | ~530 | signal_green_ratio -> 0.6 (threshold 480) |
+| 2.06M | ~510 | signal_green_ratio -> 0.5 (threshold 510) |
+| 3.0M | ~500 | Plateau at green_ratio=0.5 |
+| 5.0M | 497 | Budget exhausted |
+
+### Curriculum Status (3/4)
+
+| Parameter | Transition | Threshold | Status |
+|-----------|-----------|-----------|--------|
+| signal_green_ratio | 0.8 -> 0.7 | 450 | DONE (~700K) |
+| signal_green_ratio | 0.7 -> 0.6 | 480 | DONE (~1.4M) |
+| signal_green_ratio | 0.6 -> 0.5 | 510 | DONE (~2.06M) |
+| signal_green_ratio | 0.5 -> 0.4 | 540 | MISSED (plateau ~490-500) |
+
+### Key Results
+
+1. **P-022 Fix Validated**: Signal-first approach eliminated the ordering crash. No reward drop at signal activation (v3 had -177 point crash).
+2. **Smooth Curriculum**: Each green_ratio transition caused ~40-60 point dip, then recovery. No catastrophic collapse.
+3. **Reward Compression (P-023)**: As green_ratio decreased, reward ceiling dropped proportionally:
+   - green=0.8: peak 616
+   - green=0.7: plateau ~540
+   - green=0.6: plateau ~520
+   - green=0.5: plateau ~490-500
+4. **Threshold 540 Unreachable**: Agent plateaus ~40 points below the final threshold. The reward range narrows as red light waiting reduces progress/speed rewards.
+
+### Lesson P-023
+**Reward compression under signal constraints.** As green ratio decreases, agents spend more time stopped at red lights. This reduces per-episode progress and speed rewards, compressing the achievable reward range. Threshold design must account for this ceiling reduction at each difficulty level.
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-J-v4.yaml`
+- **Results**: `results/phase-J-v4/E2EDrivingAgent/`
+- **Experiment Archive**: `experiments/phase-J-traffic-signals-v4/`
+
+---
+
+*Phase J v4 Training Complete - 2026-02-02*
+*Next: Phase J v5 (lower threshold) or Phase K (U-turn)*

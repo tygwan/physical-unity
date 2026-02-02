@@ -31,6 +31,9 @@ namespace ADPlatform.Environment
         public GameObject leftAngledArm;
         public GameObject rightAngledArm;
 
+        [Header("Traffic Signal (Phase J)")]
+        public TrafficLightController trafficLight;
+
         [Header("NPC Spawning")]
         public float npcMinSpawnDistance = 20f;    // Min distance ahead of ego (meters)
         public float npcMaxSpawnDistance = 150f;   // Max distance ahead of ego (meters)
@@ -45,6 +48,23 @@ namespace ADPlatform.Environment
         [Header("Curriculum")]
         public bool useCurriculum = true;
         public float defaultGoalDistance = 230f;
+
+        [Header("Inference Testing")]
+        [Tooltip("When true, use override values below instead of ML-Agents curriculum parameters")]
+        public bool inferenceMode = false;
+        public int inferenceNumNPCs = 3;
+        public float inferenceGoalDistance = 230f;
+        public int inferenceSpeedZoneCount = 1;
+        public float inferenceRoadCurvature = 0f;
+        public float inferenceCurveVariation = 0f;
+        public int inferenceNumLanes = 2;
+        public bool inferenceCenterLine = true;
+        public int inferenceIntersectionType = 3;
+        public int inferenceTurnDirection = 2;
+        public float inferenceNpcSpeedRatio = 0.85f;
+        public float inferenceNpcSpeedVariation = 0.15f;
+        public bool inferenceTrafficSignalEnabled = true;
+        public float inferenceSignalGreenRatio = 0.5f;
 
         [Header("Stats")]
         public int episodeCount = 0;
@@ -73,6 +93,7 @@ namespace ADPlatform.Environment
         private void DelayedConnect()
         {
             FindIntersectionVisuals();
+            FindTrafficLight();
             ValidateActiveScene();
             ConnectWaypoints();
 
@@ -88,10 +109,9 @@ namespace ADPlatform.Environment
         private void ValidateActiveScene()
         {
             string sceneName = SceneManager.GetActiveScene().name;
-            var envParams = Academy.Instance.EnvironmentParameters;
 
             // Check multi-lane requirement
-            float maxLanes = envParams.GetWithDefault("num_lanes", 1f);
+            float maxLanes = GetCurriculumParam("num_lanes", 1f);
             if (maxLanes > 1f && !sceneName.Contains("MultiLane") && !sceneName.Contains("PhaseF"))
             {
                 Debug.LogError($"[SCENE MISMATCH] num_lanes curriculum expects multi-lane but active scene is '{sceneName}'. " +
@@ -99,7 +119,7 @@ namespace ADPlatform.Environment
             }
 
             // Check intersection requirement
-            float intersectionType = envParams.GetWithDefault("intersection_type", 0f);
+            float intersectionType = GetCurriculumParam("intersection_type", 0f);
             if (intersectionType > 0f && !sceneName.Contains("Intersection") && !sceneName.Contains("PhaseG") && !sceneName.Contains("PhaseH"))
             {
                 Debug.LogError($"[SCENE MISMATCH] intersection_type curriculum expects intersections but active scene is '{sceneName}'. " +
@@ -172,10 +192,38 @@ namespace ADPlatform.Environment
                 waypointManager.ResetProgress();
 
             // Apply curriculum parameters
-            if (useCurriculum)
+            if (useCurriculum || inferenceMode)
                 ApplyCurriculumParameters();
 
             Debug.Log($"[DrivingSceneManager] Episode {episodeCount} started (NPCs: {activeNPCCount})");
+        }
+
+        /// <summary>
+        /// Get a curriculum parameter value, using inference overrides when in inference mode.
+        /// </summary>
+        private float GetCurriculumParam(string name, float defaultValue)
+        {
+            if (inferenceMode)
+            {
+                switch (name)
+                {
+                    case "num_active_npcs": return inferenceNumNPCs;
+                    case "goal_distance": return inferenceGoalDistance;
+                    case "speed_zone_count": return inferenceSpeedZoneCount;
+                    case "road_curvature": return inferenceRoadCurvature;
+                    case "curve_direction_variation": return inferenceCurveVariation;
+                    case "num_lanes": return inferenceNumLanes;
+                    case "center_line_enabled": return inferenceCenterLine ? 1f : 0f;
+                    case "intersection_type": return inferenceIntersectionType;
+                    case "turn_direction": return inferenceTurnDirection;
+                    case "npc_speed_ratio": return inferenceNpcSpeedRatio;
+                    case "npc_speed_variation": return inferenceNpcSpeedVariation;
+                    case "traffic_signal_enabled": return inferenceTrafficSignalEnabled ? 1f : 0f;
+                    case "signal_green_ratio": return inferenceSignalGreenRatio;
+                    default: return defaultValue;
+                }
+            }
+            return Academy.Instance.EnvironmentParameters.GetWithDefault(name, defaultValue);
         }
 
         /// <summary>
@@ -183,10 +231,8 @@ namespace ADPlatform.Environment
         /// </summary>
         private void ApplyCurriculumParameters()
         {
-            var envParams = Academy.Instance.EnvironmentParameters;
-
             // Control number of active NPCs
-            int numNPCs = Mathf.RoundToInt(envParams.GetWithDefault("num_active_npcs", 0f));
+            int numNPCs = Mathf.RoundToInt(GetCurriculumParam("num_active_npcs", 0f));
             activeNPCCount = Mathf.Clamp(numNPCs, 0, npcVehicles.Length);
 
             for (int i = 0; i < npcVehicles.Length; i++)
@@ -196,7 +242,7 @@ namespace ADPlatform.Environment
             }
 
             // Control goal distance (relative to Training Area origin)
-            float goalDist = envParams.GetWithDefault("goal_distance", defaultGoalDistance);
+            float goalDist = GetCurriculumParam("goal_distance", defaultGoalDistance);
             if (goalTarget != null)
             {
                 Vector3 areaOrigin = transform.position;
@@ -206,23 +252,23 @@ namespace ADPlatform.Environment
             }
 
             // Control speed zone count (Stage 4: Speed Policy)
-            int speedZoneCount = Mathf.RoundToInt(envParams.GetWithDefault("speed_zone_count", 1f));
+            int speedZoneCount = Mathf.RoundToInt(GetCurriculumParam("speed_zone_count", 1f));
             if (waypointManager != null)
             {
                 waypointManager.SetSpeedZoneCount(speedZoneCount);
             }
 
             // Road curvature (Phase E: Curved Roads)
-            float roadCurvature = envParams.GetWithDefault("road_curvature", 0f);
-            float curveDirectionVariation = envParams.GetWithDefault("curve_direction_variation", 0f);
+            float roadCurvature = GetCurriculumParam("road_curvature", 0f);
+            float curveDirectionVariation = GetCurriculumParam("curve_direction_variation", 0f);
             if (waypointManager != null && roadCurvature > 0.01f)
             {
                 waypointManager.SetRoadCurvature(roadCurvature, curveDirectionVariation);
             }
 
             // Multi-lane support (Phase F)
-            int numLanes = Mathf.RoundToInt(envParams.GetWithDefault("num_lanes", 1f));
-            bool centerLineEnabled = envParams.GetWithDefault("center_line_enabled", 0f) > 0.5f;
+            int numLanes = Mathf.RoundToInt(GetCurriculumParam("num_lanes", 1f));
+            bool centerLineEnabled = GetCurriculumParam("center_line_enabled", 0f) > 0.5f;
             if (waypointManager != null)
             {
                 waypointManager.SetLaneCount(numLanes);
@@ -230,8 +276,8 @@ namespace ADPlatform.Environment
             }
 
             // Intersection support (Phase G)
-            int intersectionType = Mathf.RoundToInt(envParams.GetWithDefault("intersection_type", 0f));
-            int turnDirection = Mathf.RoundToInt(envParams.GetWithDefault("turn_direction", 0f));
+            int intersectionType = Mathf.RoundToInt(GetCurriculumParam("intersection_type", 0f));
+            int turnDirection = Mathf.RoundToInt(GetCurriculumParam("turn_direction", 0f));
             if (waypointManager != null && intersectionType > 0)
             {
                 waypointManager.SetIntersection(intersectionType, turnDirection);
@@ -240,12 +286,20 @@ namespace ADPlatform.Environment
             // Toggle intersection road visuals to match current type
             UpdateIntersectionVisuals(intersectionType);
 
+            // Traffic signal (Phase J)
+            float trafficSignalEnabled = GetCurriculumParam("traffic_signal_enabled", 0f);
+            float signalGreenRatio = GetCurriculumParam("signal_green_ratio", 0.5f);
+            if (trafficLight != null)
+            {
+                trafficLight.ResetSignal(trafficSignalEnabled > 0.5f, signalGreenRatio);
+            }
+
             // NPC speed variation range (curriculum: 0.0 -> 0.3)
-            float speedVariation = envParams.GetWithDefault("npc_speed_variation", 0.0f);
+            float speedVariation = GetCurriculumParam("npc_speed_variation", 0.0f);
 
             // NPC base speed ratio (v12: 0.3 = very slow for overtaking training)
             // Default 1.0 = NPCs drive at speed limit
-            float npcSpeedRatio = envParams.GetWithDefault("npc_speed_ratio", 1.0f);
+            float npcSpeedRatio = GetCurriculumParam("npc_speed_ratio", 1.0f);
 
             // Get current zone speed limit for NPC speed calculation
             float zoneSpeedLimit = waypointManager != null
@@ -477,6 +531,25 @@ namespace ADPlatform.Environment
             {
                 Transform t = road.Find("RightAngledArm");
                 if (t != null) rightAngledArm = t.gameObject;
+            }
+        }
+
+        /// <summary>
+        /// Auto-discover TrafficLightController in the Training Area hierarchy.
+        /// </summary>
+        private void FindTrafficLight()
+        {
+            if (trafficLight != null) return;
+
+            Transform areaRoot = transform.parent;
+            if (areaRoot == null) return;
+
+            trafficLight = areaRoot.GetComponentInChildren<TrafficLightController>(true);
+
+            // Wire to agent
+            if (trafficLight != null && egoAgent != null && egoAgent.trafficLight == null)
+            {
+                egoAgent.trafficLight = trafficLight;
             }
         }
 

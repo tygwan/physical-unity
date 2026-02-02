@@ -24,6 +24,9 @@ namespace ADPlatform.Agents
     ///   Phase G (260D = 254D + 6D):
     ///   - + Intersection info (6D): type(4), distance(1), turn_direction(1)
     ///
+    ///   Phase J (268D = 260D + 8D):
+    ///   - + Traffic signal (8D): state(4), dist_to_stop(1), time_remaining(1), should_stop(1), stopped_at_line(1)
+    ///
     /// Action Space (2D continuous):
     ///   - Steering: [-0.5, 0.5] rad
     ///   - Acceleration: [-4.0, 2.0] m/s²
@@ -60,6 +63,8 @@ namespace ADPlatform.Agents
         public bool enableLaneObservation = false;      // +12D when enabled
         [Tooltip("Phase G+: true (260D)")]
         public bool enableIntersectionObservation = false;  // +6D when enabled
+        [Tooltip("Phase J+: true (268D)")]
+        public bool enableTrafficSignalObservation = false;  // +8D when enabled
 
         [Header("Reward Weights")]
         public float progressWeight = 1.0f;
@@ -85,6 +90,14 @@ namespace ADPlatform.Agents
         [Header("Center Line Rules (Phase F)")]
         public float wrongWayPenalty = -5f;             // Penalty for crossing center line (same as off-road)
         public float centerLineCrossingPenalty = -0.5f; // Per-step penalty when on wrong side
+
+        [Header("Traffic Signal Rules (Phase J)")]
+        public float redLightViolationPenalty = -5f;    // Crossing stop line on red
+        public float properRedStopReward = 0.3f;        // Per-step: stopped correctly at red
+        public float yellowCautionPenalty = -2f;         // Entering intersection on yellow from far
+        public float unnecessaryStopPenalty = -0.1f;     // Per-step: stopped at green for too long
+        public float unnecessaryStopTimeout = 2f;        // seconds at green before penalty
+        public bool terminateOnRedViolation = true;      // End episode on red light violation
 
         public enum TrainingVersion { v10g, v11, v12 }
 
@@ -133,6 +146,7 @@ namespace ADPlatform.Agents
         [Header("Scene")]
         public DrivingSceneManager sceneManager;
         public WaypointManager waypointManager;
+        public TrafficLightController trafficLight;
 
         // Internal state
         private Rigidbody rb;
@@ -201,6 +215,13 @@ namespace ADPlatform.Agents
         private bool rightLaneCrossing = false;  // Currently crossing right lane
         private float lastLaneViolationTime = -1f;
         private const float LANE_VIOLATION_COOLDOWN = 0.5f;
+
+        // Traffic signal state (Phase J)
+        private bool hasPassedStopLine = false;          // Track if agent already past stop line
+        private bool wasPastStopLineAtRedStart = false;  // Was agent already past stop line when Red began?
+        private TrafficLightController.LightState prevSignalState = TrafficLightController.LightState.None;
+        private float stoppedAtGreenTimer = 0f;          // Time spent unnecessarily stopped at green
+        private float dbgTrafficSignalReward = 0f;       // Debug: traffic signal reward component
 
         // Debug: reward component tracking
         private float dbgProgressReward = 0f;
@@ -323,6 +344,13 @@ namespace ADPlatform.Agents
             rightLaneCrossing = false;
             lastLaneViolationTime = -LANE_VIOLATION_COOLDOWN;
 
+            // Reset traffic signal state
+            hasPassedStopLine = false;
+            wasPastStopLineAtRedStart = false;
+            prevSignalState = TrafficLightController.LightState.None;
+            stoppedAtGreenTimer = 0f;
+            dbgTrafficSignalReward = 0f;
+
             // Reset debug stats
             dbgProgressReward = 0f;
             dbgSpeedReward = 0f;
@@ -400,6 +428,12 @@ namespace ADPlatform.Agents
             if (enableIntersectionObservation)
             {
                 AddIntersectionObservations(sensor);
+            }
+
+            // === TRAFFIC SIGNAL INFO (8D) === [Phase J+: enabled]
+            if (enableTrafficSignalObservation)
+            {
+                CollectTrafficSignalObservations(sensor);
             }
         }
 
@@ -487,6 +521,40 @@ namespace ADPlatform.Agents
 
             // Turn direction: 0=straight, 1=left, 2=right (encoded as normalized value)
             sensor.AddObservation(waypointManager.turnDirection / 2f);
+        }
+
+        /// <summary>
+        /// Add traffic signal observations (Phase J)
+        /// Total: 8D = state one-hot(4) + dist_to_stop(1) + time_remaining(1) + should_stop(1) + stopped_at_line(1)
+        /// </summary>
+        private void CollectTrafficSignalObservations(VectorSensor sensor)
+        {
+            if (trafficLight == null)
+            {
+                for (int i = 0; i < 8; i++)
+                    sensor.AddObservation(0f);
+                return;
+            }
+
+            var state = trafficLight.GetCurrentState();
+
+            // Traffic light state one-hot (4D): [Red, Yellow, Green, None]
+            sensor.AddObservation(state == TrafficLightController.LightState.Red ? 1f : 0f);
+            sensor.AddObservation(state == TrafficLightController.LightState.Yellow ? 1f : 0f);
+            sensor.AddObservation(state == TrafficLightController.LightState.Green ? 1f : 0f);
+            sensor.AddObservation(state == TrafficLightController.LightState.None ? 1f : 0f);
+
+            // Distance to stop line (1D) - normalized by 200m
+            sensor.AddObservation(trafficLight.GetDistanceToStopLineNormalized(transform.position));
+
+            // Time remaining in current signal phase (1D) - normalized [0, 1]
+            sensor.AddObservation(trafficLight.GetTimeRemainingNormalized());
+
+            // Should stop indicator (1D) - 1 if red/yellow AND behind stop line
+            sensor.AddObservation(trafficLight.ShouldStop(transform.position) ? 1f : 0f);
+
+            // Stopped at line indicator (1D) - 1 if stopped within tolerance of stop line
+            sensor.AddObservation(trafficLight.IsStoppedAtLine(transform.position, Mathf.Abs(currentSpeed)) ? 1f : 0f);
         }
 
         /// <summary>
@@ -850,6 +918,34 @@ namespace ADPlatform.Agents
                 return;
             }
 
+            // 5.7. Traffic signal compliance (Phase J)
+            if (enableTrafficSignalObservation && trafficLight != null)
+            {
+                float signalR = CalculateTrafficSignalReward();
+                reward += signalR;
+                dbgTrafficSignalReward += signalR;
+
+                // Log signal approach/interaction every 10 steps when within 50m of stop line
+                if (debugRewards && episodeSteps % 10 == 0)
+                {
+                    float distToStop = trafficLight.GetStopLineWorldZ() - transform.position.z;
+                    var sigState = trafficLight.GetCurrentState();
+                    if (sigState != TrafficLightController.LightState.None && distToStop < 50f && distToStop > -20f)
+                    {
+                        Debug.Log($"[Signal] Step={episodeSteps} State={sigState} Dist={distToStop:F1}m Spd={currentSpeed:F1} SigR={signalR:F3} ShouldStop={trafficLight.ShouldStop(transform.position)} AtLine={trafficLight.IsStoppedAtLine(transform.position, Mathf.Abs(currentSpeed))}");
+                    }
+                }
+
+                if (signalR <= redLightViolationPenalty + 0.1f && terminateOnRedViolation)
+                {
+                    dbgEpisodeEndReason = "RED_LIGHT_VIOLATION";
+                    LogEpisodeSummary();
+                    AddReward(reward);
+                    EndEpisode();
+                    return;
+                }
+            }
+
             // 6. Near-collision penalty (TTC < 2s)
             if (IsNearCollision())
             {
@@ -867,9 +963,17 @@ namespace ADPlatform.Agents
             // Debug logging
             if (debugRewards && episodeSteps % debugLogInterval == 0)
             {
+                // Signal info for debug
+                string sigInfo = "";
+                if (enableTrafficSignalObservation && trafficLight != null)
+                {
+                    var sigState = trafficLight.GetCurrentState();
+                    float stopDist = trafficLight.GetStopLineWorldZ() - transform.position.z;
+                    sigInfo = $" Sig={sigState} StopDist={stopDist:F1}m SigR={dbgTrafficSignalReward:F2}";
+                }
                 Debug.Log($"[DBG] Step={episodeSteps} Spd={currentSpeed:F1}/{currentSpeedLimit:F1} Phase={overtakingPhase} " +
                           $"R={reward:F2} (prog={progressR:F2} spd={speedR:F2} lane={laneR:F2} ovt={overtakeR:F2} lnViol={laneViolR:F2}) " +
-                          $"Stuck={stuckBehindTimer:F1}s L={leftLaneType} R={rightLaneType} Total={episodeReward:F1}");
+                          $"Stuck={stuckBehindTimer:F1}s L={leftLaneType} R={rightLaneType} Total={episodeReward:F1}{sigInfo}");
             }
 
             episodeReward += reward;
@@ -887,6 +991,7 @@ namespace ADPlatform.Agents
                 stats.Add("Reward/LaneKeeping", dbgLaneKeepReward);
                 stats.Add("Reward/Overtaking", dbgOvertakeReward);
                 stats.Add("Reward/LaneViolation", dbgLaneViolationPenalty);
+                stats.Add("Reward/TrafficSignal", dbgTrafficSignalReward);
                 stats.Add("Reward/Jerk", (Mathf.Abs(steering - prevSteering) + Mathf.Abs(acceleration - prevAcceleration)) * jerkPenalty);
                 stats.Add("Reward/Time", timePenalty * debugLogInterval);
 
@@ -912,7 +1017,7 @@ namespace ADPlatform.Agents
                       $"Overtakes={overtakeCount} Collisions={episodeCollisions} " +
                       $"Components: Progress={dbgProgressReward:F1} Speed={dbgSpeedReward:F1} " +
                       $"LaneKeep={dbgLaneKeepReward:F1} Overtake={dbgOvertakeReward:F1} StuckPen={dbgStuckPenalty:F1} " +
-                      $"LaneViol={dbgLaneViolationPenalty:F1}");
+                      $"LaneViol={dbgLaneViolationPenalty:F1} Signal={dbgTrafficSignalReward:F2}");
 
             // === v11: TensorBoard Episode Summary ===
             var stats = Academy.Instance.StatsRecorder;
@@ -1540,6 +1645,118 @@ namespace ADPlatform.Agents
         }
 
         /// <summary>
+        /// Traffic signal reward (Phase J).
+        /// Rewards stopping at red lights, penalizes violations.
+        /// </summary>
+        private float CalculateTrafficSignalReward()
+        {
+            if (trafficLight == null) return 0f;
+
+            var state = trafficLight.GetCurrentState();
+            if (state == TrafficLightController.LightState.None) return 0f;
+
+            float reward = 0f;
+            float speed = Mathf.Abs(currentSpeed);
+            float stopLineWorldZ = trafficLight.GetStopLineWorldZ();
+            bool behindStopLine = transform.position.z < stopLineWorldZ;
+            float distToStop = stopLineWorldZ - transform.position.z;
+
+            // Detect signal state transitions
+            if (state != prevSignalState)
+            {
+                if (state == TrafficLightController.LightState.Red)
+                {
+                    // Red phase just started: record whether agent was already past stop line
+                    wasPastStopLineAtRedStart = !behindStopLine;
+                    hasPassedStopLine = !behindStopLine;
+                }
+                prevSignalState = state;
+            }
+
+            // Track stop line crossing during current phase
+            if (!behindStopLine && !hasPassedStopLine)
+            {
+                hasPassedStopLine = true;
+            }
+
+            switch (state)
+            {
+                case TrafficLightController.LightState.Red:
+                    if (hasPassedStopLine && !wasPastStopLineAtRedStart
+                        && trafficLight.HasViolatedRedLight(transform.position))
+                    {
+                        // Crossed stop line DURING red phase — true violation
+                        reward = redLightViolationPenalty;
+                        Debug.Log($"[TrafficSignal] RED LIGHT VIOLATION at step {episodeSteps}");
+                    }
+                    else if (trafficLight.IsStoppedAtLine(transform.position, speed))
+                    {
+                        // Properly stopped at red — reward
+                        reward = properRedStopReward * Time.fixedDeltaTime;
+                    }
+                    else if (behindStopLine && distToStop < 50f && distToStop > 0f)
+                    {
+                        // Approaching red light within 50m — reward deceleration
+                        // Target: slow down proportionally to distance (closer = slower)
+                        float maxApproachSpeed = currentSpeedLimit;
+                        float desiredSpeed = Mathf.Lerp(0f, maxApproachSpeed, distToStop / 50f);
+                        if (speed <= desiredSpeed + 1f)
+                        {
+                            // Good: speed is at or below the appropriate approach speed
+                            reward = 0.1f * Time.fixedDeltaTime;
+                        }
+                        else
+                        {
+                            // Bad: approaching too fast for the distance
+                            float excessRatio = Mathf.Clamp01((speed - desiredSpeed) / maxApproachSpeed);
+                            reward = -0.2f * excessRatio * Time.fixedDeltaTime;
+                        }
+                    }
+                    // Reset green timer when red
+                    stoppedAtGreenTimer = 0f;
+                    break;
+
+                case TrafficLightController.LightState.Yellow:
+                    if (behindStopLine && distToStop > 15f && speed > 2f)
+                    {
+                        // Far from intersection + moving = should start slowing
+                        float excessRatio = Mathf.Clamp01((speed - 5f) / currentSpeedLimit);
+                        reward = -0.1f * excessRatio * Time.fixedDeltaTime;
+                    }
+                    else if (!behindStopLine && !hasPassedStopLine)
+                    {
+                        // Entering intersection on yellow from far away
+                        reward = yellowCautionPenalty;
+                        Debug.Log($"[TrafficSignal] Yellow caution at step {episodeSteps}");
+                    }
+                    stoppedAtGreenTimer = 0f;
+                    break;
+
+                case TrafficLightController.LightState.Green:
+                    // Track unnecessary stopping at green
+                    if (behindStopLine && speed < 0.5f)
+                    {
+                        stoppedAtGreenTimer += Time.fixedDeltaTime;
+                        if (stoppedAtGreenTimer > unnecessaryStopTimeout)
+                        {
+                            reward = unnecessaryStopPenalty * Time.fixedDeltaTime;
+                        }
+                    }
+                    else
+                    {
+                        stoppedAtGreenTimer = 0f;
+                    }
+
+                    // Reset stop line tracking on green (agent can proceed)
+                    hasPassedStopLine = !behindStopLine;
+                    wasPastStopLineAtRedStart = false;
+                    break;
+            }
+
+            return reward;
+        }
+
+        /// <summary>
         /// Detect lead vehicle ahead using SphereCast (catches laterally offset NPCs).
         /// Returns true if a vehicle is within leadVehicleDetectRange ahead.
         /// Also updates overtakeTarget for overtaking reward tracking.
@@ -1642,10 +1859,18 @@ namespace ADPlatform.Agents
                 return;
             }
 
-            // Fallback: keyboard control
+            // Fallback: keyboard control (zero actions if legacy Input unavailable)
             var continuousActions = actionsOut.ContinuousActions;
-            continuousActions[0] = Input.GetAxis("Horizontal");  // Steering
-            continuousActions[1] = Input.GetAxis("Vertical");    // Acceleration
+            try
+            {
+                continuousActions[0] = Input.GetAxis("Horizontal");  // Steering
+                continuousActions[1] = Input.GetAxis("Vertical");    // Acceleration
+            }
+            catch (System.InvalidOperationException)
+            {
+                continuousActions[0] = 0f;
+                continuousActions[1] = 0f;
+            }
         }
 
         // Public API for external monitoring

@@ -20,6 +20,12 @@ public class BuildHelper
 
     // ====== Phase-specific builds ======
 
+    [MenuItem("Build/Build Phase J (Traffic Signals)")]
+    public static void BuildPhaseJ()
+    {
+        BuildPhase("PhaseJ", "Assets/Scenes/PhaseJ_TrafficSignals.unity");
+    }
+
     [MenuItem("Build/Build Phase H (NPC Intersection)")]
     public static void BuildPhaseH()
     {

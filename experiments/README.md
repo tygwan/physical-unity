@@ -6,21 +6,32 @@ This directory contains all training experiments for the E2E Driving Agent proje
 
 ```
 experiments/
-├── early_experiments/      # Initial experiments (3DBot, curriculum v1-v9)
-├── v10g_lane_keeping/      # v10g: Lane keeping focus
-├── v11_sparse_overtake/    # v11: Sparse overtaking
-├── phase-A-overtaking/  # Phase A: Dense traffic overtaking
-├── phase-B_decision_learning/ # Phase B: Decision learning
-├── phase-C_multi_npc/   # Phase C: Multi-NPC interaction
-├── phase-E_curved_roads/ # Phase E: Curved road handling
-├── phase-F_multi_lane/  # Phase F: Multi-lane navigation
-├── phase-G_intersection/ # Phase G: Intersection navigation
-├── phase-H-npc-intersection/    # Phase H v1: NPC at intersections
-├── phase-H-npc-intersection-v2/ # Phase H v2: Multi-env, gradual variation
-├── phase-H-npc-intersection-v3/ # Phase H v3: Lowered thresholds, success
-├── phase-I-curved-npc/          # Phase I v1: Curved roads + NPC (crash)
-├── phase-I-curved-npc-v2/      # Phase I v2: Recovery training (+770 record)
-└── failed_experiments/     # Archived failed experiments
+├── early_experiments/             # Initial experiments (3DBot, curriculum v1-v9)
+├── failed_experiments/            # Archived failed experiments
+├── phase-0-foundation/            # Phase 0: Lane keeping + NPC coexistence (+1018)
+├── phase-A-overtaking/            # Phase A: Dense traffic overtaking (+2114)
+├── phase-B-decision/              # Phase B v1: Decision learning (FAILED -108)
+├── phase-B-decision-v2/           # Phase B v2: Decision learning recovery (+877)
+├── phase-C-multi-npc/             # Phase C: Multi-NPC interaction (+1372)
+├── phase-D-lane-observation/      # Phase D v1: Lane obs 254D (FAILED, collapse)
+├── phase-D-lane-observation-v2/   # Phase D v2: Redesigned curriculum (stuck at -690)
+├── phase-D-lane-observation-v3/   # Phase D v3: Speed zones + 254D (+904)
+├── phase-E-curved-roads/          # Phase E: Curved road handling (+924)
+├── phase-F-multi-lane/            # Phase F v1: Multi-lane (scene mismatch)
+├── phase-F-multi-lane-v2/         # Phase F v2: Collapse to -14
+├── phase-F-multi-lane-v3/         # Phase F v3: Shared thresholds, collapse to 0
+├── phase-F-multi-lane-v4/         # Phase F v4: Degraded to 106
+├── phase-F-multi-lane-v5/         # Phase F v5: Multi-lane highway (+643)
+├── phase-G-intersection/          # Phase G v1/v2: Intersection navigation (+628)
+├── phase-H-npc-intersection/      # Phase H v1: NPC at intersections (crashed)
+├── phase-H-npc-intersection-v2/   # Phase H v2: Gradual variation (9/11)
+├── phase-H-npc-intersection-v3/   # Phase H v3: Lowered thresholds (+701)
+├── phase-I-curved-npc/            # Phase I v1: Curved roads + NPC (triple crash)
+├── phase-I-curved-npc-v2/         # Phase I v2: Recovery training (+770 record)
+├── phase-J-traffic-signals/       # Phase J v1: Tensor mismatch (FAILED)
+├── phase-J-traffic-signals-v2/    # Phase J v2: From scratch 268D (9/13, +632)
+├── phase-J-traffic-signals-v3/    # Phase J v3: Signal ordering issue (12/13, +477)
+└── phase-J-traffic-signals-v4/    # Phase J v4: Signal-first green_ratio (3/4, +497)
 ```
 
 ## Parallel Training Environment
@@ -56,9 +67,9 @@ experiments/
 ## Training Flow
 
 ```
-Phase A (2M) ──> Phase B (2M) ──> Phase C (4M) ──> Phase E (6M) ──> Phase F (6M) ──> Phase G (6M) ──> Phase H (13.5M) ──> Phase I (10M)
-   │                │                 │                │               │               │               │                    │
-   └─ Dense traffic └─ Decisions     └─ Multi-NPC    └─ Curves      └─ Lanes       └─ Intersections └─ NPC+Intersections └─ Curves+NPCs (+770)
+Phase A (2M) ──> Phase B (2M) ──> Phase C (4M) ──> Phase E (6M) ──> Phase F (6M) ──> Phase G (6M) ──> Phase H (13.5M) ──> Phase I (10M) ──> Phase J (10M+)
+   │                │                 │                │               │               │               │                    │                    │
+   └─ Dense traffic └─ Decisions     └─ Multi-NPC    └─ Curves      └─ Lanes       └─ Intersections └─ NPC+Intersections └─ Curves+NPCs (+770) └─ Traffic signals (v4: +497, green=0.5)
 ```
 
 ## Scene-Phase Matching Rule (P-011)
@@ -75,6 +86,7 @@ Each training phase MUST use its designated Unity scene. Wrong scene = training 
 | G | PhaseG_Intersection | 14m (4 lane) | Intersections, turn logic |
 | H | PhaseH_NPCIntersection | 14m (4 lane) | NPC traffic at intersections |
 | I | PhaseH_NPCIntersection* | 14m (4 lane) | Curved roads + NPC traffic |
+| J | PhaseJ_TrafficSignals | 14m (4 lane) | Traffic signals + stop lines |
 
 **Pre-training checklist**:
 1. Open Unity Editor
