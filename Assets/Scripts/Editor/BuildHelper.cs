@@ -20,6 +20,12 @@ public class BuildHelper
 
     // ====== Phase-specific builds ======
 
+    [MenuItem("Build/Build Phase K (Dense Urban)")]
+    public static void BuildPhaseK()
+    {
+        BuildPhase("PhaseK", "Assets/Scenes/PhaseK_DenseUrban.unity");
+    }
+
     [MenuItem("Build/Build Phase J (Traffic Signals)")]
     public static void BuildPhaseJ()
     {

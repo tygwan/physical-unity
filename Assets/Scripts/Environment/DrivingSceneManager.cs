@@ -120,7 +120,7 @@ namespace ADPlatform.Environment
 
             // Check intersection requirement
             float intersectionType = GetCurriculumParam("intersection_type", 0f);
-            if (intersectionType > 0f && !sceneName.Contains("Intersection") && !sceneName.Contains("PhaseG") && !sceneName.Contains("PhaseH"))
+            if (intersectionType > 0f && !sceneName.Contains("Intersection") && !sceneName.Contains("PhaseG") && !sceneName.Contains("PhaseH") && !sceneName.Contains("PhaseK"))
             {
                 Debug.LogError($"[SCENE MISMATCH] intersection_type curriculum expects intersections but active scene is '{sceneName}'. " +
                     $"Expected: PhaseG_Intersection or PhaseH_NPCIntersection. (P-011)");
@@ -258,12 +258,15 @@ namespace ADPlatform.Environment
                 waypointManager.SetSpeedZoneCount(speedZoneCount);
             }
 
-            // Road curvature (Phase E: Curved Roads)
+            // Road curvature (Phase E / Phase K: Dense Urban)
+            // Always set curvature fields to clear stale values from previous episodes.
+            // Phase K supports curved approach + intersection simultaneously.
             float roadCurvature = GetCurriculumParam("road_curvature", 0f);
             float curveDirectionVariation = GetCurriculumParam("curve_direction_variation", 0f);
-            if (waypointManager != null && roadCurvature > 0.01f)
+            if (waypointManager != null)
             {
-                waypointManager.SetRoadCurvature(roadCurvature, curveDirectionVariation);
+                waypointManager.roadCurvature = Mathf.Clamp01(roadCurvature);
+                waypointManager.curveDirectionVariation = Mathf.Clamp01(curveDirectionVariation);
             }
 
             // Multi-lane support (Phase F)
@@ -275,10 +278,11 @@ namespace ADPlatform.Environment
                 waypointManager.SetCenterLineEnabled(centerLineEnabled);
             }
 
-            // Intersection support (Phase G)
+            // Intersection support (Phase G / Phase K)
+            // Always call SetIntersection to regenerate waypoints with current curvature + intersection.
             int intersectionType = Mathf.RoundToInt(GetCurriculumParam("intersection_type", 0f));
             int turnDirection = Mathf.RoundToInt(GetCurriculumParam("turn_direction", 0f));
-            if (waypointManager != null && intersectionType > 0)
+            if (waypointManager != null)
             {
                 waypointManager.SetIntersection(intersectionType, turnDirection);
             }

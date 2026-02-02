@@ -207,7 +207,11 @@ namespace ADPlatform.Agents
 
             // Collect new positions without creating GameObjects
             List<Vector3> positions = new List<Vector3>();
-            if (intersectionType > 0)
+            if (intersectionType > 0 && roadCurvature > 0.01f)
+            {
+                CollectCurvedIntersectionPositions(positions);
+            }
+            else if (intersectionType > 0)
             {
                 CollectIntersectionPositions(positions);
             }
@@ -477,6 +481,87 @@ namespace ADPlatform.Agents
             float baseAngle = maxCurveAngle * roadCurvature;
             float angle = Random.Range(baseAngle * 0.3f, baseAngle);
             return angle * direction;
+        }
+
+        /// <summary>
+        /// Collect curved approach road + intersection positions (Phase K: Dense Urban).
+        /// Generates curved waypoints until 30m before intersection, then smoothly
+        /// straightens heading and X position to align with the intersection entry.
+        /// Reuses existing intersection turn and exit logic.
+        /// </summary>
+        private void CollectCurvedIntersectionPositions(List<Vector3> positions)
+        {
+            float activeLaneX = GetLaneXPosition(currentLane);
+            float approachEnd = intersectionDistance - intersectionWidth / 2f;
+            float straightenStart = approachEnd - 30f; // Begin straightening 30m before intersection
+
+            // Phase 1: Curved approach (same algorithm as CollectCurvedPositions, stops before intersection)
+            Vector3 currentPos = new Vector3(activeLaneX, waypointY, -roadLength / 2f);
+            float currentHeading = 0f;
+            int curveDirection = 1;
+
+            float segmentLength = Random.Range(minCurveSegmentLength, maxCurveSegmentLength);
+            float segmentProgress = 0f;
+            float targetCurveAngle = GetRandomCurveAngle(curveDirection);
+
+            while (currentPos.z < straightenStart)
+            {
+                positions.Add(currentPos);
+
+                segmentProgress += waypointSpacing;
+                if (segmentProgress >= segmentLength)
+                {
+                    segmentProgress = 0f;
+                    segmentLength = Random.Range(minCurveSegmentLength, maxCurveSegmentLength);
+
+                    if (curveDirectionVariation > 0.5f)
+                        curveDirection = Random.value > 0.5f ? 1 : -1;
+                    else
+                        curveDirection = -curveDirection;
+                    targetCurveAngle = GetRandomCurveAngle(curveDirection);
+                }
+
+                float curveRate = (targetCurveAngle / segmentLength) * waypointSpacing;
+                currentHeading += curveRate;
+                currentHeading = Mathf.Clamp(currentHeading, -maxCurveAngle, maxCurveAngle);
+
+                float headingRad = currentHeading * Mathf.Deg2Rad;
+                Vector3 moveDir = new Vector3(Mathf.Sin(headingRad), 0f, Mathf.Cos(headingRad));
+                currentPos += moveDir * waypointSpacing;
+            }
+
+            // Phase 2: Straightening zone - smoothly return X to lane position and heading to 0
+            float straightenDistance = approachEnd - currentPos.z;
+            int straightenSteps = Mathf.Max(1, Mathf.FloorToInt(straightenDistance / (waypointSpacing * 0.5f)));
+            float startX = currentPos.x;
+            float startZ = currentPos.z;
+
+            for (int i = 1; i <= straightenSteps; i++)
+            {
+                float t = (float)i / straightenSteps;
+                // Smooth interpolation (ease-in-out) for natural transition
+                float smooth = t * t * (3f - 2f * t);
+                float x = Mathf.Lerp(startX, activeLaneX, smooth);
+                float z = Mathf.Lerp(startZ, approachEnd, t);
+                positions.Add(new Vector3(x, waypointY, z));
+            }
+
+            // Phase 3: Intersection maneuver (reuse existing turn logic)
+            switch (turnDirection)
+            {
+                case 0:
+                    CollectStraightThroughPositions(activeLaneX, positions);
+                    break;
+                case 1:
+                    CollectLeftTurnPositions(activeLaneX, positions);
+                    break;
+                case 2:
+                    CollectRightTurnPositions(activeLaneX, positions);
+                    break;
+            }
+
+            // Phase 4: Exit section (reuse existing logic)
+            CollectExitSectionPositions(positions);
         }
 
         /// <summary>

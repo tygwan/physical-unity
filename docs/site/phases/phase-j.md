@@ -13,15 +13,15 @@ Traffic signal recognition, stop line behavior, and green ratio adaptation
 
 | Item | Value |
 |------|-------|
-| **Run ID** | phase-J-v4 (latest) |
-| **Status** | Partial (3/4 green_ratio) - v5 or Phase K planned |
+| **Run ID** | phase-J-v5 (FINAL) |
+| **Status** | COMPLETE (5/5 green_ratio curriculum) |
 | **Date** | 2026-02-02 |
-| **Total Steps** | 10M (v2) + 5M (v3) + 5M (v4) |
+| **Total Steps** | 10M (v2) + 5M (v3) + 5M (v4) + 5M (v5) = 25M |
 | **Training Time** | ~28 min per 5M (Build + 3 parallel envs) |
-| **Final Reward** | **+497** (v4, green_ratio=0.5) |
-| **Peak Reward** | **+616** (v4, green_ratio=0.8, at ~680K) |
+| **Final Reward** | **+537** (v5, green_ratio=0.4) |
+| **Peak Reward** | **+605.7** (v5, at 1.44M) |
 | **Observation** | 268D (260D + 8D traffic signal) |
-| **Initialize From** | v2 9.5M checkpoint (v3/v4) |
+| **Initialize From** | v2 9.5M checkpoint (v3/v4/v5) |
 | **Training Mode** | Build + 3 parallel envs (no_graphics) |
 
 ---
@@ -306,6 +306,6 @@ As traffic signal green_ratio decreases, agents spend more time waiting at red l
 
 ---
 
-[Phase I](./phase-i) | [Home](../)
+[Phase I](./phase-i) | [Phase K](./phase-k) | [Home](../)
 
 *Last Updated: 2026-02-02 (Phase J v4 Partial 3/4 green_ratio)*

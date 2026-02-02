@@ -12,11 +12,10 @@ title: Training Phases
 ## Phase Overview
 
 ```
-Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase G --> Phase H --> Phase I --> Phase J
- (v10-v11)     (추월)      (판단)      (일반화)     (곡선)      (다차선)    (교차로)    (NPC교차로)  (곡선+NPC)   (신호등)
-   +40~51      +937        +994        +1086       +931        +988        +628        +701        +770       +497*
+Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase G --> Phase H --> Phase I --> Phase J --> Phase K
+ (v10-v11)     (추월)      (판단)      (일반화)     (곡선)      (다차선)    (교차로)    (NPC교차로)  (곡선+NPC)   (신호등)    (종합도시)
+   +40~51      +937        +994        +1086       +931        +988        +628        +701        +770       +605     (학습중)
 ```
-*Phase J v4 with signals ON + green_ratio=0.5, 3/4 green_ratio curriculum
 
 ---
 
@@ -66,13 +65,19 @@ Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase
 
 ---
 
-## In Progress
-
 ### [Phase J: Traffic Signals](./phase-j)
 - **Goal**: 신호등 인식 + 정지선 준수 + 268D observation
-- **Result (v4)**: +616 peak, +497 final (3/4 green_ratio, signal-first)
-- **Key**: P-022 fix validated (no signal crash), green_ratio 0.8->0.5 completed
-- **Issue**: Plateau at ~490-500 with green_ratio=0.5, threshold 540 unreachable (P-023)
+- **Result (v5)**: +605.7 peak, +537 final (5/5 green_ratio COMPLETE)
+- **Key**: 감속 보상 + 낮은 threshold로 전체 green_ratio 커리큘럼 완료
+
+---
+
+## In Progress
+
+### [Phase K: Dense Urban](./phase-k)
+- **Goal**: 곡선 도로 + 교차로 + 신호등 종합 통합 테스트
+- **Result**: 학습 진행 중
+- **Key**: WaypointManager 수정 -- 곡선접근로 + 교차로 동시 지원
 
 ---
 
@@ -80,8 +85,8 @@ Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase
 
 | Phase | Focus | Observation | Status |
 |-------|-------|-------------|--------|
-| J | 신호등 + 정지선 | +8D (268D) | 🔄 In Progress (v4 done 3/4, v5 or Phase K next) |
-| K | U턴 + 특수 기동 | +4D | 📋 Planned |
+| J | 신호등 + 정지선 | +8D (268D) | COMPLETE (v5, 5/5 green_ratio) |
+| K | 종합 도시 (곡선+교차로+신호) | 268D (same) | 🔄 In Progress |
 | L | 횡단보도 + 보행자 | +12D | 📋 Planned |
 | M | 장애물 + 긴급 상황 | +10D | 📋 Planned |
 | N | 복합 시나리오 통합 | ~320D | 📋 Planned |
@@ -137,8 +142,13 @@ See [Failed Experiments](./failed-experiments) for detailed analysis.
 - **Result**: +497 (3/4 green_ratio, missed 0.5->0.4)
 - **Lesson**: 신호 대기 시간 증가로 보상 범위 축소, threshold 또는 보상 구조 조정 필요 (P-023)
 
+### Phase J v5: BehaviorType Build Bug
+- **Problem**: InferenceOnly BehaviorType가 빌드에 포함되어 학습이 무음으로 실패
+- **Result**: 30분간 진행 없음 (에이전트가 내장 ONNX 모델로 행동, trainer에 brain 미등록)
+- **Lesson**: 빌드 전 BehaviorType=Default 확인 필수 (P-024)
+
 ---
 
-*Last Updated: 2026-02-02 (Phase J v4 3/4 green_ratio)*
+*Last Updated: 2026-02-02 (Phase J v5 Complete, Phase K training started)*
 
 [<- Back to Home](../)

@@ -43,6 +43,7 @@ public class PhaseSceneCreator
         CreatePhaseGScene();
         CreatePhaseHScene();
         CreatePhaseJScene();
+        CreatePhaseKScene();
 
         EditorUtility.DisplayDialog("Complete",
             "All Phase scenes created in Assets/Scenes/", "OK");
@@ -192,6 +193,29 @@ public class PhaseSceneCreator
             turnDirection = 0,    // Configurable at runtime
             npcSpeedRatio = 0.6f,
             roadLength = 300f,
+            observationSize = 268,
+            enableLaneObservation = true,
+            enableIntersectionObservation = true,
+            enableTrafficSignalObservation = true,
+        });
+    }
+
+    [MenuItem("Tools/Create Phase Scenes/Phase K - Dense Urban")]
+    public static void CreatePhaseKScene()
+    {
+        CreatePhaseScene(new PhaseConfig
+        {
+            name = "PhaseK_DenseUrban",
+            description = "Dense urban: curved roads + intersections + traffic signals + NPCs",
+            numNPCs = 5,
+            numLanes = 2,
+            centerLineEnabled = true,
+            roadCurvature = 0.3f,
+            curveDirectionVariation = 0.5f,
+            intersectionType = 2, // Cross intersection default
+            turnDirection = 0,    // Configurable at runtime
+            npcSpeedRatio = 0.85f,
+            roadLength = 500f,
             observationSize = 268,
             enableLaneObservation = true,
             enableIntersectionObservation = true,
