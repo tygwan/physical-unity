@@ -14,7 +14,7 @@ title: Training Phases
 ```
 Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase G --> Phase H --> Phase I --> Phase J --> Phase K
  (v10-v11)     (추월)      (판단)      (일반화)     (곡선)      (다차선)    (교차로)    (NPC교차로)  (곡선+NPC)   (신호등)    (종합도시)
-   +40~51      +937        +994        +1086       +931        +988        +628        +701        +770       +605     (학습중)
+   +40~51      +937        +994        +1086       +931        +988        +628        +701        +770       +605      +703
 ```
 
 ---
@@ -70,14 +70,10 @@ Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase
 - **Result (v5)**: +605.7 peak, +537 final (5/5 green_ratio COMPLETE)
 - **Key**: 감속 보상 + 낮은 threshold로 전체 green_ratio 커리큘럼 완료
 
----
-
-## In Progress
-
 ### [Phase K: Dense Urban](./phase-k)
 - **Goal**: 곡선 도로 + 교차로 + 신호등 종합 통합 테스트
-- **Result**: 학습 진행 중
-- **Key**: WaypointManager 수정 -- 곡선접근로 + 교차로 동시 지원
+- **Result**: +703 peak, +590 final (3/3 road_curvature COMPLETE)
+- **Key**: CollectCurvedIntersectionPositions -- J v5 대비 +98 peak 향상
 
 ---
 
@@ -86,7 +82,7 @@ Foundation --> Phase A --> Phase B --> Phase C --> Phase E --> Phase F --> Phase
 | Phase | Focus | Observation | Status |
 |-------|-------|-------------|--------|
 | J | 신호등 + 정지선 | +8D (268D) | COMPLETE (v5, 5/5 green_ratio) |
-| K | 종합 도시 (곡선+교차로+신호) | 268D (same) | 🔄 In Progress |
+| K | 종합 도시 (곡선+교차로+신호) | 268D (same) | COMPLETE (v1, 3/3 road_curvature, +703) |
 | L | 횡단보도 + 보행자 | +12D | 📋 Planned |
 | M | 장애물 + 긴급 상황 | +10D | 📋 Planned |
 | N | 복합 시나리오 통합 | ~320D | 📋 Planned |
@@ -149,6 +145,6 @@ See [Failed Experiments](./failed-experiments) for detailed analysis.
 
 ---
 
-*Last Updated: 2026-02-02 (Phase J v5 Complete, Phase K training started)*
+*Last Updated: 2026-02-02 (Phase K v1 Complete, 3/3 curriculum, Peak +703)*
 
 [<- Back to Home](../)

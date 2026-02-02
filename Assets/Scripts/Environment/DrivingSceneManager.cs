@@ -112,7 +112,7 @@ namespace ADPlatform.Environment
 
             // Check multi-lane requirement
             float maxLanes = GetCurriculumParam("num_lanes", 1f);
-            if (maxLanes > 1f && !sceneName.Contains("MultiLane") && !sceneName.Contains("PhaseF"))
+            if (maxLanes > 1f && !sceneName.Contains("MultiLane") && !sceneName.Contains("PhaseF") && !sceneName.Contains("PhaseK"))
             {
                 Debug.LogError($"[SCENE MISMATCH] num_lanes curriculum expects multi-lane but active scene is '{sceneName}'. " +
                     $"Expected: PhaseF_MultiLane. Training will likely fail at lane transition. (P-011)");

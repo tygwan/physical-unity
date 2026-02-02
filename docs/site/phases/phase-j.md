@@ -308,4 +308,4 @@ As traffic signal green_ratio decreases, agents spend more time waiting at red l
 
 [Phase I](./phase-i) | [Phase K](./phase-k) | [Home](../)
 
-*Last Updated: 2026-02-02 (Phase J v4 Partial 3/4 green_ratio)*
+*Last Updated: 2026-02-02 (Phase J v5 FINAL, 5/5 green_ratio Complete)*

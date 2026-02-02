@@ -13,15 +13,16 @@ Curved roads + intersections + traffic signals -- the first comprehensive drivin
 
 | Item | Value |
 |------|-------|
-| **Run ID** | phase-K |
-| **Status** | IN PROGRESS |
+| **Run ID** | phase-K-v1 |
+| **Status** | COMPLETE (3/3 curriculum) |
 | **Date** | 2026-02-02 |
-| **Total Steps** | 5M (target) |
-| **Final Reward** | *training* |
-| **Peak Reward** | *training* |
+| **Total Steps** | 5M |
+| **Training Time** | 25.3 min (Build + 3 envs) |
+| **Final Reward** | **+590** |
+| **Peak Reward** | **+703.2** (at 4.67M) |
 | **Observation** | 268D (same as Phase J) |
 | **Initialize From** | Phase J v5 5M checkpoint |
-| **Training Mode** | Editor mode (visual) / Build + 3 envs |
+| **Training Mode** | Build + 3 envs (no_graphics) |
 
 ---
 
@@ -54,7 +55,7 @@ Added `CollectCurvedIntersectionPositions()`:
 ### DrivingSceneManager.cs
 - Always set `roadCurvature` field (fixes stale value from previous episodes)
 - Always call `SetIntersection()` to regenerate waypoints with both params
-- Updated scene validation to accept PhaseK scene name
+- Updated scene validation to accept PhaseK scene name (multi-lane + intersection)
 
 ---
 
@@ -80,11 +81,11 @@ Added `CollectCurvedIntersectionPositions()`:
 
 Single parameter curriculum (P-022 compliant): `road_curvature`
 
-| Lesson | road_curvature | Threshold | Expected Reward |
-|--------|---------------|-----------|-----------------|
-| NoCurve | 0.0 | 490 | ~530-540 (same as J v5) |
-| LightCurve | 0.3 | 430 | ~430-480 |
-| MediumCurve | 0.5 | (final) | ~400-450 |
+| Lesson | road_curvature | Threshold | Actual Transition |
+|--------|---------------|-----------|-------------------|
+| NoCurve | 0.0 | 490 | ~780K (reward 599) |
+| LightCurve | 0.3 | 430 | ~1.62M (reward 682) |
+| MediumCurve | 0.5 | (final) | -- |
 
 ### Locked Parameters (J v5 final values)
 
@@ -108,17 +109,94 @@ Single parameter curriculum (P-022 compliant): `road_curvature`
 | Metric | v1 |
 |--------|-----|
 | Init from | Phase J v5 (268D) |
-| Steps | 5M (target) |
+| Steps | 5M |
 | Curriculum | road_curvature 0/0.3/0.5 |
-| Peak Reward | *training* |
-| Final Reward | *training* |
+| Peak Reward | **+703.2** |
+| Final Reward | +590 |
 | Code changes | Curved+Intersection waypoints |
 
 ---
 
 ## Training Progress
 
-*Will be updated as training completes*
+### Reward Curve
+
+```
+Reward
++703  |                                                          *703 (4.67M)
+      |                                          ___/ \__/ \__/ \_/ \__
++680  |                                       __/                       \__
+      |                    *682 (1.62M)     __/
++650  |                   / \___          _/
+      |         *654    _/      \_      _/
++620  |        / \   __/         \_  __/
+      |       /   \_/              \/
++600  | *599/                        576 (2.0M, curve shock)
+      |  /
++550  | /
+      |/
++530  |* (30K, warm start recovery)
+      +--------------------------------------------------------------------
+       0    0.5   1.0   1.5   2.0   2.5   3.0   3.5   4.0   4.5   5.0 M
+                   ^              ^
+                  0.3            0.5
+```
+
+### Curriculum Transition Timeline
+
+| Step | Parameter | Transition | Threshold | Status |
+|------|-----------|-----------|-----------|--------|
+| ~780K | road_curvature | 0.0 -> 0.3 | 490 | DONE (reward 599) |
+| ~1.62M | road_curvature | 0.3 -> 0.5 | 430 | DONE (reward 682) |
+
+### Key Milestones
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 30K | 526 | Warm start recovery (J v5 baseline) |
+| 780K | 599 | Curriculum -> curvature 0.3 |
+| 810K | 654 | Quick adaptation to light curves |
+| 1.62M | 682 | Curriculum -> curvature 0.5 |
+| 1.66M | 696 | Quick adaptation to medium curves |
+| 2.0M | 576 | Curve shock (temporary dip) |
+| 4.67M | **703** | Peak reward |
+| 5.0M | 590 | Final (high variance, std=425) |
+
+---
+
+## Phase Comparison
+
+| | Phase J v5 | Phase K v1 | Delta |
+|---|-----------|-----------|-------|
+| Peak Reward | +605 | **+703** | **+98** |
+| Final Reward | +537 | +590 | +53 |
+| Conditions | Signals + Intersection | Signals + Intersection + **Curves** | +Curves |
+| Curriculum | 5/5 green_ratio | 3/3 road_curvature | Both complete |
+
+Despite adding curved roads, Phase K achieved **+98 higher peak** than Phase J v5. The warm start from J v5 enabled rapid skill combination.
+
+---
+
+## Key Findings
+
+### 1. Skill Integration Works
+Combining curved roads + intersections + signals + NPCs simultaneously yielded +703 peak, surpassing Phase J (+605) despite increased complexity.
+
+### 2. Fast Curriculum Completion
+Both transitions completed within 1.62M steps (total 5M). The agent adapted to curvature 0.3 within ~30K steps of transition.
+
+### 3. High Variance at Full Complexity
+At curvature=0.5, reward std reached 425 (final step), indicating some episodes crash while others succeed. The curved approach + intersection + signal combination creates challenging edge cases.
+
+### 4. Editor Inference Issue (P-025)
+ONNX model trained in build mode (time_scale=20) produces STUCK_LOW_SPEED in editor inference (time_scale=1). All inference episodes ended with zero forward progress. Evaluation pipeline needed for proper model validation.
+
+---
+
+## Lessons Learned
+
+### P-025: Build-Trained Models May Not Infer in Editor
+Models trained in headless build mode (time_scale=20, no_graphics) may not produce meaningful behavior when loaded as ONNX in editor mode (time_scale=1). The time scale difference affects action-observation dynamics. Proper evaluation requires running the model in an environment matching training conditions.
 
 ---
 
@@ -145,7 +223,11 @@ Single parameter curriculum (P-022 compliant): `road_curvature`
 - Scene: `Assets/Scenes/PhaseK_DenseUrban.unity`
 - Build: `Builds/PhaseK/PhaseK.exe` (118 MB)
 - Warm Start: `results/phase-J-v5/E2EDrivingAgent/E2EDrivingAgent-5000148.pt`
+- ONNX Model: `results/phase-K-v1/E2EDrivingAgent.onnx`
+- Best Checkpoint: `results/phase-K-v1/E2EDrivingAgent/E2EDrivingAgent-5000083.pt`
 
 ---
 
 [Phase J](./phase-j) | [Home](../)
+
+*Last Updated: 2026-02-02 (Phase K v1 Complete, 3/3 curriculum)*
