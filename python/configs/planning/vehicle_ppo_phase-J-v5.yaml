@@ -1,0 +1,212 @@
+# E2EDrivingAgent PPO Phase J v5: Traffic Signals (deceleration reward + lower thresholds)
+# Strategy: WARM START from v2 9.5M, signals ON from start, green_ratio curriculum
+#
+# v4 post-mortem:
+#   - Signal-first approach validated (P-022 fix: no signal crash)
+#   - 3/4 green_ratio completed (0.8 -> 0.7 -> 0.6 -> 0.5)
+#   - Missed 0.5 -> 0.4: threshold 540 unreachable (plateau ~490-500)
+#   - Inference test: agent never decelerates at red lights (no gradient)
+#   - Two bugs found and fixed:
+#     1) False violation: hasPassedStopLine carried from Green to Red phase
+#     2) No deceleration reward: zero signal for approaching red at speed
+#
+# v5 changes (code + config):
+#   CODE: Added deceleration reward for Red approach (50m range)
+#         Added Yellow approach penalty (speed-based)
+#         Fixed false violation with wasPastStopLineAtRedStart tracking
+#   CONFIG: Lower thresholds accounting for reward compression (P-023)
+#           v4 plateau by level: 0.8=570, 0.7=530, 0.6=510, 0.5=490
+#           v5 thresholds set ~40-60 below plateau for reliable transitions
+#
+# Hypothesis: Deceleration reward gives agent gradient to learn braking at
+# red lights. This should improve signal compliance and potentially raise
+# reward ceiling (fewer violations, more properRedStopReward).
+#
+# IMPORTANT: Requires NEW BUILD (Builds/PhaseJ/PhaseJ.exe) with v5 code changes.
+#
+# P-018 compliance: Single-param curriculum, no simultaneous transitions
+# P-019 compliance: No Unicode special characters
+# P-022: Single-param curriculum avoids ordering issues
+# P-023: Lowered thresholds accounting for reward compression
+#
+# Hardware: RTX 4090 (24GB VRAM) + 128GB RAM
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 4096
+      buffer_size: 40960
+      learning_rate: 1.5e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 5
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    init_path: results/phase-J-v2/E2EDrivingAgent/E2EDrivingAgent-9499888.pt
+    max_steps: 5000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 10
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # ALL LOCKED (final values, no curriculum)
+  # Y-Junction + signals ON from step 0 (same as v4)
+  # =======================================================
+
+  goal_distance:
+    curriculum:
+      - name: FullGoal
+        value: 230.0
+
+  num_lanes:
+    curriculum:
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: CenterLineEnforced
+        value: 1.0
+
+  num_active_npcs:
+    curriculum:
+      - name: ThreeNPCs
+        value: 3.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: NormalNPCs
+        value: 0.85
+
+  npc_speed_variation:
+    curriculum:
+      - name: FullVariation
+        value: 0.15
+
+  turn_direction:
+    curriculum:
+      - name: AllDirections
+        value: 2.0
+
+  intersection_type:
+    curriculum:
+      - name: YJunction
+        value: 3.0
+
+  traffic_signal_enabled:
+    curriculum:
+      - name: SignalActive
+        value: 1.0
+
+  road_curvature:
+    curriculum:
+      - name: NoCurve
+        value: 0.0
+
+  curve_direction_variation:
+    curriculum:
+      - name: NoVariation
+        value: 0.0
+
+  speed_zone_count:
+    curriculum:
+      - name: OneZone
+        value: 1.0
+
+  # =======================================================
+  # ONLY CURRICULUM: signal_green_ratio
+  # Same structure as v4, with LOWER thresholds (P-023 fix)
+  #
+  # v4 plateau by green_ratio level:
+  #   0.8 -> plateau ~570, peak 616   (threshold was 450 -> OK)
+  #   0.7 -> plateau ~530             (threshold was 480 -> OK)
+  #   0.6 -> plateau ~510             (threshold was 510 -> barely)
+  #   0.5 -> plateau ~490-500         (threshold was 540 -> MISSED)
+  #
+  # v5 thresholds: set ~40-60 below observed plateau
+  #   0.8 -> 450 (same, 120 below plateau)
+  #   0.7 -> 470 (was 480, 60 below plateau)
+  #   0.6 -> 475 (was 510, 35 below plateau)
+  #   0.5 -> 475 (was 540, 15-25 below plateau, achievable)
+  #
+  # Note: With deceleration reward, plateaus may shift slightly.
+  # Conservative thresholds ensure progression even if reward drops.
+  # =======================================================
+
+  signal_green_ratio:
+    curriculum:
+      - name: VeryEasyGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 450.0
+        value: 0.8
+      - name: EasyGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 470.0
+        value: 0.7
+      - name: MediumGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 475.0
+        value: 0.6
+      - name: BalancedGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 475.0
+        value: 0.5
+      - name: HardGreen
+        value: 0.4
+
+# =======================================================
+# BUILD-BASED MULTI-ENV TRAINING
+# IMPORTANT: Must rebuild PhaseJ.exe with v5 code changes
+# =======================================================
+
+env_settings:
+  env_path: Builds/PhaseJ/PhaseJ.exe
+  num_envs: 3
+  base_port: 5010
+  timeout_wait: 600
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: true
+
+torch_settings:
+  device: cuda
