@@ -31,7 +31,8 @@ experiments/
 ├── phase-J-traffic-signals/       # Phase J v1: Tensor mismatch (FAILED)
 ├── phase-J-traffic-signals-v2/    # Phase J v2: From scratch 268D (9/13, +632)
 ├── phase-J-traffic-signals-v3/    # Phase J v3: Signal ordering issue (12/13, +477)
-└── phase-J-traffic-signals-v4/    # Phase J v4: Signal-first green_ratio (3/4, +497)
+├── phase-J-traffic-signals-v4/    # Phase J v4: Signal-first green_ratio (3/4, +497)
+└── phase-J-traffic-signals-v5/    # Phase J v5: Decel reward + lower thresholds (5/5, +537)
 ```
 
 ## Parallel Training Environment
@@ -67,9 +68,9 @@ experiments/
 ## Training Flow
 
 ```
-Phase A (2M) ──> Phase B (2M) ──> Phase C (4M) ──> Phase E (6M) ──> Phase F (6M) ──> Phase G (6M) ──> Phase H (13.5M) ──> Phase I (10M) ──> Phase J (10M+)
+Phase A (2M) ──> Phase B (2M) ──> Phase C (4M) ──> Phase E (6M) ──> Phase F (6M) ──> Phase G (6M) ──> Phase H (13.5M) ──> Phase I (10M) ──> Phase J (25M)
    │                │                 │                │               │               │               │                    │                    │
-   └─ Dense traffic └─ Decisions     └─ Multi-NPC    └─ Curves      └─ Lanes       └─ Intersections └─ NPC+Intersections └─ Curves+NPCs (+770) └─ Traffic signals (v4: +497, green=0.5)
+   └─ Dense traffic └─ Decisions     └─ Multi-NPC    └─ Curves      └─ Lanes       └─ Intersections └─ NPC+Intersections └─ Curves+NPCs (+770) └─ Traffic signals (v5: +537, green=0.4, COMPLETE)
 ```
 
 ## Scene-Phase Matching Rule (P-011)

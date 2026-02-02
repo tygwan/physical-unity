@@ -1,6 +1,6 @@
 # Training Log - E2EDrivingAgent RL Training History
 
-> Phase J v4 completed on 2026-02-02 (PARTIAL 3/4 green_ratio)
+> Phase J v5 completed on 2026-02-02 (COMPLETE 5/5 green_ratio)
 
 ## Overview
 
@@ -24,6 +24,7 @@
 | **Phase J v2** | Traffic Signals (from scratch 268D) | 10M | **660.6** | ⚠️ PARTIAL (9/13) |
 | **Phase J v3** | Traffic Signals (warm start, signal ordering) | 5M | **658** | ⚠️ PARTIAL (12/13) |
 | **Phase J v4** | Traffic Signals (signal-first, green_ratio) | 5M | **616** | ⚠️ PARTIAL (3/4) |
+| **Phase J v5** | Traffic Signals (decel reward, lower thresholds) | 5M | **605.7** | ✅ COMPLETED (5/5) |
 
 ---
 
@@ -1214,4 +1215,84 @@ Fix for P-022 (signal ordering conflict). Lock signals ON and Y-Junction from st
 ---
 
 *Phase J v4 Training Complete - 2026-02-02*
-*Next: Phase J v5 (lower threshold) or Phase K (U-turn)*
+
+---
+
+## Phase J v5: Traffic Signals (Deceleration Reward + Lower Thresholds)
+
+### Status: ✅ COMPLETED (2026-02-02) - 5/5 Green Ratio Curriculum
+
+**Run ID**: phase-J-v5
+**Steps**: 5,000,000
+**Peak Reward**: +605.7 @ 1.44M | **Final**: +537.7
+**Training Mode**: Build (PhaseJ.exe) + 3 parallel envs, no_graphics
+**Init Path**: v2 9.5M checkpoint (268D, same obs space)
+
+### Strategy: Lower Thresholds + Deceleration Reward
+
+Two key improvements over v4:
+
+1. **Code fixes (E2EDrivingAgent.cs)**:
+   - False violation bug: `hasPassedStopLine` carried from Green to Red phase. Fixed with `wasPastStopLineAtRedStart` tracking.
+   - Deceleration reward: distance-proportional target speed within 50m of red light stop line.
+   - Yellow approach penalty: speed-based penalty when >15m from stop line during Yellow.
+
+2. **Lower thresholds (P-023 fix)**:
+   - v4 thresholds: 450 / 480 / 510 / 540
+   - v5 thresholds: 450 / 470 / 475 / 475
+   - Set ~40-60 below observed v4 plateau at each level
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 10K | 510 | Warm start stabilized |
+| 150K | 564 | green_ratio=0.8 stable |
+| 400K | 568 | green_ratio -> 0.7 (threshold 450) |
+| 1.0M | 580 | green_ratio -> 0.6 (threshold 470) |
+| 1.44M | **605.7** | **PEAK** |
+| 2.0M | 545 | green_ratio -> 0.5 (threshold 475) |
+| 3.0M | 545 | green_ratio -> 0.4 (threshold 475) |
+| 4.0M | 541 | Stable at final difficulty |
+| 5.0M | 537 | Training complete |
+
+### Curriculum Status (5/5 COMPLETE)
+
+| Parameter | Transition | Threshold | v4 Status | v5 Status |
+|-----------|-----------|-----------|-----------|-----------|
+| signal_green_ratio | 0.8 -> 0.7 | 450 | DONE | DONE |
+| signal_green_ratio | 0.7 -> 0.6 | 470 | DONE (480) | DONE |
+| signal_green_ratio | 0.6 -> 0.5 | 475 | DONE (510) | DONE |
+| signal_green_ratio | 0.5 -> 0.4 | 475 | **MISSED (540)** | **DONE** |
+
+### Key Results
+
+1. **Full curriculum completion**: v5 achieved what v4 could not -- green_ratio=0.4 unlocked
+2. **Deceleration reward effective**: Agent learned braking gradient at red lights (Signal Reward: ~-0.05)
+3. **False violation fix verified**: No spurious red light violations from Green-to-Red transitions
+4. **Stable at hardest difficulty**: Reward plateau ~530-550 at green_ratio=0.4 (vs v4 plateau ~490 at 0.5)
+5. **Zero collision rate**: Perfect safety maintained throughout training
+
+### Bug Found: BehaviorType Build Issue (P-024)
+
+**BehaviorType=InferenceOnly left in scene from inference test caused build to produce non-trainable agents.**
+
+Symptoms: 3 environments connected successfully, Unity ran episodes, but zero training stats, zero model files, zero TensorBoard events. `Connected new brain` message was missing.
+
+Root cause: After inference test (BehaviorType=InferenceOnly), scene was saved and rebuilt. The build agents used ONNX model internally instead of communicating with Python trainer.
+
+Fix: Always verify BehaviorType=Default before building for training.
+
+### Lesson P-024
+**BehaviorType=InferenceOnly in build silently prevents training.** The environment connects, agents receive actions from their built-in ONNX model, but no brain registration occurs. The Python trainer sees zero behaviors to train. Always check BehaviorType before building.
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-J-v5.yaml`
+- **Results**: `results/phase-J-v5/E2EDrivingAgent/`
+- **Final Model**: `results/phase-J-v5/E2EDrivingAgent/E2EDrivingAgent-5000148.pt`
+- **ONNX**: `results/phase-J-v5/E2EDrivingAgent/E2EDrivingAgent-5000148.onnx`
+
+---
+
+*Phase J v5 Training Complete - 2026-02-02*
+*Phase J DONE -- Next: Phase K*

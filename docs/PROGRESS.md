@@ -10,10 +10,10 @@
 
 | Metric | Value |
 |--------|-------|
-| **Latest Completion** | Phase J v4 Traffic Signals (3/4 green_ratio, signal-first) - 2026-02-02 |
-| **Next Training** | Phase J v5 (lower threshold) or Phase K (U-turn) |
-| **Overall Progress** | Phase 0~J v4 (10 phases, 24 runs) |
-| **Latest Model** | E2EDrivingAgent-5000080.onnx (Phase I v2, +770 reward, PROJECT RECORD) |
+| **Latest Completion** | Phase J v5 Traffic Signals - FULL CURRICULUM (5/5 green_ratio) - 2026-02-02 |
+| **Next Training** | Phase K (U-turn / advanced maneuvers) |
+| **Overall Progress** | Phase 0~J v5 (10 phases, 25 runs) |
+| **Latest Model** | E2EDrivingAgent-5000148.onnx (Phase J v5, +605 peak, full signal compliance) |
 | **Last Updated** | 2026-02-02 |
 
 ---
@@ -42,6 +42,7 @@
 | Phase J v2 | 10.0M | 660.6 | 632 | PARTIAL (9/13) | B- | 2026-02-02 |
 | Phase J v3 | 5.0M | 658 | 477 | PARTIAL (12/13) | C+ | 2026-02-02 |
 | Phase J v4 | 5.0M | 616 | 497 | PARTIAL (3/4) | B- | 2026-02-02 |
+| **Phase J v5** | **5.0M** | **605.7** | **537** | **COMPLETE (5/5)** | **B+** | **2026-02-02** |
 
 ### Failed/Superseded Runs
 
@@ -57,7 +58,7 @@
 | Phase I v1 | 5.0M | 724 | Triple-param crash (700/702/705) | I v2 |
 | Phase J v1 | ~40K | N/A | Tensor mismatch (260D vs 268D) | J v2 |
 | Phase J v3 | 5.0M | 658 | Signal ordering: green_ratio changed before signals ON | J v4 |
-| Phase J v4 | 5.0M | 616 | Plateau at green_ratio=0.5, threshold 540 unreachable | J v5 or Phase K |
+| Phase J v4 | 5.0M | 616 | Plateau at green_ratio=0.5, threshold 540 unreachable | J v5 |
 
 ---
 
@@ -243,15 +244,26 @@
 - Issue: green_ratio threshold < signal threshold, causing ordering conflict (P-022)
 - Signal activation caused 177-point crash (647 -> 470), never recovered
 
-### v1 -> v2 -> v3 -> v4 Evolution
+### v1 -> v2 -> v3 -> v4 -> v5 Evolution
 
-| Metric | v1 | v2 | v3 | v4 |
-|--------|----|----|----|----|
-| Init from | Phase I v2 (260D) | None (scratch) | v2 9.5M | v2 9.5M |
-| Steps | ~40K | 10M | 5M | 5M |
-| Curriculum | 0/13 | 9/13 | 12/13 | 3/4 green_ratio |
-| Final Reward | N/A | +632 | +477 | +497 |
-| Issue | Tensor mismatch | Peak plateau | Signal ordering (P-022) | Plateau at 0.5 (P-023) |
+| Metric | v1 | v2 | v3 | v4 | v5 |
+|--------|----|----|----|----|-----|
+| Init from | Phase I v2 (260D) | None (scratch) | v2 9.5M | v2 9.5M | v2 9.5M |
+| Steps | ~40K | 10M | 5M | 5M | 5M |
+| Curriculum | 0/13 | 9/13 | 12/13 | 3/4 green_ratio | **5/5 green_ratio** |
+| Peak Reward | N/A | +660 | +658 | +616 | **+605.7** |
+| Final Reward | N/A | +632 | +477 | +497 | +537 |
+| Issue | Tensor mismatch | Peak plateau | Signal ordering (P-022) | Plateau at 0.5 (P-023) | **COMPLETE** |
+
+### Phase J v5: COMPLETE (2026-02-02) | Grade: B+
+
+- Peak Reward: +605.7 @ 1.44M | Final: +537
+- Steps: 5.0M (warm start from v2 9.5M, same 268D)
+- Curriculum: **5/5 green_ratio COMPLETE** (0.8->0.7->0.6->0.5->0.4)
+- Code fixes: false violation bug (wasPastStopLineAtRedStart), deceleration reward
+- P-023 fix: lowered thresholds (450/470/475/475 vs v4's 450/480/510/540)
+- P-024: BehaviorType=InferenceOnly left in build caused silent training failure
+- Goal rate: 56%, Collision: 0%, Stuck: 4%
 
 ### Phase J v4: PARTIAL (2026-02-02) | Grade: B-
 
@@ -263,11 +275,11 @@
 - P-023: Reward compression at green_ratio=0.5, plateau ~490-500 vs threshold 540
 
 ### Artifacts
-- **Best Checkpoint**: `results/phase-J-v2/E2EDrivingAgent/E2EDrivingAgent-9499888.pt` (v2 9.5M, ~652)
-- **Config (v2)**: `python/configs/planning/vehicle_ppo_phase-J-v2.yaml`
-- **Config (v3)**: `python/configs/planning/vehicle_ppo_phase-J-v3.yaml`
+- **Best Checkpoint (v5)**: `results/phase-J-v5/E2EDrivingAgent/E2EDrivingAgent-5000148.pt`
+- **Best Checkpoint (v2)**: `results/phase-J-v2/E2EDrivingAgent/E2EDrivingAgent-9499888.pt` (v2 9.5M, ~652)
+- **Config (v5)**: `python/configs/planning/vehicle_ppo_phase-J-v5.yaml`
 - **Config (v4)**: `python/configs/planning/vehicle_ppo_phase-J-v4.yaml`
-- **Results (v4)**: `results/phase-J-v4/E2EDrivingAgent/`
+- **Results (v5)**: `results/phase-J-v5/E2EDrivingAgent/`
 
 ---
 
@@ -278,9 +290,9 @@
 - Perfect safety maintained with 3 NPCs in intersections
 
 ### Curriculum Progression
-- Phase 0: Basic driving -> Phase J v2: Traffic signal compliance
-- 10 training phases completed (23 total runs including failures)
-- Agent handles: overtaking, multi-NPC, speed zones, curves, multi-lane, T/Cross/Y-junction intersections, NPC speed variation, traffic signals (268D)
+- Phase 0: Basic driving -> Phase J v5: Full traffic signal compliance
+- 10 training phases completed (25 total runs including failures)
+- Agent handles: overtaking, multi-NPC, speed zones, curves, multi-lane, T/Cross/Y-junction intersections, NPC speed variation, traffic signals with full green_ratio range (268D)
 
 ### Lessons Learned
 
@@ -301,8 +313,9 @@
 | P-021 | From-scratch training needs lower thresholds than warm start | Phase J v2 |
 | P-022 | Feature activation must precede param tuning; use single-param curriculum | Phase J v3 |
 | P-023 | Reward compression under signal constraints; lower green = lower reward ceiling | Phase J v4 |
+| P-024 | BehaviorType=InferenceOnly in build silently prevents training (no brain registration) | Phase J v5 |
 
 ---
 
 *Document updated: 2026-02-02*
-*Phase J v4 Complete (3/4 green_ratio) -- v5 or Phase K next*
+*Phase J v5 Complete (5/5 green_ratio) -- Phase K next*
