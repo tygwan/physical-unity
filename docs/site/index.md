@@ -110,7 +110,7 @@ Phase K: █████████████████░░░░░░�
 8. **커리큘럼 순서 충돌**: 독립 파라미터 간 순서 보장 불가 -- green_ratio가 signal ON 전에 변경 (Phase J v3)
 9. **신호 보상 범위 축소**: green_ratio 낮아질수록 reward 범위 좁아져 threshold 도달 불가 (Phase J v4)
 10. **BehaviorType 빌드 설정**: InferenceOnly로 빌드하면 학습이 무음 실패 -- brain 등록 안 됨 (Phase J v5)
-11. **빌드 학습 모델 에디터 추론**: Build mode (time_scale=20)에서 학습한 ONNX가 editor (time_scale=1)에서 STUCK_LOW_SPEED (Phase K v1)
+11. **BehaviorType 오설정**: BehaviorType=1(HeuristicOnly)을 InferenceOnly로 착각 -> ONNX 미사용, 키보드 입력 [0,0] (Phase K v1, 해결됨: 값=2가 InferenceOnly)
 
 [전체 교훈 보기](./lessons-learned)
 

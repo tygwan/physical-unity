@@ -188,15 +188,18 @@ Both transitions completed within 1.62M steps (total 5M). The agent adapted to c
 ### 3. High Variance at Full Complexity
 At curvature=0.5, reward std reached 425 (final step), indicating some episodes crash while others succeed. The curved approach + intersection + signal combination creates challenging edge cases.
 
-### 4. Editor Inference Issue (P-025)
-ONNX model trained in build mode (time_scale=20) produces STUCK_LOW_SPEED in editor inference (time_scale=1). All inference episodes ended with zero forward progress. Evaluation pipeline needed for proper model validation.
+### 4. Editor Inference Works (P-025 Resolved)
+ONNX model works correctly in editor inference mode. The initial failure was due to BehaviorType=1 (HeuristicOnly) being set instead of BehaviorType=2 (InferenceOnly). With correct setting, the agent drives at 14-17 m/s, navigates curves, and achieves reward 776.8 in editor — surpassing the training peak of 703.
+
+### 5. Signal Compliance Partial
+Agent sometimes runs red lights (RED_LIGHT_VIOLATION), sometimes stops correctly (Signal=0.00 in best episode). Signal compliance is learned but not 100% reliable.
 
 ---
 
 ## Lessons Learned
 
-### P-025: Build-Trained Models May Not Infer in Editor
-Models trained in headless build mode (time_scale=20, no_graphics) may not produce meaningful behavior when loaded as ONNX in editor mode (time_scale=1). The time scale difference affects action-observation dynamics. Proper evaluation requires running the model in an environment matching training conditions.
+### P-025: BehaviorType Enum Values (RESOLVED)
+ML-Agents BehaviorType enum: 0=Default, 1=HeuristicOnly, 2=InferenceOnly. Setting BehaviorType=1 uses keyboard/expert input (Heuristic fallback returns [0,0] actions), NOT the ONNX model. Always use BehaviorType=2 for ONNX inference.
 
 ---
 

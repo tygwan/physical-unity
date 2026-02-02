@@ -391,6 +391,7 @@ namespace ADPlatform.Agents
                 sensor.AddObservation(currentEgo[i]);
             }
 
+
             // Store in history
             System.Array.Copy(currentEgo, egoHistory[historyIndex], 8);
             historyIndex = (historyIndex + 1) % historySteps;
@@ -788,6 +789,8 @@ namespace ADPlatform.Agents
             // Actions: [steering, acceleration] in [-1, 1] range from ML-Agents
             float steeringInput = Mathf.Clamp(actions.ContinuousActions[0], -1f, 1f);
             float accelInput = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
+
+
 
             // Scale to physical units (symmetric for better RL exploration)
             float steering = steeringInput * 0.5f;  // [-0.5, 0.5] rad
