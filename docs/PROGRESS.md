@@ -10,11 +10,11 @@
 
 | Metric | Value |
 |--------|-------|
-| **Latest Completion** | Phase L v5 Crosswalks + Pedestrians (3/3 peds, reward 504) - 2026-02-03 |
-| **Current Phase** | Phase M: Multi-Agent Test Field (12 agents, inference) |
-| **Overall Progress** | Phase 0~L (12 phases, 32 runs) + Phase M test field |
+| **Latest Completion** | Phase M v2: 4x4 City Block Grid Test Field - 2026-02-04 |
+| **Current Phase** | Phase M: Multi-Agent Test Field (v2 Grid, 12 agents, inference) |
+| **Overall Progress** | Phase 0~L (12 phases, 32 runs) + Phase M test field v2 |
 | **Latest Model** | E2EDrivingAgent-5000046.onnx (Phase L v5, peak 504.3) |
-| **Last Updated** | 2026-02-03 |
+| **Last Updated** | 2026-02-04 |
 
 ---
 
@@ -374,27 +374,78 @@
 
 ## Phase M: Multi-Agent Test Field
 
-**ACTIVE (2026-02-03)** | Inference Only (No Training)
+**ACTIVE (2026-02-04)** | Inference Only (No Training)
 
-12 trained RL agents driving simultaneously on a shared 2000m road, interacting with each other, 25 NPCs, 8 pedestrians, and traffic signals.
+### v2: 4x4 City Block Grid (2026-02-04)
 
-### Configuration
+12 trained RL agents driving on a **4x4 city block grid** (5x5 intersections, 500m x 500m), each following unique cyclic routes through the grid. 25 NPCs and 8 pedestrians distributed across the network.
+
 | Item | Value |
 |------|-------|
+| **Grid** | 5x5 intersections, 100m block size, ~500m x 500m |
+| **Roads** | 3-lane (10.5m width), horizontal + vertical |
+| **Intersections** | 25 total, 12 signalized (NS/EW paired lights) |
 | **Agents** | 12 E2EDrivingAgent (InferenceOnly, Phase L v5 ONNX) |
-| **NPCs** | 25 (all active, scattered along road) |
-| **Pedestrians** | 8 (at crosswalk Z=75) |
-| **Road** | 2000m, 3 lanes, curved, with intersection + crosswalk |
-| **Traffic Signals** | Active at intersection |
+| **Agent Routes** | 12 unique cyclic routes (outer/inner loops, diagonals, H/cross shapes) |
+| **NPCs** | 25 (distributed across H/V roads) |
+| **Pedestrians** | 8 (at signalized intersection crosswalks) |
 | **Model** | E2EDrivingAgent_PhaseL.onnx (L v5, peak 504) |
 | **Camera** | Tab to cycle agents, F for free-fly |
 
-### New Code
-1. **TestFieldManager.cs** (NEW): Central orchestrator for multi-agent inference
-2. **FreeFlyCamera.cs** (NEW): WASD + mouse free-fly camera (F toggle)
-3. **FollowCamera.cs** (MOD): Multi-target cycling (Tab, 1-9 keys)
-4. **PhaseSceneCreator.cs** (MOD): CreatePhaseM_TestField menu item
-5. **BuildHelper.cs** (MOD): Build Phase M menu item
+#### v2 New/Modified Code
+1. **GridRouteDefinition.cs** (NEW): 12 cyclic route definitions through grid
+2. **GridWaypointProxy.cs** (NEW): WaypointManager subclass for grid navigation
+3. **GridRoadNetwork.cs** (NEW): Grid road geometry + route waypoint generator
+4. **GridTrafficLightManager.cs** (NEW): NS/EW paired traffic light coordination
+5. **TrafficLightController.cs** (MOD): Local-space stop line detection (direction-independent)
+6. **TestFieldManager.cs** (MOD): Grid mode with dynamic route/traffic light management
+7. **E2EDrivingAgent.cs** (MOD): Cyclic waypoint index wrapping
+8. **PhaseSceneCreator.cs** (MOD): Grid-based scene creation
+
+#### v2 Key Design
+- Agents follow **pre-computed cyclic routes** as waypoint arrays (same mechanism as training)
+- **TrafficLightController** refactored to local-space for direction-independent operation
+- Each intersection has paired NS/EW lights with green wave coordination
+- **GridWaypointProxy** inherits WaypointManager for agent compatibility
+- Dynamic traffic light assignment based on agent position/heading
+
+#### v2 Bug Fixes (P-028)
+1. **GOAL_BYPASS loop**: World-Z comparison (`agentZ > goalZ + 20f`) triggered instantly on grid routes where goal Z < agent Z. Fix: skip GOAL_BYPASS and MAX_DISTANCE checks in inference mode (`isInferenceMode` flag).
+2. **Stale waypoint index**: `currentWaypointIndex` in E2EDrivingAgent was always 0 (never updated). Agents observed waypoints from route start regardless of position. Fix: added `CurrentWaypointIndex` property, TestFieldManager syncs per-frame.
+3. **Off-grid escape**: Agents driving past grid boundaries without detection. Fix: boundary check in TestFieldManager Update loop, respawn at ±230m.
+
+#### v2 Test Results (2026-02-04)
+- Compilation: 0 errors
+- Play mode: 12 agents initialized, goal reached/respawn working
+- Goal reached: Agent_1 (15.7s), Agent_4 (8.5s), Agent_7 (15.8s), Agent_8 (16.0s)
+- Out-of-bounds: detected and respawned (all at Z=+230, north boundary)
+- Timeouts: ~8 agents at 120s
+
+#### v2 Fix: Ego State Northification (P-029)
+- **Problem**: `GetEgoState()` used world-space velocity/heading; model trained northbound only
+- **Fix**: Rotate ego vectors by `-heading` in inference mode ("northification")
+  - `cos/sin` rotation applied to position offset, velocity, acceleration
+  - Heading fixed to `cos=1, sin=0` (always "facing north" from model's perspective)
+  - Training path unchanged (`else` branch = original world-space)
+- **Result**: Agents no longer all drift north; out-of-bounds distributed across all 4 boundaries
+
+#### v2+P029 Test Results (2026-02-04)
+| Metric | Before (P-029) | After (P-029) |
+|--------|----------------|---------------|
+| Out-of-bounds direction | All north (Z=+230) | N/S/E/W distributed |
+| Out-of-bounds count (~90s) | ~8 (all north) | 8 (2N, 3S, 2W, 1E) |
+| Episode endings (~90s) | ~4 goal + 8 timeout | 30 natural (14 RED_LIGHT, 13 COLLISION, 1 STUCK) |
+| Agent progress | Only northbound agents | Positive progress across routes (up to +131) |
+| Goal reached | 4/12 (northbound only) | Agents actively navigating grid |
+
+**Remaining issues** (not P-029 related):
+- Frequent RED_LIGHT_VIOLATION (model trained with different signal timing)
+- Agent-agent collisions (12 agents + 25 NPCs vs training's 3 NPCs)
+- LaneKeep penalty high (grid road geometry differs from training roads)
+
+### v1: Linear 2000m Road (2026-02-03)
+
+Original single straight road with one intersection.
 
 ### Agent Interaction
 - All 12 agents + 25 NPCs share "Vehicle" tag
@@ -418,7 +469,7 @@
 - Phase 0: Basic driving -> Phase L v5: Crosswalk + 3 pedestrians -> Phase M: Multi-agent test field
 - 12 training phases completed (32 total runs including failures)
 - Agent handles: overtaking, multi-NPC, speed zones, curves, multi-lane, T/Cross/Y-junction intersections, NPC speed variation, traffic signals, crosswalks, pedestrian yielding (280D)
-- Phase M: 12 agents + 25 NPCs + 8 pedestrians on shared 2000m road (inference)
+- Phase M v2: 12 agents on 4x4 city block grid (25 intersections, 12 signalized), cyclic routes (inference)
 
 ### Lessons Learned
 
@@ -443,8 +494,10 @@
 | P-025 | BehaviorType enum: value 1 = HeuristicOnly, not InferenceOnly (use value 2) | Phase L v1 |
 | P-026 | Unbounded per-step positive reward enables reward hacking; cap yield rewards per episode | Phase L v1 |
 | P-027 | MaxStep=3000 for training, MaxStep=0 for inference (unlimited steps) | Phase M |
+| P-028 | Inference mode needs separate termination: skip GOAL_BYPASS (world-Z), MAX_DISTANCE; sync waypoint index externally | Phase M v2 |
+| P-029 | World-space ego observations confuse model on non-north headings; northify (rotate by -heading) in inference mode | Phase M v2 |
 
 ---
 
-*Document updated: 2026-02-03*
-*Phase L v5 Complete (peak 504, 3/3 pedestrians) -- Phase M Multi-Agent Test Field active*
+*Document updated: 2026-02-04*
+*Phase M v2 Grid Test Field active -- P-028/P-029 fixes applied, northification working (drift eliminated)*

@@ -170,6 +170,16 @@ namespace ADPlatform.Agents
         private float previousDistanceToGoal;
         private int currentWaypointIndex;
 
+        /// <summary>
+        /// P-028: Allow external update of waypoint index for grid mode.
+        /// TestFieldManager tracks per-agent waypoint progress and synchronizes here.
+        /// </summary>
+        public int CurrentWaypointIndex
+        {
+            get => currentWaypointIndex;
+            set => currentWaypointIndex = value;
+        }
+
         // History buffer (ring buffer)
         private float[][] egoHistory;
         private int historyIndex;
@@ -253,6 +263,9 @@ namespace ADPlatform.Agents
         private float speedRewardAccumulated = 0f;
         private float maxSpeedRewardPerEpisode = 200f;
 
+        // P-028: Inference mode flag (skip training-only termination checks)
+        private bool isInferenceMode = false;
+
         // Debug: reward component tracking
         private float dbgProgressReward = 0f;
         private float dbgSpeedReward = 0f;
@@ -311,7 +324,8 @@ namespace ADPlatform.Agents
             // P-027: Limit per-episode steps to prevent infinite farming
             // But allow unlimited steps for inference-only mode (Phase M test field)
             var bp = GetComponent<Unity.MLAgents.Policies.BehaviorParameters>();
-            if (bp != null && bp.BehaviorType == Unity.MLAgents.Policies.BehaviorType.InferenceOnly)
+            isInferenceMode = bp != null && bp.BehaviorType == Unity.MLAgents.Policies.BehaviorType.InferenceOnly;
+            if (isInferenceMode)
                 MaxStep = 0;  // Unlimited for inference
             else
                 MaxStep = 3000;
@@ -785,25 +799,47 @@ namespace ADPlatform.Agents
         {
             float[] ego = new float[8];
 
-            // Position (local, normalized)
-            Vector3 localPos = transform.position - startPosition;
-            ego[0] = localPos.x / 100f;
-            ego[1] = localPos.z / 100f;
-
-            // Velocity (normalized)
+            Vector3 posOffset = transform.position - startPosition;
             Vector3 velocity = rb.linearVelocity;
-            ego[2] = velocity.x / maxSpeed;
-            ego[3] = velocity.z / maxSpeed;
-
-            // Heading (cos, sin)
             float heading = transform.eulerAngles.y * Mathf.Deg2Rad;
-            ego[4] = Mathf.Cos(heading);
-            ego[5] = Mathf.Sin(heading);
-
-            // Acceleration (estimated from velocity change)
             Vector3 accel = (velocity - prevVelocity) / Mathf.Max(Time.fixedDeltaTime, 0.001f);
-            ego[6] = Mathf.Clamp(accel.x / maxAcceleration, -1f, 1f);
-            ego[7] = Mathf.Clamp(accel.z / maxAcceleration, -1f, 1f);
+
+            if (isInferenceMode)
+            {
+                // P-029: Northify - rotate world-space vectors by -heading
+                // Model trained exclusively northbound (heading=0), so we rotate
+                // all vectors into heading-aligned frame for correct inference
+                float cosH = Mathf.Cos(heading);
+                float sinH = Mathf.Sin(heading);
+
+                // Position offset (rotated to heading-aligned frame)
+                ego[0] = (posOffset.x * cosH - posOffset.z * sinH) / 100f;
+                ego[1] = (posOffset.x * sinH + posOffset.z * cosH) / 100f;
+
+                // Velocity (rotated: forward -> ego[3], lateral -> ego[2])
+                ego[2] = (velocity.x * cosH - velocity.z * sinH) / maxSpeed;
+                ego[3] = (velocity.x * sinH + velocity.z * cosH) / maxSpeed;
+
+                // Heading: always "north" in northified frame
+                ego[4] = 1f;
+                ego[5] = 0f;
+
+                // Acceleration (rotated)
+                ego[6] = Mathf.Clamp((accel.x * cosH - accel.z * sinH) / maxAcceleration, -1f, 1f);
+                ego[7] = Mathf.Clamp((accel.x * sinH + accel.z * cosH) / maxAcceleration, -1f, 1f);
+            }
+            else
+            {
+                // Training: unchanged world-space (original behavior)
+                ego[0] = posOffset.x / 100f;
+                ego[1] = posOffset.z / 100f;
+                ego[2] = velocity.x / maxSpeed;
+                ego[3] = velocity.z / maxSpeed;
+                ego[4] = Mathf.Cos(heading);
+                ego[5] = Mathf.Sin(heading);
+                ego[6] = Mathf.Clamp(accel.x / maxAcceleration, -1f, 1f);
+                ego[7] = Mathf.Clamp(accel.z / maxAcceleration, -1f, 1f);
+            }
 
             prevVelocity = velocity;
             return ego;
@@ -876,7 +912,7 @@ namespace ADPlatform.Agents
                 // Use predefined waypoints
                 for (int i = 0; i < numWaypoints; i++)
                 {
-                    int wpIdx = Mathf.Min(currentWaypointIndex + i, routeWaypoints.Length - 1);
+                    int wpIdx = (currentWaypointIndex + i) % routeWaypoints.Length;
                     if (routeWaypoints[wpIdx] == null)
                     {
                         sensor.AddObservation(0f);
@@ -2062,28 +2098,34 @@ namespace ADPlatform.Agents
 
         private void CheckTermination()
         {
-            // Max distance exceeded
-            float distFromStart = Vector3.Distance(transform.position, startPosition);
-            if (distFromStart > maxEpisodeDistance)
+            // P-028: Skip training-only termination checks in inference mode
+            // In inference mode (Phase M grid), TestFieldManager handles goal/timeout
+            if (!isInferenceMode)
             {
-                dbgEpisodeEndReason = "MAX_DISTANCE";
-                LogEpisodeSummary();
-                EndEpisode();
-                return;
-            }
-
-            // P-027: Goal bypass detection - agent drove past goal without reaching it
-            if (goalTarget != null)
-            {
-                float agentZ = transform.position.z;
-                float goalZ = goalTarget.position.z;
-                if (agentZ > goalZ + 20f)
+                // Max distance exceeded
+                float distFromStart = Vector3.Distance(transform.position, startPosition);
+                if (distFromStart > maxEpisodeDistance)
                 {
-                    dbgEpisodeEndReason = "GOAL_BYPASS";
+                    dbgEpisodeEndReason = "MAX_DISTANCE";
                     LogEpisodeSummary();
-                    AddReward(-2f);
                     EndEpisode();
                     return;
+                }
+
+                // P-027: Goal bypass detection - agent drove past goal without reaching it
+                // Uses world Z axis - only valid for straight roads (training)
+                if (goalTarget != null)
+                {
+                    float agentZ = transform.position.z;
+                    float goalZ = goalTarget.position.z;
+                    if (agentZ > goalZ + 20f)
+                    {
+                        dbgEpisodeEndReason = "GOAL_BYPASS";
+                        LogEpisodeSummary();
+                        AddReward(-2f);
+                        EndEpisode();
+                        return;
+                    }
                 }
             }
 
