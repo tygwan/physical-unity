@@ -34,6 +34,10 @@ namespace ADPlatform.Environment
         [Header("Traffic Signal (Phase J)")]
         public TrafficLightController trafficLight;
 
+        [Header("Pedestrian (Phase L)")]
+        public PedestrianController[] pedestrians;
+        public float crosswalkZ = 75f;  // Before intersection (93m)
+
         [Header("NPC Spawning")]
         public float npcMinSpawnDistance = 20f;    // Min distance ahead of ego (meters)
         public float npcMaxSpawnDistance = 150f;   // Max distance ahead of ego (meters)
@@ -65,6 +69,7 @@ namespace ADPlatform.Environment
         public float inferenceNpcSpeedVariation = 0.15f;
         public bool inferenceTrafficSignalEnabled = true;
         public float inferenceSignalGreenRatio = 0.5f;
+        public int inferenceNumPedestrians = 2;
 
         [Header("Stats")]
         public int episodeCount = 0;
@@ -94,6 +99,7 @@ namespace ADPlatform.Environment
         {
             FindIntersectionVisuals();
             FindTrafficLight();
+            FindPedestrians();
             ValidateActiveScene();
             ConnectWaypoints();
 
@@ -220,6 +226,7 @@ namespace ADPlatform.Environment
                     case "npc_speed_variation": return inferenceNpcSpeedVariation;
                     case "traffic_signal_enabled": return inferenceTrafficSignalEnabled ? 1f : 0f;
                     case "signal_green_ratio": return inferenceSignalGreenRatio;
+                    case "num_pedestrians": return inferenceNumPedestrians;
                     default: return defaultValue;
                 }
             }
@@ -231,6 +238,10 @@ namespace ADPlatform.Environment
         /// </summary>
         private void ApplyCurriculumParameters()
         {
+            // TestFieldManager handles road config in Phase M test field
+            if (inferenceMode && FindAnyObjectByType<ADPlatform.TestField.TestFieldManager>() != null)
+                return;
+
             // Control number of active NPCs
             int numNPCs = Mathf.RoundToInt(GetCurriculumParam("num_active_npcs", 0f));
             activeNPCCount = Mathf.Clamp(numNPCs, 0, npcVehicles.Length);
@@ -312,6 +323,10 @@ namespace ADPlatform.Environment
 
             // Spawn NPCs at random positions with varied speeds
             SpawnNPCsRandomly(zoneSpeedLimit, speedVariation, npcSpeedRatio);
+
+            // Pedestrian support (Phase L)
+            int numPedestrians = Mathf.RoundToInt(GetCurriculumParam("num_pedestrians", 0f));
+            SpawnPedestrians(numPedestrians);
         }
 
         /// <summary>
@@ -574,6 +589,55 @@ namespace ADPlatform.Environment
             if (rightArm != null) rightArm.SetActive(showRightArm);
             if (leftAngledArm != null) leftAngledArm.SetActive(showLeftAngled);
             if (rightAngledArm != null) rightAngledArm.SetActive(showRightAngled);
+        }
+
+        /// <summary>
+        /// Spawn pedestrians at crosswalk based on curriculum count.
+        /// Crosswalk is always present; num_pedestrians=0 means no pedestrians to yield to.
+        /// </summary>
+        private void SpawnPedestrians(int count)
+        {
+            if (pedestrians == null || pedestrians.Length == 0) return;
+
+            int activePedestrians = Mathf.Clamp(count, 0, pedestrians.Length);
+
+            float roadWidth = waypointManager != null
+                ? waypointManager.numLanes * 3.5f + 1f
+                : 8f;
+
+            for (int i = 0; i < pedestrians.Length; i++)
+            {
+                if (pedestrians[i] == null) continue;
+
+                if (i < activePedestrians)
+                {
+                    float speed = Random.Range(1.0f, 1.5f);
+                    pedestrians[i].SpawnAtCrosswalk(crosswalkZ, roadWidth, speed);
+                }
+                else
+                {
+                    pedestrians[i].Deactivate();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Auto-discover PedestrianControllers in the Training Area hierarchy.
+        /// </summary>
+        private void FindPedestrians()
+        {
+            if (pedestrians != null && pedestrians.Length > 0) return;
+
+            Transform areaRoot = transform.parent;
+            if (areaRoot == null) return;
+
+            pedestrians = areaRoot.GetComponentsInChildren<PedestrianController>(true);
+
+            // Wire to agent
+            if (pedestrians.Length > 0 && egoAgent != null && egoAgent.pedestrians == null)
+            {
+                egoAgent.pedestrians = pedestrians;
+            }
         }
 
         /// <summary>

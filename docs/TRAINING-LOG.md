@@ -1,6 +1,6 @@
 # Training Log - E2EDrivingAgent RL Training History
 
-> Phase J v5 completed on 2026-02-02 (COMPLETE 5/5 green_ratio)
+> Phase L v5 completed on 2026-02-03 (peak 504.3, 3 pedestrians mastered, deployed to Phase M)
 
 ## Overview
 
@@ -25,6 +25,12 @@
 | **Phase J v3** | Traffic Signals (warm start, signal ordering) | 5M | **658** | ⚠️ PARTIAL (12/13) |
 | **Phase J v4** | Traffic Signals (signal-first, green_ratio) | 5M | **616** | ⚠️ PARTIAL (3/4) |
 | **Phase J v5** | Traffic Signals (decel reward, lower thresholds) | 5M | **605.7** | ✅ COMPLETED (5/5) |
+| **Phase K v1** | Dense Urban (curves + intersections + signals) | 5M | **703** | ✅ COMPLETED (3/3) |
+| **Phase L v1** | Crosswalks + Pedestrians (yield exploit) | 15M | **+787** | ⚠️ EXPLOIT (reward hacking) |
+| **Phase L v2** | Crosswalks + Pedestrians (yield cap fix) | 1.8M | **6759** | ⚠️ EXPLOIT (still hacking) |
+| **Phase L v3** | Crosswalks + Pedestrians (from scratch) | 5M | **28675** | ⚠️ EXPLOIT (still hacking) |
+| **Phase L v4** | Crosswalks + Pedestrians (reward redesign) | 5M | **505** | ✅ COMPLETED (3/3 peds) |
+| **Phase L v5** | Crosswalks + Pedestrians (warm start v4) | 5M | **504** | ✅ COMPLETED (3/3 peds) |
 
 ---
 
@@ -1296,3 +1302,250 @@ Fix: Always verify BehaviorType=Default before building for training.
 
 *Phase J v5 Training Complete - 2026-02-02*
 *Phase J DONE -- Next: Phase K*
+
+---
+
+## Phase K v1: Dense Urban Integration
+
+### Status: ✅ COMPLETED (2026-02-02) - Grade: A-
+
+| Item | Value |
+|------|-------|
+| **Run ID** | phase-K-v1 |
+| **Steps** | 5,000,000 |
+| **Training Time** | 25.3 min |
+| **Peak Reward** | **+703.2** (at 4.67M) |
+| **Final Reward** | +590 |
+| **Observation** | 268D (same as Phase J) |
+| **Init From** | Phase J v5 5M checkpoint |
+
+### What's New
+- Combined ALL driving skills for first time: curved roads + intersections + signals + NPCs
+- New `CollectCurvedIntersectionPositions()` in WaypointManager
+- Curriculum: 3/3 lessons (road_curvature 0 -> 0.3 -> 0.5)
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 100K | +622 | Immediate high reward (warm start) |
+| 1.2M | +684 | road_curvature 0 -> 0.3 |
+| 2.3M | +642 | road_curvature 0.3 -> 0.5 |
+| 4.67M | **+703** | Peak reward |
+| 5.0M | +590 | Finished |
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-K.yaml`
+- **Results**: `results/phase-K-v1/E2EDrivingAgent/`
+- **Final Model**: `results/phase-K-v1/E2EDrivingAgent/E2EDrivingAgent-4999930.onnx`
+
+---
+
+## Phase L v1: Crosswalks + Pedestrians (Yield Exploit)
+
+### Status: ⚠️ REWARD EXPLOIT (2026-02-03) - Grade: C (exploit invalidates late training)
+
+| Item | Value |
+|------|-------|
+| **Run ID** | phase-L-v1 |
+| **Steps** | 15,000,000 (fresh start) |
+| **Training Time** | 69 min |
+| **Peak Reward (stable)** | **+787** (at 12.09M, pre-exploit) |
+| **Peak Reward (exploit)** | +20,148 (at 14.66M, farming) |
+| **Final Reward** | +5,799 (unstable, exploit) |
+| **Observation** | 280D (+12D: 268D Phase K + pedestrian + crosswalk) |
+| **Init From** | None (P-020: obs dim change 268D -> 280D) |
+
+### Code Changes (Phase L)
+
+1. **PedestrianController.cs** (NEW): Kinematic capsule crossing road at crosswalk
+   - Walk speed 1.0-1.5 m/s, random direction, deactivates after crossing
+2. **E2EDrivingAgent.cs**: +12D observations (2 nearest pedestrians + crosswalk info)
+   - `CollectPedestrianObservations()`: rel_x, rel_z, vel_x, vel_z, dist per pedestrian
+   - `CalculatePedestrianReward()`: collision penalty, yield reward, speed penalty
+3. **DrivingSceneManager.cs**: num_pedestrians curriculum param, SpawnPedestrians()
+4. **PhaseSceneCreator.cs**: PhaseL_Crosswalks scene with pedestrian objects + crosswalk visual
+
+### Observation Space: 280D
+
+| Feature Group | Dimensions | New in Phase L |
+|--------------|-----------|----------------|
+| Ego + route + surroundings | 268D | No |
+| Nearest pedestrian 1 (rel_x, rel_z, vel_x, vel_z, dist) | 5D | Yes |
+| Nearest pedestrian 2 (same) | 5D | Yes |
+| Crosswalk info (has_ahead, distance) | 2D | Yes |
+
+### Training Progression
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 0-1M | 0 -> 552 | Basic driving from scratch |
+| 930K | 552 | goal_distance Short -> Medium1 (first curriculum transition) |
+| 1.72M | **1.7** | Massive curriculum shock -- 6 params transitioned simultaneously |
+| 2.34M | 743 | Full recovery |
+| 2.81M | 680 | goal Full, NPC=2, T-junction, signals ON |
+| 6M-10M | 680-720 | Stable plateau, all driving skills active |
+| 10M-12.5M | 710-730 | Curves added, reward slightly improves |
+| 12.5M | 772 | **Pedestrian curriculum begins (num_pedestrians 0 -> 1)** |
+| 12.93M | 812 | Reward climbing with pedestrian yield bonus |
+| 13.15M | 967 | Sharp reward increase |
+| 13.31M | 1,094 | Entering exploit territory |
+| 13.37M | 1,325 | Agent learning to farm yield reward |
+| 13.5M | 3,110 | **Full exploit**: agent stops at crosswalk indefinitely |
+| 13.96M | 11,159 | "No episode completed" messages appearing |
+| 14.66M | **20,148** | Peak exploit reward |
+| 15.0M | 5,799 | Training ends (unstable) |
+
+### Reward Exploit Analysis (P-026)
+
+**Root cause**: `crosswalkYieldReward` (0.2 per second) was given every physics step while agent was stopped near crosswalk with active pedestrian. No cap or time limit existed.
+
+**Exploit behavior**:
+- Agent learned to stop at crosswalk zone (speed < 1 m/s, dist < 15m)
+- Pedestrian crosses road, but agent stays stopped collecting yield reward
+- Episodes become very long (no termination trigger for stationary behavior)
+- Reward accumulates to 5,000-20,000+ per episode
+- "No episode completed since last summary" messages indicate episodes lasting entire summary intervals
+
+**Evidence**:
+- Reward jumps from ~730 to 1,000+ at 13.3M (pedestrian curriculum active)
+- Std of Reward explodes: 130 -> 300 -> 900 -> 11,725
+- Interspersed low rewards (500-600) = episodes where agent crashes quickly
+- High rewards (5,000-20,000) = episodes where agent farms the yield spot
+
+**Best usable checkpoint**: `E2EDrivingAgent-12499788.pt` (12.5M steps, +730 reward, stable)
+
+### Lesson P-026: Yield Reward Cap
+
+**Unbounded per-step positive reward enables reward hacking.** Any reward given continuously while the agent is stationary must have:
+1. A cumulative cap per episode (maxYieldRewardPerEpisode)
+2. A time limit per encounter (maxYieldDuration)
+3. A penalty for overstaying (stationary penalty after yield timeout)
+
+This is a variant of the general "reward shaping exploit" problem where agents find degenerate strategies that maximize reward without completing the intended task.
+
+### v2 Fix Applied
+
+```csharp
+// v2 changes in CalculatePedestrianReward():
+// 1. yieldRewardAccumulated capped at maxYieldRewardPerEpisode (2.0)
+// 2. yieldDuration tracked; after maxYieldDuration (8s), -0.1/s penalty
+// 3. hasYieldedThisEncounter resets when agent leaves crosswalk zone
+```
+
+### Artifacts
+- **Config (v1)**: `python/configs/planning/vehicle_ppo_phase-L.yaml`
+- **Best Checkpoint**: `results/phase-L-v1/E2EDrivingAgent/E2EDrivingAgent-12499788.pt` (12.5M, stable)
+- **Final Model (exploited)**: `results/phase-L-v1/E2EDrivingAgent/E2EDrivingAgent-15000215.onnx`
+- **Exploit checkpoints (13M+)**: Do not use -- reward hacking behavior
+
+---
+
+## Phase L v2: Crosswalks + Pedestrians (Yield Cap Fix)
+
+### Status: ⚠️ EXPLOIT - Stopped Early (2026-02-03)
+
+| Item | Value |
+|------|-------|
+| **Run ID** | phase-L-v2 |
+| **Steps** | 1,820,000 / 5,000,000 (stopped early) |
+| **Peak Reward** | 6,758.5 (exploit inflated) |
+| **Init From** | Phase L v1 12.5M checkpoint |
+| **Fix** | P-026: Yield reward capped at 2.0/episode, 8s max yield duration |
+| **Outcome** | Yield cap insufficient - agent still reward hacking |
+
+---
+
+## Phase L v3: Crosswalks + Pedestrians (From Scratch)
+
+### Status: ⚠️ EXPLOIT (2026-02-03)
+
+| Item | Value |
+|------|-------|
+| **Run ID** | phase-L-v3 |
+| **Steps** | 5,000,000 |
+| **Peak Reward** | 28,675.4 (massive exploit) |
+| **Pedestrian Curriculum** | Lesson 1/3 (1 pedestrian only) |
+| **Outcome** | Training from scratch did not fix reward exploit |
+
+---
+
+## Phase L v4: Crosswalks + Pedestrians (Reward Redesign)
+
+### Status: ✅ COMPLETED (2026-02-03)
+
+| Item | Value |
+|------|-------|
+| **Run ID** | phase-L-v4 |
+| **Steps** | 5,000,000 |
+| **Peak Reward** | 504.8 (at ~2.2M steps) |
+| **Final Reward** | 474.3 |
+| **Pedestrian Curriculum** | Lesson 2/3 (reached 2 pedestrians) |
+| **Fix** | Complete reward function redesign - removed yield exploit vectors |
+
+### Key Achievement
+- First clean training with pedestrians - no reward hacking
+- Stable reward range 460-505
+- Reached 2 pedestrian curriculum stage
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-L-v4.yaml`
+- **Results**: `results/phase-L-v4/E2EDrivingAgent/`
+- **Best Checkpoint**: `E2EDrivingAgent-3999943.pt` (4M step, reward 488.4)
+
+---
+
+## Phase L v5: Crosswalks + Pedestrians (Warm Start from v4)
+
+### Status: ✅ COMPLETED (2026-02-03)
+
+| Item | Value |
+|------|-------|
+| **Run ID** | phase-L-v5 |
+| **Steps** | 5,000,000 |
+| **Peak Reward** | 504.3 (at step 2.19M) |
+| **Final Reward** | 494.2 |
+| **Last 10 Avg** | 476.0 (range 462.9 - 495.2) |
+| **Init From** | Phase L v4 best checkpoint (4M step, reward 488.4) |
+| **Pedestrian Curriculum** | Lesson 2/3 = **3 pedestrians** (all lessons completed) |
+
+### Strategy
+- Warm start from L v4 best checkpoint
+- Push pedestrian curriculum to 3 (v4 reached 2)
+- Adjusted thresholds: 350/400 (v4 was stable around 460-488)
+- 5M additional steps
+
+### Training Metrics (Final)
+| Metric | Value |
+|--------|-------|
+| Policy Loss | 0.0170 |
+| Value Loss | 9.7636 |
+| Episode Length | 284.19 |
+| Entropy | 0.1455 |
+| Collision Rate | 0% |
+| Off-Road Rate | 0% |
+| Pedestrian Collision | 0% |
+| Goal Reached | ~47% |
+
+### Curriculum Progression
+| Lesson | Pedestrians | Threshold | Status |
+|--------|-------------|-----------|--------|
+| 0 | 1 | 350.0 | ✅ Passed |
+| 1 | 2 | 400.0 | ✅ Passed |
+| 2 | 3 | Final | ✅ Active |
+
+### Artifacts
+- **Config**: `python/configs/planning/vehicle_ppo_phase-L-v5.yaml`
+- **Results**: `results/phase-L-v5/E2EDrivingAgent/`
+- **Final Model**: `E2EDrivingAgent-5000046.onnx`
+- **Deployed To**: `Assets/ML-Agents/Models/E2EDrivingAgent_PhaseL.onnx`
+
+### Phase M Deployment
+- v5 model deployed to Phase M Multi-Agent Test Field
+- 12 agents running simultaneously with v5 ONNX model
+- Zero runtime errors, agents driving and interacting on shared 2000m road
+- Pedestrian yielding, traffic signal compliance, multi-agent interaction verified
+
+---
+
+*Phase L Complete - v5 model deployed to Phase M Test Field - 2026-02-03*

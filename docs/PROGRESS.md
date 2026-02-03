@@ -10,11 +10,11 @@
 
 | Metric | Value |
 |--------|-------|
-| **Latest Completion** | Phase J v5 Traffic Signals - FULL CURRICULUM (5/5 green_ratio) - 2026-02-02 |
-| **Next Training** | Phase K (U-turn / advanced maneuvers) |
-| **Overall Progress** | Phase 0~J v5 (10 phases, 25 runs) |
-| **Latest Model** | E2EDrivingAgent-5000148.onnx (Phase J v5, +605 peak, full signal compliance) |
-| **Last Updated** | 2026-02-02 |
+| **Latest Completion** | Phase L v5 Crosswalks + Pedestrians (3/3 peds, reward 504) - 2026-02-03 |
+| **Current Phase** | Phase M: Multi-Agent Test Field (12 agents, inference) |
+| **Overall Progress** | Phase 0~L (12 phases, 32 runs) + Phase M test field |
+| **Latest Model** | E2EDrivingAgent-5000046.onnx (Phase L v5, peak 504.3) |
+| **Last Updated** | 2026-02-03 |
 
 ---
 
@@ -43,6 +43,12 @@
 | Phase J v3 | 5.0M | 658 | 477 | PARTIAL (12/13) | C+ | 2026-02-02 |
 | Phase J v4 | 5.0M | 616 | 497 | PARTIAL (3/4) | B- | 2026-02-02 |
 | **Phase J v5** | **5.0M** | **605.7** | **537** | **COMPLETE (5/5)** | **B+** | **2026-02-02** |
+| **Phase K v1** | **5.0M** | **703** | **590** | **COMPLETE (3/3)** | **A-** | **2026-02-02** |
+| Phase L v1 | 15.0M | 787 | 5799 | EXPLOIT (P-026) | C | 2026-02-03 |
+| Phase L v2 | 1.8M | 6759 | 3965 | EXPLOIT (still) | D | 2026-02-03 |
+| Phase L v3 | 5.0M | 28675 | 6923 | EXPLOIT (still) | D | 2026-02-03 |
+| Phase L v4 | 5.0M | 505 | 474 | COMPLETE (2/3 peds) | B+ | 2026-02-03 |
+| **Phase L v5** | **5.0M** | **504** | **494** | **COMPLETE (3/3 peds)** | **A-** | **2026-02-03** |
 
 ### Failed/Superseded Runs
 
@@ -59,6 +65,9 @@
 | Phase J v1 | ~40K | N/A | Tensor mismatch (260D vs 268D) | J v2 |
 | Phase J v3 | 5.0M | 658 | Signal ordering: green_ratio changed before signals ON | J v4 |
 | Phase J v4 | 5.0M | 616 | Plateau at green_ratio=0.5, threshold 540 unreachable | J v5 |
+| Phase L v1 | 15.0M | 787 | Yield reward exploit (P-026): agent farms crosswalk indefinitely | L v4 |
+| Phase L v2 | 1.8M | 6759 | Yield cap insufficient, still exploiting | L v4 |
+| Phase L v3 | 5.0M | 28675 | From-scratch still exploiting (massive reward) | L v4 |
 
 ---
 
@@ -283,16 +292,133 @@
 
 ---
 
+## Phase K v1: Dense Urban Integration
+
+**COMPLETED 2026-02-02** | Grade: A-
+
+- Final Reward: +590 | Peak: +703 @ 4.67M
+- Steps: 5.0M (warm start from Phase J v5)
+- Training: Build-based, 3 parallel envs, ~25 min
+- Observation: 268D (same as Phase J)
+- Skills: Combined ALL driving skills -- curved roads + intersections + signals + NPCs
+- Curriculum: **3/3 complete** (road_curvature 0 -> 0.3 -> 0.5)
+
+### Artifacts
+- **Final Model**: `results/phase-K-v1/E2EDrivingAgent/E2EDrivingAgent-4999930.onnx`
+- **Config**: `python/configs/planning/vehicle_ppo_phase-K.yaml`
+
+---
+
+## Phase L: Crosswalks + Pedestrians
+
+### Phase L v1: EXPLOIT (2026-02-03) | Grade: C
+
+- Peak Reward (stable): +787 @ 12.09M | Peak (exploit): +20,148 @ 14.66M
+- Steps: 15.0M (fresh start, 280D = 268D + 12D pedestrian/crosswalk)
+- Driving skills solid (+730 at 12.5M), but reward exploit found at ~13.3M
+- Agent learned to stop at crosswalk indefinitely, farming unbounded yield reward
+- Best usable checkpoint: `E2EDrivingAgent-12499788.pt` (12.5M, +730)
+- **Lesson P-026**: Yield reward cap needed (see Lessons Learned)
+
+### Phase L v2: EXPLOIT (2026-02-03) | Grade: D
+
+- Steps: 1.8M / 5.0M (stopped early - exploit persisted)
+- Peak: +6759 (exploit inflated) | Init from v1 12.5M checkpoint
+- P-026 yield cap insufficient - agent still reward hacking
+
+### Phase L v3: EXPLOIT (2026-02-03) | Grade: D
+
+- Steps: 5.0M (from scratch, 280D)
+- Peak: +28,675 (massive exploit) | Ped curriculum: 1/3
+- Training from scratch did not fix reward exploit
+
+### Phase L v4: COMPLETE (2026-02-03) | Grade: B+
+
+- Final Reward: +474 | Peak: +505 @ ~2.2M
+- Steps: 5.0M | Pedestrian curriculum: 2/3 (reached 2 pedestrians)
+- Complete reward function redesign eliminated exploit vectors
+- First clean training with pedestrians
+
+### Phase L v5: COMPLETE (2026-02-03) | Grade: A-
+
+- Final Reward: +494 | Peak: +504 @ 2.19M
+- Steps: 5.0M (warm start from v4 best checkpoint at 4M)
+- Pedestrian curriculum: **3/3 complete** (1 -> 2 -> 3 pedestrians)
+- Collision: 0% | Off-Road: 0% | Pedestrian collision: 0%
+- Last 10 avg: 476.0 (stable range 462.9 - 495.2)
+
+### v1 -> v2 -> v3 -> v4 -> v5 Evolution
+
+| Metric | v1 | v2 | v3 | v4 | v5 |
+|--------|----|----|----|----|-----|
+| Init from | Scratch | v1 12.5M | Scratch | Scratch | v4 4M |
+| Steps | 15M | 1.8M | 5M | 5M | 5M |
+| Peak Reward | +787 | +6759 | +28675 | +505 | **+504** |
+| Exploit | YES | YES | YES | NO | NO |
+| Ped Curriculum | 2/3 | 1/3 | 1/3 | 2/3 | **3/3** |
+| Issue | P-026 reward hack | Cap insufficient | Still hacking | 2 peds only | **COMPLETE** |
+
+### Code Changes (Phase L)
+1. **PedestrianController.cs** (NEW): Kinematic capsule crossing road at crosswalk
+2. **E2EDrivingAgent.cs**: +12D observations (2 nearest pedestrians + crosswalk info), SetStartPose(), inference MaxStep guard
+3. **DrivingSceneManager.cs**: num_pedestrians curriculum param, SpawnPedestrians(), TestFieldManager guard
+4. **PhaseSceneCreator.cs**: PhaseL_Crosswalks scene + PhaseM_TestField scene
+
+### Artifacts
+- **Best Model (v5)**: `results/phase-L-v5/E2EDrivingAgent-5000046.onnx`
+- **Deployed Model**: `Assets/ML-Agents/Models/E2EDrivingAgent_PhaseL.onnx`
+- **Config (v5)**: `python/configs/planning/vehicle_ppo_phase-L-v5.yaml`
+- **Build**: `Builds/PhaseL/PhaseL.exe`
+
+---
+
+## Phase M: Multi-Agent Test Field
+
+**ACTIVE (2026-02-03)** | Inference Only (No Training)
+
+12 trained RL agents driving simultaneously on a shared 2000m road, interacting with each other, 25 NPCs, 8 pedestrians, and traffic signals.
+
+### Configuration
+| Item | Value |
+|------|-------|
+| **Agents** | 12 E2EDrivingAgent (InferenceOnly, Phase L v5 ONNX) |
+| **NPCs** | 25 (all active, scattered along road) |
+| **Pedestrians** | 8 (at crosswalk Z=75) |
+| **Road** | 2000m, 3 lanes, curved, with intersection + crosswalk |
+| **Traffic Signals** | Active at intersection |
+| **Model** | E2EDrivingAgent_PhaseL.onnx (L v5, peak 504) |
+| **Camera** | Tab to cycle agents, F for free-fly |
+
+### New Code
+1. **TestFieldManager.cs** (NEW): Central orchestrator for multi-agent inference
+2. **FreeFlyCamera.cs** (NEW): WASD + mouse free-fly camera (F toggle)
+3. **FollowCamera.cs** (MOD): Multi-target cycling (Tab, 1-9 keys)
+4. **PhaseSceneCreator.cs** (MOD): CreatePhaseM_TestField menu item
+5. **BuildHelper.cs** (MOD): Build Phase M menu item
+
+### Agent Interaction
+- All 12 agents + 25 NPCs share "Vehicle" tag
+- Each agent's OverlapSphere (50m) detects other agents as vehicles
+- Agent-agent collision triggers respawn via TestFieldManager
+- Intersection and crosswalk negotiation per individual agent
+
+### Artifacts
+- **Scene**: `Assets/Scenes/PhaseM_TestField.unity`
+- **Build**: `Builds/PhaseM/PhaseM.exe` (pending)
+
+---
+
 ## Key Achievements
 
 ### Safety Record
-- **0% collision across all phases** (0 through J v2)
-- Perfect safety maintained with 3 NPCs in intersections
+- **0% collision across all phases** (0 through L v5)
+- Perfect safety maintained with 3 NPCs + 3 pedestrians in intersections
 
 ### Curriculum Progression
-- Phase 0: Basic driving -> Phase J v5: Full traffic signal compliance
-- 10 training phases completed (25 total runs including failures)
-- Agent handles: overtaking, multi-NPC, speed zones, curves, multi-lane, T/Cross/Y-junction intersections, NPC speed variation, traffic signals with full green_ratio range (268D)
+- Phase 0: Basic driving -> Phase L v5: Crosswalk + 3 pedestrians -> Phase M: Multi-agent test field
+- 12 training phases completed (32 total runs including failures)
+- Agent handles: overtaking, multi-NPC, speed zones, curves, multi-lane, T/Cross/Y-junction intersections, NPC speed variation, traffic signals, crosswalks, pedestrian yielding (280D)
+- Phase M: 12 agents + 25 NPCs + 8 pedestrians on shared 2000m road (inference)
 
 ### Lessons Learned
 
@@ -314,8 +440,11 @@
 | P-022 | Feature activation must precede param tuning; use single-param curriculum | Phase J v3 |
 | P-023 | Reward compression under signal constraints; lower green = lower reward ceiling | Phase J v4 |
 | P-024 | BehaviorType=InferenceOnly in build silently prevents training (no brain registration) | Phase J v5 |
+| P-025 | BehaviorType enum: value 1 = HeuristicOnly, not InferenceOnly (use value 2) | Phase L v1 |
+| P-026 | Unbounded per-step positive reward enables reward hacking; cap yield rewards per episode | Phase L v1 |
+| P-027 | MaxStep=3000 for training, MaxStep=0 for inference (unlimited steps) | Phase M |
 
 ---
 
-*Document updated: 2026-02-02*
-*Phase J v5 Complete (5/5 green_ratio) -- Phase K next*
+*Document updated: 2026-02-03*
+*Phase L v5 Complete (peak 504, 3/3 pedestrians) -- Phase M Multi-Agent Test Field active*

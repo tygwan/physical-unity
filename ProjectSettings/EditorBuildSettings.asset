@@ -32,6 +32,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/PhaseK_DenseUrban.unity
     guid: 4cff98e97e1f1764583dd6fafc3139dc
+  - enabled: 1
+    path: Assets/Scenes/PhaseL_Crosswalks.unity
+    guid: 7de193cbe7512194b87a210b9f33f87f
+  - enabled: 1
+    path: Assets/Scenes/PhaseM_TestField.unity
+    guid: 6cb6c22f59fbb1c4fa3792016a2d63a4
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 289c1b55c9541489481df5cc06664110, type: 3}

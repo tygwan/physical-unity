@@ -44,10 +44,15 @@ public class PhaseSceneCreator
         CreatePhaseHScene();
         CreatePhaseJScene();
         CreatePhaseKScene();
+        CreatePhaseLScene();
+        CreatePhaseMScene();
 
         EditorUtility.DisplayDialog("Complete",
             "All Phase scenes created in Assets/Scenes/", "OK");
     }
+
+    [MenuItem("Tools/Create Phase Scenes/Phase M - Test Field")]
+    public static void CreatePhaseMScene() { CreatePhaseM_TestField(); }
 
     [MenuItem("Tools/Create Phase Scenes/Phase A - Dense Overtaking")]
     public static void CreatePhaseAScene()
@@ -223,6 +228,31 @@ public class PhaseSceneCreator
         });
     }
 
+    [MenuItem("Tools/Create Phase Scenes/Phase L - Crosswalks")]
+    public static void CreatePhaseLScene()
+    {
+        CreatePhaseScene(new PhaseConfig
+        {
+            name = "PhaseL_Crosswalks",
+            description = "Crosswalk + pedestrian yielding in urban environment",
+            numNPCs = 5,
+            numLanes = 2,
+            centerLineEnabled = true,
+            roadCurvature = 0.3f,
+            curveDirectionVariation = 0.5f,
+            intersectionType = 2,
+            turnDirection = 0,
+            npcSpeedRatio = 0.85f,
+            roadLength = 500f,
+            observationSize = 280,
+            enableLaneObservation = true,
+            enableIntersectionObservation = true,
+            enableTrafficSignalObservation = true,
+            enablePedestrianObservation = true,
+            numPedestrians = 3,
+        });
+    }
+
     #endregion
 
     #region Scene Creation
@@ -242,10 +272,12 @@ public class PhaseSceneCreator
         public int numSpeedZones;
         public float roadLength;
         // Observation configuration
-        public int observationSize;            // 242, 254, 260, or 268
+        public int observationSize;            // 242, 254, 260, 268, or 280
         public bool enableLaneObservation;     // true for Phase D+
         public bool enableIntersectionObservation; // true for Phase G+
         public bool enableTrafficSignalObservation; // true for Phase J+
+        public bool enablePedestrianObservation;   // true for Phase L+
+        public int numPedestrians;             // max pedestrian pool (Phase L+)
     }
 
     private static void CreatePhaseScene(PhaseConfig config)
@@ -353,8 +385,16 @@ public class PhaseSceneCreator
             trafficLightObj = CreateTrafficLightForArea(trainingArea.transform);
         }
 
+        // Pedestrians + Crosswalk (Phase L)
+        GameObject[] pedestrianObjs = null;
+        if (config.enablePedestrianObservation)
+        {
+            pedestrianObjs = CreatePedestriansForArea(config.numPedestrians, trainingArea.transform);
+            CreateCrosswalkForArea(trainingArea.transform);
+        }
+
         // Wire up references within this training area
-        WireAreaReferences(sceneManager, agent, road, goal, npcs, trafficLightObj);
+        WireAreaReferences(sceneManager, agent, road, goal, npcs, trafficLightObj, pedestrianObjs);
 
         return trainingArea;
     }
@@ -707,6 +747,7 @@ public class PhaseSceneCreator
             SetProperty(agentComponent, "enableLaneObservation", config.enableLaneObservation);
             SetProperty(agentComponent, "enableIntersectionObservation", config.enableIntersectionObservation);
             SetProperty(agentComponent, "enableTrafficSignalObservation", config.enableTrafficSignalObservation);
+            SetProperty(agentComponent, "enablePedestrianObservation", config.enablePedestrianObservation);
         }
 
         // Configure BehaviorParameters for ML-Agents training via SerializedObject
@@ -899,7 +940,8 @@ public class PhaseSceneCreator
     }
 
     private static void WireAreaReferences(GameObject manager, GameObject agent,
-        GameObject road, GameObject goal, GameObject[] npcs, GameObject trafficLightObj = null)
+        GameObject road, GameObject goal, GameObject[] npcs, GameObject trafficLightObj = null,
+        GameObject[] pedestrianObjs = null)
     {
         var managerComponent = manager.GetComponent("DrivingSceneManager");
         if (managerComponent == null) return;
@@ -954,6 +996,23 @@ public class PhaseSceneCreator
                     SetProperty(agentComponent, "trafficLight", tlComponent);
             }
         }
+
+        // Wire pedestrians (Phase L)
+        if (pedestrianObjs != null && pedestrianObjs.Length > 0)
+        {
+            var pedType = System.Type.GetType("ADPlatform.Environment.PedestrianController, Assembly-CSharp");
+            if (pedType != null)
+            {
+                var pedArray = System.Array.CreateInstance(pedType, pedestrianObjs.Length);
+                for (int i = 0; i < pedestrianObjs.Length; i++)
+                {
+                    pedArray.SetValue(pedestrianObjs[i].GetComponent(pedType), i);
+                }
+                SetProperty(managerComponent, "pedestrians", pedArray);
+                if (agentComponent != null)
+                    SetProperty(agentComponent, "pedestrians", pedArray);
+            }
+        }
     }
 
     private static void WireReferences(GameObject manager, GameObject agent,
@@ -999,6 +1058,605 @@ public class PhaseSceneCreator
             SetProperty(followCamera, "target", agent.transform);
         }
     }
+
+    #region Phase M - Multi-Agent Test Field
+
+    private const int PHASE_M_NUM_AGENTS = 12;
+    private const int PHASE_M_NUM_NPCS = 25;
+    private const int PHASE_M_NUM_PEDESTRIANS = 8;
+    private const float PHASE_M_ROAD_LENGTH = 2000f;
+    private const float PHASE_M_GOAL_DISTANCE = 230f;
+
+    private static void CreatePhaseM_TestField()
+    {
+        if (!Directory.Exists(SCENES_PATH))
+        {
+            Directory.CreateDirectory(SCENES_PATH);
+            AssetDatabase.Refresh();
+        }
+
+        InitMaterialCache();
+
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+        // 1. Main Camera with FollowCamera + FreeFlyCamera
+        var camera = CreatePhaseMCamera();
+
+        // 2. Directional Light
+        CreateDirectionalLight();
+
+        // 3. TestFieldManager (root orchestrator)
+        var testFieldManagerObj = new GameObject("TestFieldManager");
+        testFieldManagerObj.transform.position = Vector3.zero;
+
+        // 4. Single TestField parent
+        var testField = new GameObject("TestField");
+        testField.transform.position = Vector3.zero;
+
+        // 5. Ground (80m x 2020m)
+        var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        ground.name = "Ground";
+        ground.transform.SetParent(testField.transform);
+        ground.transform.localPosition = Vector3.zero;
+        ground.transform.localScale = new Vector3(80f / 10f, 1f, (PHASE_M_ROAD_LENGTH + 20f) / 10f);
+        var groundMat = new Material(Shader.Find("Standard"));
+        groundMat.color = new Color(0.15f, 0.4f, 0.15f);
+        ground.GetComponent<Renderer>().material = groundMat;
+
+        // 6. Road with WaypointManager
+        var road = CreatePhaseMRoad(testField.transform);
+
+        // 7. Create 12 agents
+        var agents = CreatePhaseMAgents(testField.transform);
+
+        // 8. Create 12 goal targets
+        var goals = CreatePhaseMGoalTargets(agents, testField.transform);
+
+        // 9. Create 25 NPCs
+        var npcs = CreatePhaseMNPCs(testField.transform);
+
+        // 10. Traffic light at intersection
+        var trafficLightObj = CreateTrafficLightForArea(testField.transform);
+
+        // 11. Pedestrians + crosswalk
+        var pedestrianObjs = CreatePhaseMPedestrians(testField.transform);
+        CreateCrosswalkForArea(testField.transform);
+
+        // 12. Wire TestFieldManager references
+        WirePhaseMReferences(testFieldManagerObj, agents, goals, npcs, road, trafficLightObj, pedestrianObjs, camera);
+
+        // Wire agent-level references (waypoints, traffic light, pedestrians)
+        WirePhaseMAgentReferences(agents, road, trafficLightObj, pedestrianObjs, goals);
+
+        // Save scene
+        string scenePath = $"{SCENES_PATH}/PhaseM_TestField.unity";
+        EditorSceneManager.SaveScene(scene, scenePath);
+        AddSceneToBuildSettings(scenePath);
+
+        Debug.Log($"[PhaseSceneCreator] Created PhaseM_TestField: {PHASE_M_NUM_AGENTS} agents, " +
+                  $"{PHASE_M_NUM_NPCS} NPCs, {PHASE_M_NUM_PEDESTRIANS} pedestrians on {PHASE_M_ROAD_LENGTH}m road");
+    }
+
+    private static GameObject CreatePhaseMCamera()
+    {
+        var camera = new GameObject("Main Camera");
+        camera.tag = "MainCamera";
+        var cam = camera.AddComponent<Camera>();
+        cam.clearFlags = CameraClearFlags.Skybox;
+        cam.fieldOfView = 60f;
+        camera.transform.position = new Vector3(1.75f, 15f, -PHASE_M_ROAD_LENGTH / 2f - 15f);
+        camera.transform.rotation = Quaternion.Euler(30, 0, 0);
+        camera.AddComponent<AudioListener>();
+
+        // FollowCamera
+        var followCameraType = System.Type.GetType("ADPlatform.DebugTools.FollowCamera, Assembly-CSharp");
+        if (followCameraType != null)
+            camera.AddComponent(followCameraType);
+
+        // FreeFlyCamera
+        var freeFlyType = System.Type.GetType("ADPlatform.DebugTools.FreeFlyCamera, Assembly-CSharp");
+        if (freeFlyType != null)
+            camera.AddComponent(freeFlyType);
+
+        return camera;
+    }
+
+    private static GameObject CreatePhaseMRoad(Transform parent)
+    {
+        var road = new GameObject("Road");
+        road.transform.SetParent(parent);
+        road.transform.localPosition = Vector3.zero;
+
+        // Main road surface (3 lanes)
+        float roadWidth = 3 * 3.5f + 1f; // 11.5m
+        var roadSurface = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        roadSurface.name = "MainRoadSurface";
+        roadSurface.transform.SetParent(road.transform);
+        roadSurface.transform.localPosition = new Vector3(0, 0.01f, 0);
+        roadSurface.transform.localScale = new Vector3(roadWidth / 10f, 1, PHASE_M_ROAD_LENGTH / 10f);
+        roadSurface.GetComponent<Renderer>().sharedMaterial = GetAsphaltMaterial();
+
+        // WaypointManager
+        var wpManagerType = System.Type.GetType("ADPlatform.Agents.WaypointManager, Assembly-CSharp");
+        if (wpManagerType != null)
+        {
+            var wpManager = road.AddComponent(wpManagerType);
+            SetProperty(wpManager, "roadLength", PHASE_M_ROAD_LENGTH);
+            SetProperty(wpManager, "numLanes", 3);
+            // centerLineEnabled=false: all 3 lanes are same-direction in test field
+            // (center line enables wrong-way check which kills agents at X<0)
+            SetProperty(wpManager, "centerLineEnabled", false);
+            SetProperty(wpManager, "roadCurvature", 0.3f);
+            SetProperty(wpManager, "curveDirectionVariation", 0.5f);
+            SetProperty(wpManager, "intersectionType", 2); // Cross
+            SetProperty(wpManager, "turnDirection", 0);    // Straight
+        }
+
+        // Intersection road visuals
+        var intersectionConfig = new PhaseConfig
+        {
+            roadLength = PHASE_M_ROAD_LENGTH,
+            numLanes = 3,
+            intersectionType = 2,
+        };
+        CreateIntersectionRoadVisuals(road.transform, intersectionConfig);
+
+        return road;
+    }
+
+    private static GameObject[] CreatePhaseMAgents(Transform parent)
+    {
+        var agentsParent = new GameObject("Agents");
+        agentsParent.transform.SetParent(parent);
+        agentsParent.transform.localPosition = Vector3.zero;
+
+        var agents = new GameObject[PHASE_M_NUM_AGENTS];
+        float[] laneXPositions = { 1.75f, 0f, -1.75f };
+
+        // Load ONNX model reference
+        string onnxPath = "Assets/ML-Agents/Models/E2EDrivingAgent_PhaseL.onnx";
+        var onnxAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(onnxPath);
+        if (onnxAsset == null)
+        {
+            // Try alternate name
+            onnxPath = "Assets/ML-Agents/Models/E2EDrivingAgent-5000029.onnx";
+            onnxAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(onnxPath);
+        }
+
+        for (int i = 0; i < PHASE_M_NUM_AGENTS; i++)
+        {
+            var agent = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            agent.name = $"Agent_{i}";
+            agent.transform.SetParent(agentsParent.transform);
+
+            // Stagger start positions: Z from -900 to +750, cycle across 3 lanes
+            float startZ = -900f + i * 150f;
+            float startX = laneXPositions[i % 3];
+            agent.transform.localPosition = new Vector3(startX, 0.75f, startZ);
+            agent.transform.localScale = new Vector3(2f, 1.5f, 4.5f);
+
+            // Blue-ish color, slightly varied per agent
+            var renderer = agent.GetComponent<Renderer>();
+            var material = new Material(Shader.Find("Standard"));
+            float hue = 0.58f + (i * 0.03f); // Range from blue to cyan
+            material.color = Color.HSVToRGB(hue % 1f, 0.7f, 0.85f);
+            renderer.material = material;
+
+            // Tag and layer for detection
+            agent.tag = "Vehicle";
+
+            // Rigidbody
+            var rb = agent.AddComponent<Rigidbody>();
+            rb.mass = 1500f;
+            rb.linearDamping = 1f;
+            rb.angularDamping = 2f;
+            rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+            // Replace default collider
+            Object.DestroyImmediate(agent.GetComponent<Collider>());
+            var collider = agent.AddComponent<BoxCollider>();
+            collider.size = Vector3.one;
+
+            // E2EDrivingAgent component
+            var agentType = System.Type.GetType("ADPlatform.Agents.E2EDrivingAgent, Assembly-CSharp");
+            if (agentType != null)
+            {
+                var agentComponent = agent.AddComponent(agentType);
+                // Enable all observation flags (Phase L = 280D)
+                SetProperty(agentComponent, "enableLaneObservation", true);
+                SetProperty(agentComponent, "enableIntersectionObservation", true);
+                SetProperty(agentComponent, "enableTrafficSignalObservation", true);
+                SetProperty(agentComponent, "enablePedestrianObservation", true);
+            }
+
+            // BehaviorParameters: InferenceOnly with ONNX model
+            ConfigurePhaseMBehaviorParameters(agent, onnxAsset);
+
+            // DecisionRequester
+            var drType = System.Type.GetType("Unity.MLAgents.DecisionRequester, Unity.ML-Agents");
+            if (drType != null)
+            {
+                var dr = agent.AddComponent(drType);
+                SetProperty(dr, "DecisionPeriod", 5);
+                SetProperty(dr, "TakeActionsBetweenDecisions", true);
+            }
+
+            agents[i] = agent;
+        }
+
+        return agents;
+    }
+
+    private static void ConfigurePhaseMBehaviorParameters(GameObject agent, UnityEngine.Object onnxModel)
+    {
+        var bp = agent.GetComponent("BehaviorParameters") as UnityEngine.Component;
+        if (bp == null) return;
+
+        var so = new SerializedObject(bp);
+
+        var nameProp = so.FindProperty("m_BehaviorName");
+        if (nameProp != null) nameProp.stringValue = "E2EDrivingAgent";
+
+        // Observation size: 280D (Phase L full)
+        var obsSizeProp = so.FindProperty("m_BrainParameters.VectorObservationSize");
+        if (obsSizeProp != null) obsSizeProp.intValue = 280;
+
+        var stackProp = so.FindProperty("m_BrainParameters.NumStackedVectorObservations");
+        if (stackProp != null) stackProp.intValue = 1;
+
+        var continuousProp = so.FindProperty("m_BrainParameters.m_ActionSpec.m_NumContinuousActions");
+        if (continuousProp != null) continuousProp.intValue = 2;
+
+        var branchProp = so.FindProperty("m_BrainParameters.m_ActionSpec.BranchSizes");
+        if (branchProp != null) branchProp.ClearArray();
+
+        // BehaviorType = 2 (InferenceOnly) -- P-025: NOT 1 which is HeuristicOnly
+        var behaviorTypeProp = so.FindProperty("m_BehaviorType");
+        if (behaviorTypeProp != null) behaviorTypeProp.enumValueIndex = 2;
+
+        // Assign ONNX model
+        if (onnxModel != null)
+        {
+            var modelProp = so.FindProperty("m_Model");
+            if (modelProp != null) modelProp.objectReferenceValue = onnxModel;
+        }
+
+        so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    private static GameObject[] CreatePhaseMGoalTargets(GameObject[] agents, Transform parent)
+    {
+        var goalsParent = new GameObject("GoalTargets");
+        goalsParent.transform.SetParent(parent);
+        goalsParent.transform.localPosition = Vector3.zero;
+
+        var goals = new GameObject[agents.Length];
+        float halfRoad = PHASE_M_ROAD_LENGTH / 2f;
+
+        for (int i = 0; i < agents.Length; i++)
+        {
+            var goal = new GameObject($"GoalTarget_{i}");
+            goal.transform.SetParent(goalsParent.transform);
+
+            float agentZ = agents[i].transform.localPosition.z;
+            float goalZ = Mathf.Min(agentZ + PHASE_M_GOAL_DISTANCE, halfRoad - 20f);
+            goal.transform.localPosition = new Vector3(0f, 1f, goalZ);
+
+            // Small visual indicator
+            var visual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            visual.name = "GoalVisual";
+            visual.transform.SetParent(goal.transform);
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localScale = new Vector3(3f, 0.05f, 3f);
+
+            var renderer = visual.GetComponent<Renderer>();
+            var material = new Material(Shader.Find("Standard"));
+            material.color = new Color(0.2f, 0.8f, 0.2f, 0.3f);
+            renderer.material = material;
+            Object.DestroyImmediate(visual.GetComponent<Collider>());
+
+            goals[i] = goal;
+        }
+
+        return goals;
+    }
+
+    private static GameObject[] CreatePhaseMNPCs(Transform parent)
+    {
+        var npcParent = new GameObject("NPCVehicles");
+        npcParent.transform.SetParent(parent);
+        npcParent.transform.localPosition = Vector3.zero;
+
+        var npcs = new GameObject[PHASE_M_NUM_NPCS];
+        float[] laneXPositions = { 1.75f, 0f, -1.75f };
+
+        // Spread along road from Z=-800 to Z=+800, ~65m spacing
+        float npcZStart = -800f;
+        float npcZEnd = 800f;
+        float npcSpacing = (npcZEnd - npcZStart) / (PHASE_M_NUM_NPCS - 1);
+
+        for (int i = 0; i < PHASE_M_NUM_NPCS; i++)
+        {
+            var npc = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            npc.name = $"NPC_{i}";
+            npc.transform.SetParent(npcParent.transform);
+
+            float npcZ = npcZStart + i * npcSpacing;
+            float npcX = laneXPositions[i % 3];
+            npc.transform.localPosition = new Vector3(npcX, 0.75f, npcZ);
+            npc.transform.localScale = new Vector3(2f, 1.5f, 4.5f);
+
+            var renderer = npc.GetComponent<Renderer>();
+            var material = new Material(Shader.Find("Standard"));
+            material.color = GetNPCColor(i);
+            renderer.material = material;
+
+            npc.tag = "Vehicle";
+
+            var rb = npc.AddComponent<Rigidbody>();
+            rb.mass = 1500f;
+            rb.isKinematic = true;
+
+            var npcType = System.Type.GetType("ADPlatform.Agents.NPCVehicleController, Assembly-CSharp");
+            if (npcType != null)
+                npc.AddComponent(npcType);
+
+            // All NPCs start ACTIVE in Phase M (no curriculum)
+            npc.SetActive(true);
+            npcs[i] = npc;
+        }
+
+        return npcs;
+    }
+
+    private static GameObject[] CreatePhaseMPedestrians(Transform parent)
+    {
+        var pedestrians = new GameObject[PHASE_M_NUM_PEDESTRIANS];
+        var pedParent = new GameObject("Pedestrians");
+        pedParent.transform.SetParent(parent);
+        pedParent.transform.localPosition = Vector3.zero;
+
+        for (int i = 0; i < PHASE_M_NUM_PEDESTRIANS; i++)
+        {
+            var ped = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            ped.name = $"Pedestrian_{i}";
+            ped.transform.SetParent(pedParent.transform);
+            ped.transform.localPosition = new Vector3(-10f - i * 2f, 0.9f, CROSSWALK_Z);
+            ped.transform.localScale = new Vector3(0.5f, 0.9f, 0.5f);
+
+            var renderer = ped.GetComponent<Renderer>();
+            var material = new Material(Shader.Find("Standard"));
+            material.color = GetPedestrianColor(i);
+            renderer.material = material;
+
+            var rb = ped.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            var pedType = System.Type.GetType("ADPlatform.Environment.PedestrianController, Assembly-CSharp");
+            if (pedType != null)
+                ped.AddComponent(pedType);
+
+            ped.SetActive(true); // Active in Phase M
+            pedestrians[i] = ped;
+        }
+
+        return pedestrians;
+    }
+
+    private static void WirePhaseMReferences(GameObject managerObj, GameObject[] agents,
+        GameObject[] goals, GameObject[] npcs, GameObject road, GameObject trafficLightObj,
+        GameObject[] pedestrianObjs, GameObject camera)
+    {
+        var tfmType = System.Type.GetType("ADPlatform.TestField.TestFieldManager, Assembly-CSharp");
+        if (tfmType == null)
+        {
+            Debug.LogError("[PhaseSceneCreator] TestFieldManager type not found");
+            return;
+        }
+
+        var tfm = managerObj.AddComponent(tfmType);
+
+        // Wire agents array
+        var agentType = System.Type.GetType("ADPlatform.Agents.E2EDrivingAgent, Assembly-CSharp");
+        if (agentType != null)
+        {
+            var agentArray = System.Array.CreateInstance(agentType, agents.Length);
+            for (int i = 0; i < agents.Length; i++)
+                agentArray.SetValue(agents[i].GetComponent(agentType), i);
+            SetProperty(tfm, "agents", agentArray);
+        }
+
+        // Wire goal targets
+        var goalTransforms = new Transform[goals.Length];
+        for (int i = 0; i < goals.Length; i++)
+            goalTransforms[i] = goals[i].transform;
+        SetProperty(tfm, "goalTargets", goalTransforms);
+
+        // Wire NPCs
+        var npcType = System.Type.GetType("ADPlatform.Agents.NPCVehicleController, Assembly-CSharp");
+        if (npcType != null)
+        {
+            var npcArray = System.Array.CreateInstance(npcType, npcs.Length);
+            for (int i = 0; i < npcs.Length; i++)
+                npcArray.SetValue(npcs[i].GetComponent(npcType), i);
+            SetProperty(tfm, "npcVehicles", npcArray);
+        }
+
+        // Wire pedestrians
+        var pedType = System.Type.GetType("ADPlatform.Environment.PedestrianController, Assembly-CSharp");
+        if (pedType != null)
+        {
+            var pedArray = System.Array.CreateInstance(pedType, pedestrianObjs.Length);
+            for (int i = 0; i < pedestrianObjs.Length; i++)
+                pedArray.SetValue(pedestrianObjs[i].GetComponent(pedType), i);
+            SetProperty(tfm, "pedestrians", pedArray);
+        }
+
+        // Wire WaypointManager
+        var wpManager = road.GetComponent("WaypointManager");
+        if (wpManager != null)
+            SetProperty(tfm, "waypointManager", wpManager);
+
+        // Wire TrafficLight
+        var tlComponent = trafficLightObj.GetComponent("TrafficLightController");
+        if (tlComponent != null)
+            SetProperty(tfm, "trafficLight", tlComponent);
+
+        // Wire FollowCamera with multi-target
+        var followCamera = camera.GetComponent("FollowCamera");
+        if (followCamera != null)
+        {
+            SetProperty(tfm, "followCamera", followCamera);
+
+            // Set camera targets array (all agents)
+            var agentTransforms = new Transform[agents.Length];
+            for (int i = 0; i < agents.Length; i++)
+                agentTransforms[i] = agents[i].transform;
+            SetProperty(followCamera, "targets", agentTransforms);
+
+            // Set initial target to first agent
+            if (agents.Length > 0)
+                SetProperty(followCamera, "target", agents[0].transform);
+        }
+
+        // Config
+        SetProperty(tfm, "goalDistance", PHASE_M_GOAL_DISTANCE);
+        SetProperty(tfm, "roadLength", PHASE_M_ROAD_LENGTH);
+    }
+
+    private static void WirePhaseMAgentReferences(GameObject[] agents, GameObject road,
+        GameObject trafficLightObj, GameObject[] pedestrianObjs, GameObject[] goals)
+    {
+        var agentType = System.Type.GetType("ADPlatform.Agents.E2EDrivingAgent, Assembly-CSharp");
+        var wpManager = road.GetComponent("WaypointManager");
+        var tlComponent = trafficLightObj != null ? trafficLightObj.GetComponent("TrafficLightController") : null;
+
+        // Build pedestrian array
+        var pedType = System.Type.GetType("ADPlatform.Environment.PedestrianController, Assembly-CSharp");
+        System.Array pedArray = null;
+        if (pedType != null && pedestrianObjs != null)
+        {
+            pedArray = System.Array.CreateInstance(pedType, pedestrianObjs.Length);
+            for (int i = 0; i < pedestrianObjs.Length; i++)
+                pedArray.SetValue(pedestrianObjs[i].GetComponent(pedType), i);
+        }
+
+        for (int i = 0; i < agents.Length; i++)
+        {
+            if (agentType == null) continue;
+            var agentComponent = agents[i].GetComponent(agentType);
+            if (agentComponent == null) continue;
+
+            // Wire waypoint manager
+            if (wpManager != null)
+                SetProperty(agentComponent, "waypointManager", wpManager);
+
+            // Wire traffic light
+            if (tlComponent != null)
+                SetProperty(agentComponent, "trafficLight", tlComponent);
+
+            // Wire pedestrians
+            if (pedArray != null)
+                SetProperty(agentComponent, "pedestrians", pedArray);
+
+            // Wire goal target
+            if (i < goals.Length)
+                SetProperty(agentComponent, "goalTarget", goals[i].transform);
+        }
+    }
+
+    #endregion
+
+    #region Pedestrian & Crosswalk Helpers
+
+    private const float CROSSWALK_Z = 75f;  // Before intersection (93m)
+    private const float CROSSWALK_WIDTH = 4f;
+
+    /// <summary>
+    /// Create pedestrian capsule primitives with PedestrianController.
+    /// Start inactive; DrivingSceneManager activates via curriculum.
+    /// </summary>
+    private static GameObject[] CreatePedestriansForArea(int count, Transform parent)
+    {
+        var pedestrians = new GameObject[count];
+        var pedParent = new GameObject("Pedestrians");
+        pedParent.transform.SetParent(parent);
+        pedParent.transform.localPosition = Vector3.zero;
+
+        for (int i = 0; i < count; i++)
+        {
+            var ped = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            ped.name = $"Pedestrian_{i}";
+            ped.transform.SetParent(pedParent.transform);
+            // Start position off-road (will be set by SpawnAtCrosswalk)
+            ped.transform.localPosition = new Vector3(-10f - i * 2f, 0.9f, CROSSWALK_Z);
+            ped.transform.localScale = new Vector3(0.5f, 0.9f, 0.5f);
+
+            var renderer = ped.GetComponent<Renderer>();
+            var material = new Material(Shader.Find("Standard"));
+            material.color = GetPedestrianColor(i);
+            renderer.material = material;
+
+            // Kinematic rigidbody
+            var rb = ped.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            // Add PedestrianController
+            var pedType = System.Type.GetType("ADPlatform.Environment.PedestrianController, Assembly-CSharp");
+            if (pedType != null)
+            {
+                ped.AddComponent(pedType);
+            }
+
+            ped.SetActive(false);
+            pedestrians[i] = ped;
+        }
+
+        return pedestrians;
+    }
+
+    private static Color GetPedestrianColor(int index)
+    {
+        Color[] colors = {
+            new Color(0.9f, 0.6f, 0.2f), // Orange
+            new Color(0.3f, 0.7f, 0.9f), // Light blue
+            new Color(0.8f, 0.3f, 0.6f), // Pink
+        };
+        return colors[index % colors.Length];
+    }
+
+    /// <summary>
+    /// Create crosswalk visual (white stripes) at Z=75m.
+    /// </summary>
+    private static void CreateCrosswalkForArea(Transform parent)
+    {
+        var crosswalk = new GameObject("Crosswalk");
+        crosswalk.transform.SetParent(parent);
+        crosswalk.transform.localPosition = Vector3.zero;
+
+        float stripeWidth = 0.4f;
+        float stripeLength = ROAD_WIDTH;
+        float stripeSpacing = 0.6f;
+        int numStripes = Mathf.FloorToInt(CROSSWALK_WIDTH / stripeSpacing);
+
+        for (int i = 0; i < numStripes; i++)
+        {
+            var stripe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            stripe.name = $"CrosswalkStripe_{i}";
+            stripe.transform.SetParent(crosswalk.transform);
+
+            float zOffset = CROSSWALK_Z - CROSSWALK_WIDTH / 2f + i * stripeSpacing;
+            stripe.transform.localPosition = new Vector3(0f, 0.025f, zOffset);
+            stripe.transform.localScale = new Vector3(stripeLength, 0.02f, stripeWidth);
+
+            stripe.GetComponent<Renderer>().sharedMaterial = GetWhiteLineMaterial();
+            Object.DestroyImmediate(stripe.GetComponent<Collider>());
+        }
+    }
+
+    #endregion
 
     #region Material Factory
 

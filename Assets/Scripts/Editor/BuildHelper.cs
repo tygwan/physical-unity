@@ -20,6 +20,18 @@ public class BuildHelper
 
     // ====== Phase-specific builds ======
 
+    [MenuItem("Build/Build Phase M (Test Field)")]
+    public static void BuildPhaseM()
+    {
+        BuildPhase("PhaseM", "Assets/Scenes/PhaseM_TestField.unity");
+    }
+
+    [MenuItem("Build/Build Phase L (Crosswalks)")]
+    public static void BuildPhaseL()
+    {
+        BuildPhase("PhaseL", "Assets/Scenes/PhaseL_Crosswalks.unity");
+    }
+
     [MenuItem("Build/Build Phase K (Dense Urban)")]
     public static void BuildPhaseK()
     {

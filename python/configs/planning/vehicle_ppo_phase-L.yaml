@@ -1,0 +1,377 @@
+# E2EDrivingAgent PPO Phase L: Crosswalks + Pedestrians
+# Strategy: FRESH START (P-020: 268D -> 280D observation change)
+#
+# Phase K post-mortem:
+#   - Dense urban achieved: curved roads + intersections + signals + NPCs
+#   - Peak reward +703
+#   - Full curriculum (3/3)
+#
+# Phase L code changes:
+#   - PedestrianController: kinematic capsule crossing road at crosswalk
+#   - E2EDrivingAgent: +12D observations (2 nearest peds + crosswalk info)
+#   - DrivingSceneManager: num_pedestrians curriculum param, SpawnPedestrians()
+#   - PhaseSceneCreator: PhaseL_Crosswalks scene with pedestrians + crosswalk
+#
+# Observation space: 280D = 268D (Phase K) + 12D (pedestrian + crosswalk)
+#   - 2 nearest pedestrians x 5D (rel_x, rel_z, vel_x, vel_z, dist)
+#   - crosswalk info 2D (has_crosswalk_ahead, distance_to_crosswalk)
+#
+# Curriculum strategy:
+#   - Fresh start from scratch (P-020 compliant)
+#   - Full rebuild: driving -> NPC -> intersection -> signals -> curves -> pedestrians
+#   - num_pedestrians: 0 -> 1 -> 2 (final phase, after all driving skills)
+#   - Crosswalk always present; num_pedestrians=0 = nothing to yield to
+#     (avoids P-022 ordering issue with separate crosswalk_enabled param)
+#
+# P-018 compliance: Thresholds spaced 15+ points apart within groups
+# P-019 compliance: No Unicode special characters in YAML
+# P-022 compliance: Sequential threshold groups prevent param ordering conflicts
+# P-023: Conservative thresholds accounting for fresh-start variance
+#
+# Hardware: RTX 4090 (24GB VRAM) + 128GB RAM
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 2048       # Smaller for from-scratch (J v2 pattern)
+      buffer_size: 20480
+      learning_rate: 3.0e-4  # Higher LR for from-scratch
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3           # Fewer epochs for from-scratch
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    # NO init_path (fresh start per P-020)
+    max_steps: 15000000      # 15M steps
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 10
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # =======================================================
+  # PHASE 1: Basic Driving (steps 0 - 3M)
+  # Learn: forward progress, speed compliance, lane keeping
+  # =======================================================
+
+  goal_distance:
+    curriculum:
+      - name: Short
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 30.0
+        value: 50.0
+      - name: Medium1
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 60.0
+        value: 100.0
+      - name: Medium2
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 100.0
+        value: 150.0
+      - name: Long
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 140.0
+        value: 200.0
+      - name: Full
+        value: 230.0
+
+  num_lanes:
+    curriculum:
+      - name: SingleLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 150.0
+        value: 1.0
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: NoCenterLine
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 170.0
+        value: 0.0
+      - name: CenterLineOn
+        value: 1.0
+
+  # =======================================================
+  # PHASE 2: NPC Traffic (steps 3M - 6M)
+  # Learn: interaction with other vehicles
+  # =======================================================
+
+  num_active_npcs:
+    curriculum:
+      - name: NoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 250.0
+        value: 0.0
+      - name: OneNPC
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 270.0
+        value: 1.0
+      - name: TwoNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 300.0
+        value: 2.0
+      - name: ThreeNPCs
+        value: 3.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: SlowNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 320.0
+        value: 0.5
+      - name: MediumNPCs
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 350.0
+        value: 0.7
+      - name: NormalNPCs
+        value: 0.85
+
+  npc_speed_variation:
+    curriculum:
+      - name: NoVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 370.0
+        value: 0.0
+      - name: LowVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 400.0
+        value: 0.05
+      - name: MediumVariation
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 420.0
+        value: 0.10
+      - name: FullVariation
+        value: 0.15
+
+  # =======================================================
+  # PHASE 3: Intersection + Signals (steps 6M - 10M)
+  # Learn: turning, signal compliance
+  # =======================================================
+
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 450.0
+        value: 0.0
+      - name: TJunction
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 470.0
+        value: 1.0
+      - name: CrossIntersection
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 490.0
+        value: 2.0
+      - name: YJunction
+        value: 3.0
+
+  turn_direction:
+    curriculum:
+      - name: RightTurn
+        value: 2.0
+
+  traffic_signal_enabled:
+    curriculum:
+      - name: NoSignal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 510.0
+        value: 0.0
+      - name: SignalActive
+        value: 1.0
+
+  signal_green_ratio:
+    curriculum:
+      - name: EasyGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 530.0
+        value: 0.8
+      - name: MediumGreen
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 540.0
+        value: 0.6
+      - name: HardGreen
+        value: 0.4
+
+  # =======================================================
+  # PHASE 4: Curves + Pedestrians (steps 10M - 15M)
+  # Learn: curved roads, then yielding to pedestrians
+  # =======================================================
+
+  curve_direction_variation:
+    curriculum:
+      - name: RandomCurves
+        value: 0.5
+
+  road_curvature:
+    curriculum:
+      - name: NoCurve
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 550.0
+        value: 0.0
+      - name: LightCurve
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 530.0
+        value: 0.3
+      - name: MediumCurve
+        value: 0.5
+
+  # Pedestrians: final curriculum stage
+  # Crosswalk always present; num_pedestrians=0 = nothing to yield to
+  num_pedestrians:
+    curriculum:
+      - name: NoPedestrians
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 560.0
+        value: 0.0
+      - name: OnePedestrian
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 540.0
+        value: 1.0
+      - name: TwoPedestrians
+        value: 2.0
+
+  speed_zone_count:
+    curriculum:
+      - name: OneZone
+        value: 1.0
+
+# =======================================================
+# BUILD-BASED MULTI-ENV TRAINING
+# IMPORTANT: Must rebuild PhaseL.exe with L code changes
+# Pre-build checklist (P-024):
+#   1. Open PhaseL_Crosswalks scene
+#   2. Verify BehaviorType = Default (NOT InferenceOnly)
+#   3. Build via Build > Build Phase L
+# =======================================================
+
+env_settings:
+  env_path: Builds/PhaseL/PhaseL.exe
+  num_envs: 3
+  base_port: 5010
+  timeout_wait: 600
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: true
+
+torch_settings:
+  device: cuda

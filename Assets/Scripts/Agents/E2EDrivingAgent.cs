@@ -27,6 +27,10 @@ namespace ADPlatform.Agents
     ///   Phase J (268D = 260D + 8D):
     ///   - + Traffic signal (8D): state(4), dist_to_stop(1), time_remaining(1), should_stop(1), stopped_at_line(1)
     ///
+    ///   Phase L (280D = 268D + 12D):
+    ///   - + Pedestrian info (10D): 2 nearest pedestrians x 5 (rel_x, rel_z, vel_x, vel_z, dist)
+    ///   - + Crosswalk info (2D): has_crosswalk_ahead(1), distance_to_crosswalk(1)
+    ///
     /// Action Space (2D continuous):
     ///   - Steering: [-0.5, 0.5] rad
     ///   - Acceleration: [-4.0, 2.0] m/s²
@@ -65,6 +69,8 @@ namespace ADPlatform.Agents
         public bool enableIntersectionObservation = false;  // +6D when enabled
         [Tooltip("Phase J+: true (268D)")]
         public bool enableTrafficSignalObservation = false;  // +8D when enabled
+        [Tooltip("Phase L+: true (280D)")]
+        public bool enablePedestrianObservation = false;     // +12D when enabled
 
         [Header("Reward Weights")]
         public float progressWeight = 1.0f;
@@ -73,7 +79,7 @@ namespace ADPlatform.Agents
         public float offRoadPenalty = -5f;
         public float jerkPenalty = -0.1f;
         public float goalBonus = 10f;
-        public float timePenalty = -0.001f;
+        public float timePenalty = -0.05f;
 
         [Header("Speed Policy Rewards")]
         public float speedComplianceReward = 0.3f;    // 80-100% of limit
@@ -98,6 +104,15 @@ namespace ADPlatform.Agents
         public float unnecessaryStopPenalty = -0.1f;     // Per-step: stopped at green for too long
         public float unnecessaryStopTimeout = 2f;        // seconds at green before penalty
         public bool terminateOnRedViolation = true;      // End episode on red light violation
+
+        [Header("Pedestrian References (Phase L)")]
+        public PedestrianController[] pedestrians;
+        public float pedestrianDetectionRange = 50f;
+
+        [Header("Pedestrian Rewards (Phase L)")]
+        public float pedestrianCollisionPenalty = -10f;
+        public float crosswalkYieldReward = 0.2f;
+        public float crosswalkSpeedPenaltyScale = -0.3f;
 
         public enum TrainingVersion { v10g, v11, v12 }
 
@@ -223,6 +238,21 @@ namespace ADPlatform.Agents
         private float stoppedAtGreenTimer = 0f;          // Time spent unnecessarily stopped at green
         private float dbgTrafficSignalReward = 0f;       // Debug: traffic signal reward component
 
+        // Pedestrian state (Phase L)
+        private float dbgPedestrianReward = 0f;
+        private float crosswalkZ = 75f;  // Default crosswalk Z position (before intersection at 93m)
+        private float yieldRewardAccumulated = 0f;     // Cumulative yield reward this episode
+        private float maxYieldRewardPerEpisode = 2f;   // Cap: max yield reward per episode (prevents farming)
+        private float yieldDuration = 0f;              // How long agent has been yielding this encounter
+        private float maxYieldDuration = 8f;           // Max yield time before penalty (seconds)
+        private bool hasYieldedThisEncounter = false;   // Track if yield was already rewarded for current crosswalk
+        private float crosswalkStopTimer = 0f;         // Total time spent slow (<2 m/s) near crosswalk this episode
+        private float maxCrosswalkStopDuration = 15f;  // Episode terminates after this many seconds near crosswalk
+
+        // Speed reward cap (P-027: anti-speed-farming)
+        private float speedRewardAccumulated = 0f;
+        private float maxSpeedRewardPerEpisode = 200f;
+
         // Debug: reward component tracking
         private float dbgProgressReward = 0f;
         private float dbgSpeedReward = 0f;
@@ -276,6 +306,15 @@ namespace ADPlatform.Agents
             stuckBehindTimeout = 3.0f;
             overtakeSlowLeadThreshold = 0.7f;
             overtakeDetectWidth = 3.0f;
+            timePenalty = -0.05f;  // P-027: force value (prevent Inspector override)
+
+            // P-027: Limit per-episode steps to prevent infinite farming
+            // But allow unlimited steps for inference-only mode (Phase M test field)
+            var bp = GetComponent<Unity.MLAgents.Policies.BehaviorParameters>();
+            if (bp != null && bp.BehaviorType == Unity.MLAgents.Policies.BehaviorType.InferenceOnly)
+                MaxStep = 0;  // Unlimited for inference
+            else
+                MaxStep = 3000;
 
             startPosition = transform.position;
             startRotation = transform.rotation;
@@ -294,6 +333,15 @@ namespace ADPlatform.Agents
             {
                 egoHistory[i] = new float[8];
             }
+        }
+
+        /// <summary>
+        /// Set the start position/rotation for this agent (used by TestFieldManager for respawning).
+        /// </summary>
+        public void SetStartPose(Vector3 position, Quaternion rotation)
+        {
+            startPosition = position;
+            startRotation = rotation;
         }
 
         public override void OnEpisodeBegin()
@@ -350,6 +398,14 @@ namespace ADPlatform.Agents
             prevSignalState = TrafficLightController.LightState.None;
             stoppedAtGreenTimer = 0f;
             dbgTrafficSignalReward = 0f;
+
+            // Reset pedestrian state
+            dbgPedestrianReward = 0f;
+            yieldRewardAccumulated = 0f;
+            yieldDuration = 0f;
+            hasYieldedThisEncounter = false;
+            crosswalkStopTimer = 0f;
+            speedRewardAccumulated = 0f;  // P-027
 
             // Reset debug stats
             dbgProgressReward = 0f;
@@ -435,6 +491,12 @@ namespace ADPlatform.Agents
             if (enableTrafficSignalObservation)
             {
                 CollectTrafficSignalObservations(sensor);
+            }
+
+            // === PEDESTRIAN INFO (12D) === [Phase L+: enabled]
+            if (enablePedestrianObservation)
+            {
+                CollectPedestrianObservations(sensor);
             }
         }
 
@@ -556,6 +618,84 @@ namespace ADPlatform.Agents
 
             // Stopped at line indicator (1D) - 1 if stopped within tolerance of stop line
             sensor.AddObservation(trafficLight.IsStoppedAtLine(transform.position, Mathf.Abs(currentSpeed)) ? 1f : 0f);
+        }
+
+        /// <summary>
+        /// Pedestrian observation collection (Phase L).
+        /// Finds 2 nearest active pedestrians and adds relative position, velocity, distance.
+        /// Also adds crosswalk info: has_crosswalk_ahead(1D), distance_to_crosswalk(1D).
+        /// Total: 12D = 2 pedestrians x 5D + 2D crosswalk
+        /// </summary>
+        private void CollectPedestrianObservations(VectorSensor sensor)
+        {
+            // Find nearest active pedestrians sorted by distance
+            float nearestDist1 = float.MaxValue;
+            float nearestDist2 = float.MaxValue;
+            PedestrianController nearest1 = null;
+            PedestrianController nearest2 = null;
+
+            if (pedestrians != null)
+            {
+                foreach (var ped in pedestrians)
+                {
+                    if (ped == null || !ped.IsActive()) continue;
+
+                    float dist = Vector3.Distance(transform.position, ped.GetPosition());
+                    if (dist > pedestrianDetectionRange) continue;
+
+                    if (dist < nearestDist1)
+                    {
+                        // Shift 1st to 2nd
+                        nearestDist2 = nearestDist1;
+                        nearest2 = nearest1;
+                        nearestDist1 = dist;
+                        nearest1 = ped;
+                    }
+                    else if (dist < nearestDist2)
+                    {
+                        nearestDist2 = dist;
+                        nearest2 = ped;
+                    }
+                }
+            }
+
+            // Pedestrian 1 (5D)
+            AddPedestrianObs(sensor, nearest1, nearestDist1);
+            // Pedestrian 2 (5D)
+            AddPedestrianObs(sensor, nearest2, nearestDist2);
+
+            // Crosswalk info (2D)
+            // Distance from ego to crosswalk (in local Z space)
+            float crosswalkWorldZ = transform.parent != null
+                ? transform.parent.position.z + crosswalkZ
+                : crosswalkZ;
+            float distToCrosswalk = crosswalkWorldZ - transform.position.z;
+            bool hasCrosswalkAhead = distToCrosswalk > 0f && distToCrosswalk < 100f;
+
+            sensor.AddObservation(hasCrosswalkAhead ? 1f : 0f);
+            sensor.AddObservation(Mathf.Clamp01(distToCrosswalk / 200f));
+        }
+
+        private void AddPedestrianObs(VectorSensor sensor, PedestrianController ped, float dist)
+        {
+            if (ped != null && ped.IsActive())
+            {
+                Vector3 relPos = transform.InverseTransformPoint(ped.GetPosition());
+                Vector3 pedVel = ped.GetVelocity();
+                Vector3 relVel = transform.InverseTransformDirection(pedVel);
+
+                sensor.AddObservation(relPos.x / pedestrianDetectionRange);   // rel_x
+                sensor.AddObservation(relPos.z / pedestrianDetectionRange);   // rel_z
+                sensor.AddObservation(relVel.x / 2f);                         // vel_x (norm by 2 m/s)
+                sensor.AddObservation(relVel.z / 2f);                         // vel_z
+                sensor.AddObservation(dist / pedestrianDetectionRange);        // distance
+            }
+            else
+            {
+                // Pad with zeros
+                for (int i = 0; i < 5; i++)
+                    sensor.AddObservation(0f);
+            }
         }
 
         /// <summary>
@@ -869,8 +1009,12 @@ namespace ADPlatform.Agents
                 }
             }
 
-            // 2. Speed policy rewards
+            // 2. Speed policy rewards (P-027: cap per-episode to prevent farming)
             speedR = CalculateSpeedPolicyReward();
+            if (speedR > 0f && speedRewardAccumulated + speedR > maxSpeedRewardPerEpisode)
+                speedR = Mathf.Max(0f, maxSpeedRewardPerEpisode - speedRewardAccumulated);
+            if (speedR > 0f)
+                speedRewardAccumulated += speedR;
             reward += speedR;
 
             // 2.5. Lane keeping
@@ -949,6 +1093,23 @@ namespace ADPlatform.Agents
                 }
             }
 
+            // 5.8. Pedestrian reward (Phase L)
+            if (enablePedestrianObservation)
+            {
+                float pedR = CalculatePedestrianReward();
+                reward += pedR;
+                dbgPedestrianReward += pedR;
+
+                if (pedR <= pedestrianCollisionPenalty + 0.1f)
+                {
+                    dbgEpisodeEndReason = "PEDESTRIAN_COLLISION";
+                    LogEpisodeSummary();
+                    AddReward(reward);
+                    EndEpisode();
+                    return;
+                }
+            }
+
             // 6. Near-collision penalty (TTC < 2s)
             if (IsNearCollision())
             {
@@ -995,6 +1156,7 @@ namespace ADPlatform.Agents
                 stats.Add("Reward/Overtaking", dbgOvertakeReward);
                 stats.Add("Reward/LaneViolation", dbgLaneViolationPenalty);
                 stats.Add("Reward/TrafficSignal", dbgTrafficSignalReward);
+                stats.Add("Reward/Pedestrian", dbgPedestrianReward);
                 stats.Add("Reward/Jerk", (Mathf.Abs(steering - prevSteering) + Mathf.Abs(acceleration - prevAcceleration)) * jerkPenalty);
                 stats.Add("Reward/Time", timePenalty * debugLogInterval);
 
@@ -1040,6 +1202,9 @@ namespace ADPlatform.Agents
             stats.Add("Episode/EndReason_MaxDistance", dbgEpisodeEndReason == "MAX_DISTANCE" ? 1f : 0f);
             stats.Add("Episode/EndReason_Stuck", dbgEpisodeEndReason == "STUCK_LOW_SPEED" ? 1f : 0f);
             stats.Add("Episode/EndReason_LaneViolation", dbgEpisodeEndReason == "DOUBLE_YELLOW_VIOLATION" ? 1f : 0f);
+            stats.Add("Episode/EndReason_Pedestrian", dbgEpisodeEndReason == "PEDESTRIAN_COLLISION" ? 1f : 0f);
+            stats.Add("Episode/EndReason_GoalBypass", dbgEpisodeEndReason == "GOAL_BYPASS" ? 1f : 0f);
+            stats.Add("Episode/SpeedRewardCapped", speedRewardAccumulated >= maxSpeedRewardPerEpisode ? 1f : 0f);
 
             // Cumulative reward components (episode totals)
             stats.Add("Episode/TotalProgress", dbgProgressReward);
@@ -1760,6 +1925,103 @@ namespace ADPlatform.Agents
         }
 
         /// <summary>
+        /// Pedestrian reward (Phase L).
+        /// - Collision with pedestrian: terminate with large penalty
+        /// - Approaching crosswalk with active pedestrian while fast: speed penalty
+        /// - Yielding (slowing/stopping) at crosswalk with crossing pedestrian: positive reward
+        /// </summary>
+        private float CalculatePedestrianReward()
+        {
+            if (pedestrians == null) return 0f;
+
+            float reward = 0f;
+            float speed = Mathf.Abs(currentSpeed);
+            float crosswalkWorldZ = transform.parent != null
+                ? transform.parent.position.z + crosswalkZ
+                : crosswalkZ;
+            float distToCrosswalk = crosswalkWorldZ - transform.position.z;
+
+            // Check collision via OverlapSphere (small radius around ego)
+            bool anyPedestrianActive = false;
+            bool pedestrianAtCrosswalk = false;
+
+            foreach (var ped in pedestrians)
+            {
+                if (ped == null || !ped.IsActive()) continue;
+                anyPedestrianActive = true;
+
+                float distToPed = Vector3.Distance(transform.position, ped.GetPosition());
+
+                // Collision detection: very close to pedestrian
+                if (distToPed < 3f)
+                {
+                    Debug.Log($"[Pedestrian] COLLISION at step {episodeSteps}, dist={distToPed:F1}m");
+                    return pedestrianCollisionPenalty;  // -10f, triggers episode end
+                }
+
+                // Check if pedestrian is near crosswalk (within 5m Z)
+                float pedDistFromCrosswalk = Mathf.Abs(ped.GetPosition().z - crosswalkWorldZ);
+                if (pedDistFromCrosswalk < 10f)
+                {
+                    pedestrianAtCrosswalk = true;
+                }
+            }
+
+            // Crosswalk yielding reward (v3: capped + episode termination for overstay)
+            // Track time spent slow near crosswalk (anti-farming, regardless of pedestrian presence)
+            if (distToCrosswalk > 0f && distToCrosswalk < 20f && speed < 2f)
+            {
+                crosswalkStopTimer += Time.fixedDeltaTime;
+            }
+            else if (distToCrosswalk > 30f || speed >= 3f)
+            {
+                // Reset timer when clearly past crosswalk or driving normally
+                crosswalkStopTimer = Mathf.Max(0f, crosswalkStopTimer - Time.fixedDeltaTime * 2f);
+            }
+
+            if (pedestrianAtCrosswalk && distToCrosswalk > 0f && distToCrosswalk < 50f)
+            {
+                // Agent is approaching crosswalk with active pedestrian
+                if (speed < 1f && distToCrosswalk < 15f)
+                {
+                    yieldDuration += Time.fixedDeltaTime;
+
+                    if (yieldDuration <= maxYieldDuration && yieldRewardAccumulated < maxYieldRewardPerEpisode)
+                    {
+                        // Yielding: capped positive reward
+                        float yieldR = crosswalkYieldReward * Time.fixedDeltaTime;
+                        yieldR = Mathf.Min(yieldR, maxYieldRewardPerEpisode - yieldRewardAccumulated);
+                        reward += yieldR;
+                        yieldRewardAccumulated += yieldR;
+                        hasYieldedThisEncounter = true;
+                    }
+                    else if (yieldDuration > maxYieldDuration)
+                    {
+                        // Overstaying penalty: strong enough to deter farming
+                        reward += -1.0f * Time.fixedDeltaTime;
+                    }
+                }
+                else if (speed > currentSpeedLimit * 0.5f && distToCrosswalk < 30f)
+                {
+                    // Going too fast near crosswalk with pedestrian
+                    float excessRatio = speed / Mathf.Max(currentSpeedLimit, 1f);
+                    reward += crosswalkSpeedPenaltyScale * excessRatio * Time.fixedDeltaTime;
+                }
+            }
+            else
+            {
+                // Not near crosswalk with pedestrian: reset yield tracking for next encounter
+                if (hasYieldedThisEncounter)
+                {
+                    yieldDuration = 0f;
+                    hasYieldedThisEncounter = false;
+                }
+            }
+
+            return reward;
+        }
+
+        /// <summary>
         /// Detect lead vehicle ahead using SphereCast (catches laterally offset NPCs).
         /// Returns true if a vehicle is within leadVehicleDetectRange ahead.
         /// Also updates overtakeTarget for overtaking reward tracking.
@@ -1810,6 +2072,21 @@ namespace ADPlatform.Agents
                 return;
             }
 
+            // P-027: Goal bypass detection - agent drove past goal without reaching it
+            if (goalTarget != null)
+            {
+                float agentZ = transform.position.z;
+                float goalZ = goalTarget.position.z;
+                if (agentZ > goalZ + 20f)
+                {
+                    dbgEpisodeEndReason = "GOAL_BYPASS";
+                    LogEpisodeSummary();
+                    AddReward(-2f);
+                    EndEpisode();
+                    return;
+                }
+            }
+
             // Max steps (handled by ML-Agents MaxStep setting)
             // Stuck detection (low speed for too long)
             if (episodeSteps > 500 && currentSpeed < 0.1f)
@@ -1817,6 +2094,16 @@ namespace ADPlatform.Agents
                 dbgEpisodeEndReason = "STUCK_LOW_SPEED";
                 LogEpisodeSummary();
                 AddReward(-1f);
+                EndEpisode();
+                return;
+            }
+
+            // Crosswalk anti-farming: terminate if loitering near crosswalk (P-026 v3)
+            if (enablePedestrianObservation && crosswalkStopTimer > maxCrosswalkStopDuration)
+            {
+                dbgEpisodeEndReason = "CROSSWALK_OVERSTAY";
+                LogEpisodeSummary();
+                AddReward(-2f);
                 EndEpisode();
             }
         }

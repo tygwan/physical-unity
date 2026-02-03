@@ -1,0 +1,167 @@
+# E2EDrivingAgent PPO Phase L v3: Crosswalks + Pedestrians (Anti-Farming v3)
+# Strategy: RESUME from L v1 12.5M checkpoint (best stable model)
+#
+# Phase L v1 (exploit): Agent stopped at crosswalk to farm yield reward -> +20K
+# Phase L v2 (partial fix): Yield cap (2.0/episode) insufficient.
+#   Agent found new exploit: drive slow (0.2-0.9 m/s) near crosswalk,
+#   avoid stuck detection (threshold 0.1 m/s), accumulate driving rewards
+#   over extremely long episodes (5000+ reward).
+#
+# v3 Fix (P-026 v3: Crosswalk Anti-Farming):
+#   - crosswalkStopTimer: total time spent slow (<2 m/s) within 20m of crosswalk
+#   - Episode terminates (CROSSWALK_OVERSTAY) after 15 seconds
+#   - Overstay penalty increased: -0.1/s -> -1.0/s (10x stronger)
+#   - Timer decays when agent is far from crosswalk or driving normally
+#
+# Resume strategy:
+#   - init_path from v1 12.5M checkpoint (same as v2)
+#   - 5M additional steps
+#   - Pedestrian curriculum: 0 -> 1 -> 2
+#
+# P-019 compliance: No Unicode special characters in YAML
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 2048
+      buffer_size: 20480
+      learning_rate: 1.0e-4    # Lower LR for resume fine-tuning
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    init_path: results/phase-L-v1/E2EDrivingAgent/E2EDrivingAgent-12499788.pt
+    max_steps: 5000000       # 5M additional steps
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 10
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  # All driving params at final values (already learned in v1)
+  goal_distance:
+    curriculum:
+      - name: Full
+        value: 230.0
+
+  num_lanes:
+    curriculum:
+      - name: TwoLanes
+        value: 2.0
+
+  center_line_enabled:
+    curriculum:
+      - name: CenterLineOn
+        value: 1.0
+
+  num_active_npcs:
+    curriculum:
+      - name: ThreeNPCs
+        value: 3.0
+
+  npc_speed_ratio:
+    curriculum:
+      - name: NormalNPCs
+        value: 0.85
+
+  npc_speed_variation:
+    curriculum:
+      - name: FullVariation
+        value: 0.15
+
+  intersection_type:
+    curriculum:
+      - name: YJunction
+        value: 3.0
+
+  turn_direction:
+    curriculum:
+      - name: RightTurn
+        value: 2.0
+
+  traffic_signal_enabled:
+    curriculum:
+      - name: SignalActive
+        value: 1.0
+
+  signal_green_ratio:
+    curriculum:
+      - name: HardGreen
+        value: 0.4
+
+  curve_direction_variation:
+    curriculum:
+      - name: RandomCurves
+        value: 0.5
+
+  road_curvature:
+    curriculum:
+      - name: MediumCurve
+        value: 0.5
+
+  speed_zone_count:
+    curriculum:
+      - name: OneZone
+        value: 1.0
+
+  # Pedestrian curriculum: gradual introduction
+  num_pedestrians:
+    curriculum:
+      - name: NoPedestrians
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 600.0
+        value: 0.0
+      - name: OnePedestrian
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 620.0
+        value: 1.0
+      - name: TwoPedestrians
+        value: 2.0
+
+# =======================================================
+# BUILD-BASED MULTI-ENV TRAINING
+# IMPORTANT: PhaseL.exe rebuilt with v3 anti-farming fix
+# =======================================================
+
+env_settings:
+  env_path: Builds/PhaseL/PhaseL.exe
+  num_envs: 3
+  base_port: 5010
+  timeout_wait: 600
+
+engine_settings:
+  width: 640
+  height: 480
+  quality_level: 1
+  time_scale: 20
+  target_frame_rate: -1
+  capture_frame_rate: 60
+  no_graphics: true
+
+torch_settings:
+  device: cuda
