@@ -36,7 +36,7 @@ behaviors:
         gamma: 0.99
         strength: 1.0
 
-    # init_path: results/phase-N-v0-bc/E2EDrivingAgent/E2EDrivingAgent-XXXX.pt
+    # init_path: results/phase-N-v5/E2EDrivingAgent/E2EDrivingAgent-272682.pt
     max_steps: 3000000
     time_horizon: 256
     summary_freq: 10000

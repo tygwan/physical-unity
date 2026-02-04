@@ -150,7 +150,17 @@ namespace ADPlatform.Environment
         /// </summary>
         private void ConnectWaypoints()
         {
-            if (waypointManager == null) return;
+            // Phase N: CurriculumRoadManager handles waypoints instead of WaypointManager
+            if (waypointManager == null)
+            {
+                if (curriculumRoadManager != null && egoAgent != null)
+                {
+                    egoAgent.routeWaypoints = curriculumRoadManager.GetCurrentWaypoints();
+                    if (goalTarget != null)
+                        egoAgent.goalTarget = goalTarget;
+                }
+                return;
+            }
 
             Transform[] waypoints = waypointManager.GetAllWaypoints();
             if (waypoints.Length == 0)
@@ -247,9 +257,12 @@ namespace ADPlatform.Environment
             if (curriculumRoadManager != null)
             {
                 curriculumRoadManager.ConfigureForEpisode();
-                // Update agent waypoints from the newly generated road
                 if (egoAgent != null)
+                {
                     egoAgent.routeWaypoints = curriculumRoadManager.GetCurrentWaypoints();
+                    if (goalTarget != null)
+                        egoAgent.goalTarget = goalTarget;
+                }
             }
 
             // Control number of active NPCs

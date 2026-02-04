@@ -1306,8 +1306,20 @@ namespace ADPlatform.Agents
             float speed = Mathf.Abs(currentSpeed);
             float speedLimit = currentSpeedLimit;
 
+            // Phase N (no waypointManager): strong positive speed reward for fresh training.
+            // Without transfer learning, PPO needs a clear reward gradient to bootstrap acceleration.
+            // The heading alignment reward (+0.02/step) creates a local optimum at speed=0.
+            // We need speed reward > heading reward at even low speeds to break this plateau.
+            // At 5 m/s: ratio=0.17 * 1.0 = 0.17/step >> heading's 0.02/step
+            if (waypointManager == null)
+            {
+                float target = Mathf.Max(speedLimit, maxSpeed);
+                float ratio = Mathf.Clamp01(speed / target);
+                return ratio * 1.0f;
+            }
+
             // If no speed limit info available, use a minimal forward reward
-            if (waypointManager == null || speedLimit < 0.1f)
+            if (speedLimit < 0.1f)
             {
                 return Mathf.Clamp01(speed / maxSpeed) * 0.1f;
             }
@@ -1422,7 +1434,7 @@ namespace ADPlatform.Agents
 
             if (aheadWP == null) return 0f;
 
-            // === Heading Alignment ===
+            // === Heading Alignment (gated by speed to prevent stationary local optimum) ===
             Vector3 toWaypoint = aheadWP.position - transform.position;
             toWaypoint.y = 0f;
             toWaypoint.Normalize();
@@ -1432,15 +1444,17 @@ namespace ADPlatform.Agents
             forward.Normalize();
 
             float headingDot = Vector3.Dot(forward, toWaypoint);
+            // Speed gate: no heading reward when stationary, full at 2+ m/s
+            float speedGate = Mathf.Clamp01(Mathf.Abs(currentSpeed) / 2f);
             // Reward when well-aligned (dot > 0.95 = within ~18 degrees)
             if (headingDot > 0.95f)
             {
-                reward += headingAlignmentReward * ((headingDot - 0.95f) / 0.05f);
+                reward += headingAlignmentReward * ((headingDot - 0.95f) / 0.05f) * speedGate;
             }
             // Penalty when badly misaligned (dot < 0.7 = > 45 degrees)
             else if (headingDot < 0.7f)
             {
-                reward += -0.05f;
+                reward += -0.05f * speedGate;
             }
 
             // === Lateral Deviation (suspended during overtaking) ===
