@@ -324,7 +324,8 @@ namespace ADPlatform.Agents
             // P-027: Limit per-episode steps to prevent infinite farming
             // But allow unlimited steps for inference-only mode (Phase M test field)
             var bp = GetComponent<Unity.MLAgents.Policies.BehaviorParameters>();
-            isInferenceMode = bp != null && bp.BehaviorType == Unity.MLAgents.Policies.BehaviorType.InferenceOnly;
+            isInferenceMode = bp != null && (bp.BehaviorType == Unity.MLAgents.Policies.BehaviorType.InferenceOnly
+                                          || bp.BehaviorType == Unity.MLAgents.Policies.BehaviorType.HeuristicOnly);
             if (isInferenceMode)
                 MaxStep = 0;  // Unlimited for inference
             else

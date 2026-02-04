@@ -182,8 +182,20 @@ namespace ADPlatform.Environment
         }
 
         /// <summary>
+        /// Get signed distance along the approach axis from vehicle to stop line.
+        /// Uses local space so it works regardless of traffic light orientation.
+        /// Positive = vehicle is before the stop line, Negative = vehicle has passed it.
+        /// Backward compatible: existing scenes with Z+ facing lights produce identical results.
+        /// </summary>
+        public float GetDistanceAlongApproach(Vector3 vehiclePosition)
+        {
+            Vector3 localPos = transform.InverseTransformPoint(vehiclePosition);
+            return stopLineZ - localPos.z;
+        }
+
+        /// <summary>
         /// Get the Z position of the stop line in world space.
-        /// Accounts for Training Area offset.
+        /// Kept for backward compatibility with existing training scenes.
         /// </summary>
         public float GetStopLineWorldZ()
         {
@@ -193,14 +205,14 @@ namespace ADPlatform.Environment
         /// <summary>
         /// Check if a vehicle at the given position should stop.
         /// True if red/yellow AND vehicle is behind the stop line.
+        /// Uses local space for direction-independent detection.
         /// </summary>
         public bool ShouldStop(Vector3 vehiclePosition)
         {
             if (!signalEnabled) return false;
             if (currentState != LightState.Red && currentState != LightState.Yellow) return false;
 
-            float stopLineWorldZ = GetStopLineWorldZ();
-            return vehiclePosition.z < stopLineWorldZ;
+            return GetDistanceAlongApproach(vehiclePosition) > 0f;
         }
 
         /// <summary>
@@ -210,10 +222,8 @@ namespace ADPlatform.Environment
         {
             if (!signalEnabled) return false;
 
-            float stopLineWorldZ = GetStopLineWorldZ();
-            float distToLine = stopLineWorldZ - vehiclePosition.z;
-
-            return distToLine > 0f && distToLine < stopLineTolerance && vehicleSpeed < 0.5f;
+            float dist = GetDistanceAlongApproach(vehiclePosition);
+            return dist > 0f && dist < stopLineTolerance && vehicleSpeed < 0.5f;
         }
 
         /// <summary>
@@ -224,9 +234,7 @@ namespace ADPlatform.Environment
             if (!signalEnabled) return false;
             if (currentState != LightState.Red) return false;
 
-            float stopLineWorldZ = GetStopLineWorldZ();
-            // Vehicle has passed the stop line while red
-            return vehiclePosition.z > stopLineWorldZ;
+            return GetDistanceAlongApproach(vehiclePosition) < 0f;
         }
 
         /// <summary>
@@ -235,8 +243,7 @@ namespace ADPlatform.Environment
         /// </summary>
         public float GetDistanceToStopLineNormalized(Vector3 vehiclePosition)
         {
-            float stopLineWorldZ = GetStopLineWorldZ();
-            float dist = stopLineWorldZ - vehiclePosition.z;
+            float dist = GetDistanceAlongApproach(vehiclePosition);
             return Mathf.Clamp01(dist / 200f);
         }
     }
