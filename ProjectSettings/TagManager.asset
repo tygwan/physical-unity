@@ -6,6 +6,9 @@ TagManager:
   tags:
   - Vehicle
   - Obstacle
+  - Road
+  - LaneMarking
+  - RoadEdge
   layers:
   - Default
   - TransparentFX

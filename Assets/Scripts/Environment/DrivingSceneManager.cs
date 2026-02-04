@@ -19,6 +19,7 @@ namespace ADPlatform.Environment
         public E2EDrivingAgent egoAgent;
         public AutonomousDrivingController adController;
         public WaypointManager waypointManager;
+        public ADPlatform.RoadBuilder.CurriculumRoadManager curriculumRoadManager;
         public Transform goalTarget;
 
         [Header("NPC Vehicles")]
@@ -241,6 +242,15 @@ namespace ADPlatform.Environment
             // TestFieldManager handles road config in Phase M test field
             if (inferenceMode && FindAnyObjectByType<ADPlatform.TestField.TestFieldManager>() != null)
                 return;
+
+            // CurriculumRoadManager handles road generation in Phase N
+            if (curriculumRoadManager != null)
+            {
+                curriculumRoadManager.ConfigureForEpisode();
+                // Update agent waypoints from the newly generated road
+                if (egoAgent != null)
+                    egoAgent.routeWaypoints = curriculumRoadManager.GetCurrentWaypoints();
+            }
 
             // Control number of active NPCs
             int numNPCs = Mathf.RoundToInt(GetCurriculumParam("num_active_npcs", 0f));

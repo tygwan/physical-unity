@@ -1,0 +1,121 @@
+# E2EDrivingAgent PPO Phase N v2: Curves introduction
+# Strategy: Warm start from Phase N v1, then add curves and longer goals
+#
+# Changes from v1:
+#   - road_stage curriculum: 0 (Straight) -> 1 (Curves) at threshold 350
+#   - road_curvature curriculum: 0 -> 0.3 -> 0.6 at thresholds 250/360
+#   - num_lanes curriculum: 1 -> 2 -> 3 at thresholds 300/400
+#   - goal_distance curriculum: 200 -> 400 at threshold 320
+#   - Learning rate reduced to 1e-4 for fine-tuning
+#   - 5M steps for curves
+#
+# P-002 compliance: All thresholds staggered (250, 300, 320, 350, 360, 400)
+# P-019 compliance: No Unicode special characters in YAML
+
+behaviors:
+  E2EDrivingAgent:
+    trainer_type: ppo
+
+    hyperparameters:
+      batch_size: 2048
+      buffer_size: 20480
+      learning_rate: 1.0e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: constant
+      beta_schedule: constant
+      epsilon_schedule: constant
+
+    network_settings:
+      normalize: false
+      hidden_units: 512
+      num_layers: 3
+
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    # init_path: results/phase-N-v1/E2EDrivingAgent/E2EDrivingAgent-XXXX.pt
+    max_steps: 5000000
+    time_horizon: 256
+    summary_freq: 10000
+    keep_checkpoints: 10
+    checkpoint_interval: 500000
+    threaded: false
+
+environment_parameters:
+  road_stage:
+    curriculum:
+      - name: Stage0_Straight
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 350.0
+        value: 0.0
+      - name: Stage1_Curves
+        value: 1.0
+
+  num_lanes:
+    curriculum:
+      - name: OneLane
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 300.0
+        value: 1.0
+      - name: TwoLanes
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 400.0
+        value: 2.0
+      - name: ThreeLanes
+        value: 3.0
+
+  road_curvature:
+    curriculum:
+      - name: NoCurves
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 250.0
+        value: 0.0
+      - name: MildCurves
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 360.0
+        value: 0.3
+      - name: StrongCurves
+        value: 0.6
+
+  goal_distance:
+    curriculum:
+      - name: MidGoal
+        completion_criteria:
+          measure: reward
+          behavior: E2EDrivingAgent
+          signal_smoothing: true
+          min_lesson_length: 3000
+          threshold: 320.0
+        value: 200.0
+      - name: LongGoal
+        value: 400.0
+
+  intersection_type:
+    curriculum:
+      - name: NoIntersection
+        value: 0.0

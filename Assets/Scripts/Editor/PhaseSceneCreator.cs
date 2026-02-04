@@ -46,6 +46,7 @@ public class PhaseSceneCreator
         CreatePhaseKScene();
         CreatePhaseLScene();
         CreatePhaseMScene();
+        CreatePhaseNScene();
 
         EditorUtility.DisplayDialog("Complete",
             "All Phase scenes created in Assets/Scenes/", "OK");
@@ -252,6 +253,9 @@ public class PhaseSceneCreator
             numPedestrians = 3,
         });
     }
+
+    [MenuItem("Tools/Create Phase Scenes/Phase N - Curriculum Roads")]
+    public static void CreatePhaseNScene() { CreatePhaseN_CurriculumRoads(); }
 
     #endregion
 
@@ -1803,6 +1807,266 @@ public class PhaseSceneCreator
             if (i < goals.Length)
                 SetProperty(agentComponent, "goalTarget", goals[i].transform);
         }
+    }
+
+    #endregion
+
+    #region Phase N - Curriculum Roads (ProceduralRoadBuilder)
+
+    private const int PHASE_N_NUM_AREAS = 16;
+    private const float PHASE_N_AREA_SPACING = 120f; // Wider spacing for procedural roads
+
+    private static void CreatePhaseN_CurriculumRoads()
+    {
+        if (!Directory.Exists(SCENES_PATH))
+        {
+            Directory.CreateDirectory(SCENES_PATH);
+            AssetDatabase.Refresh();
+        }
+
+        InitMaterialCache();
+
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+        // 1. Main Camera
+        var camera = new GameObject("Main Camera");
+        camera.tag = "MainCamera";
+        var cam = camera.AddComponent<Camera>();
+        cam.clearFlags = CameraClearFlags.Skybox;
+        cam.fieldOfView = 60f;
+        camera.transform.position = new Vector3(0f, 30f, -20f);
+        camera.transform.rotation = Quaternion.Euler(25, 0, 0);
+        camera.AddComponent<AudioListener>();
+
+        var followCameraType = System.Type.GetType("ADPlatform.DebugTools.FollowCamera, Assembly-CSharp");
+        if (followCameraType != null)
+            camera.AddComponent(followCameraType);
+        var freeFlyType = System.Type.GetType("ADPlatform.DebugTools.FreeFlyCamera, Assembly-CSharp");
+        if (freeFlyType != null)
+            camera.AddComponent(freeFlyType);
+
+        // 2. Directional Light
+        CreateDirectionalLight();
+
+        // 3. Training Areas parent
+        var trainingAreasParent = new GameObject("TrainingAreas");
+        trainingAreasParent.transform.position = Vector3.zero;
+
+        // 4. Create 16 parallel training areas
+        GameObject firstAgent = null;
+        for (int i = 0; i < PHASE_N_NUM_AREAS; i++)
+        {
+            Vector3 areaOffset = new Vector3(i * PHASE_N_AREA_SPACING, 0, 0);
+            var trainingArea = CreatePhaseNTrainingArea(i, areaOffset, trainingAreasParent.transform);
+
+            if (i == 0)
+                firstAgent = trainingArea.transform.Find("E2EDrivingAgent")?.gameObject;
+        }
+
+        // Wire camera to first agent
+        if (firstAgent != null && followCameraType != null)
+        {
+            var followCamera = camera.GetComponent(followCameraType);
+            if (followCamera != null)
+                SetProperty(followCamera, "target", firstAgent.transform);
+        }
+
+        // Save scene
+        string scenePath = $"{SCENES_PATH}/PhaseN_CurriculumRoads.unity";
+        EditorSceneManager.SaveScene(scene, scenePath);
+        AddSceneToBuildSettings(scenePath);
+
+        Debug.Log($"[PhaseSceneCreator] Created PhaseN_CurriculumRoads: {PHASE_N_NUM_AREAS} areas " +
+                  "with ProceduralRoadBuilder + CurriculumRoadManager (280D obs, curriculum-driven)");
+    }
+
+    private static GameObject CreatePhaseNTrainingArea(int areaIndex, Vector3 offset, Transform parent)
+    {
+        var trainingArea = new GameObject($"TrainingArea_{areaIndex}");
+        trainingArea.transform.SetParent(parent);
+        trainingArea.transform.position = offset;
+
+        // Ground (wide enough for curved roads + intersection arms)
+        var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        ground.name = "Ground";
+        ground.transform.SetParent(trainingArea.transform);
+        ground.transform.localPosition = Vector3.zero;
+        ground.transform.localScale = new Vector3(8f, 1f, 60f); // 80m wide x 600m deep
+        var groundMat = new Material(Shader.Find("Standard"));
+        groundMat.color = new Color(0.15f, 0.4f, 0.15f);
+        ground.GetComponent<Renderer>().material = groundMat;
+
+        // ProceduralRoadBuilder
+        var roadObj = new GameObject("ProceduralRoad");
+        roadObj.transform.SetParent(trainingArea.transform);
+        roadObj.transform.localPosition = Vector3.zero;
+        var roadBuilderType = System.Type.GetType("ADPlatform.RoadBuilder.ProceduralRoadBuilder, Assembly-CSharp");
+        UnityEngine.Component roadBuilderComp = null;
+        if (roadBuilderType != null)
+        {
+            roadBuilderComp = roadObj.AddComponent(roadBuilderType);
+            SetProperty(roadBuilderComp, "roadLength", 500f);
+            SetProperty(roadBuilderComp, "numLanes", 2);
+            SetProperty(roadBuilderComp, "laneWidth", 3.5f);
+            SetProperty(roadBuilderComp, "shoulderWidth", 1.0f);
+            SetProperty(roadBuilderComp, "roadCurvature", 0f);
+            SetProperty(roadBuilderComp, "waypointSpacing", 10f);
+            SetProperty(roadBuilderComp, "intersectionType", 0);
+        }
+
+        // CurriculumRoadManager (reads ML-Agents environment params)
+        var curriculumObj = new GameObject("CurriculumRoadManager");
+        curriculumObj.transform.SetParent(trainingArea.transform);
+        curriculumObj.transform.localPosition = Vector3.zero;
+        var curriculumType = System.Type.GetType("ADPlatform.RoadBuilder.CurriculumRoadManager, Assembly-CSharp");
+        UnityEngine.Component curriculumComp = null;
+        if (curriculumType != null)
+        {
+            curriculumComp = curriculumObj.AddComponent(curriculumType);
+            SetProperty(curriculumComp, "useCurriculum", true);
+            SetProperty(curriculumComp, "straightRoadLength", 300f);
+            SetProperty(curriculumComp, "curvesRoadLength", 400f);
+            SetProperty(curriculumComp, "intersectionRoadLength", 500f);
+            SetProperty(curriculumComp, "fullTrafficRoadLength", 500f);
+
+            if (roadBuilderComp != null)
+                SetProperty(curriculumComp, "roadBuilder", roadBuilderComp);
+        }
+
+        // Waypoint container
+        var waypointContainer = new GameObject("Waypoints");
+        waypointContainer.transform.SetParent(trainingArea.transform);
+        waypointContainer.transform.localPosition = Vector3.zero;
+        if (curriculumComp != null)
+            SetProperty(curriculumComp, "waypointParent", waypointContainer.transform);
+
+        // DrivingSceneManager
+        var sceneManagerObj = new GameObject("DrivingSceneManager");
+        sceneManagerObj.transform.SetParent(trainingArea.transform);
+        sceneManagerObj.transform.localPosition = Vector3.zero;
+        var dsmType = System.Type.GetType("ADPlatform.Environment.DrivingSceneManager, Assembly-CSharp");
+        UnityEngine.Component dsmComp = null;
+        if (dsmType != null)
+        {
+            dsmComp = sceneManagerObj.AddComponent(dsmType);
+            SetProperty(dsmComp, "useCurriculum", true);
+            SetProperty(dsmComp, "roadLength", 500f);
+        }
+
+        // Agent Vehicle (280D observations - all features)
+        var agent = CreatePhaseNAgent(areaIndex, trainingArea.transform);
+
+        // Goal Target
+        var goal = new GameObject("GoalTarget");
+        goal.transform.SetParent(trainingArea.transform);
+        goal.transform.localPosition = new Vector3(0f, 0.5f, 250f);
+        goal.transform.localScale = new Vector3(8f, 2f, 2f);
+
+        // Traffic Light (for curriculum Stage 2+)
+        var trafficLightObj = CreateTrafficLightForArea(trainingArea.transform);
+
+        // Wire references
+        if (dsmComp != null)
+        {
+            var agentComponent = agent.GetComponent("E2EDrivingAgent");
+            if (agentComponent != null)
+                SetProperty(dsmComp, "egoAgent", agentComponent);
+            SetProperty(dsmComp, "goalTarget", goal.transform);
+
+            // Wire CurriculumRoadManager to DrivingSceneManager
+            if (curriculumComp != null)
+                SetProperty(dsmComp, "curriculumRoadManager", curriculumComp);
+
+            if (trafficLightObj != null)
+            {
+                var tlComp = trafficLightObj.GetComponent("TrafficLightController");
+                if (tlComp != null)
+                {
+                    SetProperty(dsmComp, "trafficLight", tlComp);
+                    if (agentComponent != null)
+                        SetProperty(agentComponent, "trafficLight", tlComp);
+                }
+            }
+
+            // Empty NPC array
+            var npcType = System.Type.GetType("ADPlatform.Agents.NPCVehicleController, Assembly-CSharp");
+            if (npcType != null)
+            {
+                var emptyNpcArray = System.Array.CreateInstance(npcType, 0);
+                SetProperty(dsmComp, "npcVehicles", emptyNpcArray);
+            }
+        }
+
+        return trainingArea;
+    }
+
+    private static GameObject CreatePhaseNAgent(int areaIndex, Transform parent)
+    {
+        var agent = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        agent.name = "E2EDrivingAgent";
+        agent.transform.SetParent(parent);
+        agent.transform.localPosition = new Vector3(1.75f, 0.75f, -140f); // Near road start
+        agent.transform.localScale = new Vector3(2f, 1.5f, 4.5f);
+
+        var renderer = agent.GetComponent<Renderer>();
+        var material = new Material(Shader.Find("Standard"));
+        material.color = new Color(0.2f, 0.4f, 0.8f);
+        renderer.material = material;
+
+        var rb = agent.AddComponent<Rigidbody>();
+        rb.mass = 1500f;
+        rb.linearDamping = 1f;
+        rb.angularDamping = 2f;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+        Object.DestroyImmediate(agent.GetComponent<Collider>());
+        var collider = agent.AddComponent<BoxCollider>();
+        collider.size = Vector3.one;
+
+        // E2EDrivingAgent component with 280D observations (all features enabled)
+        var agentType = System.Type.GetType("ADPlatform.Agents.E2EDrivingAgent, Assembly-CSharp");
+        if (agentType != null)
+        {
+            var agentComponent = agent.AddComponent(agentType);
+            SetProperty(agentComponent, "enableLaneObservation", true);
+            SetProperty(agentComponent, "enableIntersectionObservation", true);
+            SetProperty(agentComponent, "enableTrafficSignalObservation", true);
+            SetProperty(agentComponent, "enablePedestrianObservation", true);
+        }
+
+        // BehaviorParameters: 280D obs, 2 continuous actions
+        var bp = agent.GetComponent("BehaviorParameters") as UnityEngine.Component;
+        if (bp != null)
+        {
+            var so = new SerializedObject(bp);
+            var nameProp = so.FindProperty("m_BehaviorName");
+            if (nameProp != null) nameProp.stringValue = "E2EDrivingAgent";
+
+            var obsSizeProp = so.FindProperty("m_BrainParameters.VectorObservationSize");
+            if (obsSizeProp != null) obsSizeProp.intValue = 280;
+
+            var stackProp = so.FindProperty("m_BrainParameters.NumStackedVectorObservations");
+            if (stackProp != null) stackProp.intValue = 1;
+
+            var continuousProp = so.FindProperty("m_BrainParameters.m_ActionSpec.m_NumContinuousActions");
+            if (continuousProp != null) continuousProp.intValue = 2;
+
+            var branchProp = so.FindProperty("m_BrainParameters.m_ActionSpec.BranchSizes");
+            if (branchProp != null) branchProp.ClearArray();
+
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        // DecisionRequester
+        var drType = System.Type.GetType("Unity.MLAgents.DecisionRequester, Unity.ML-Agents");
+        if (drType != null)
+        {
+            var dr = agent.AddComponent(drType);
+            SetProperty(dr, "DecisionPeriod", 5);
+            SetProperty(dr, "TakeActionsBetweenDecisions", true);
+        }
+
+        return agent;
     }
 
     #endregion
