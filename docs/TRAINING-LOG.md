@@ -1,6 +1,6 @@
 # Training Log - E2EDrivingAgent RL Training History
 
-> Phase L v5 completed on 2026-02-03 (peak 504.3, 3 pedestrians mastered, deployed to Phase M)
+> Phase N v5b completed on 2026-02-06 (peak +521.8, 3M steps, curriculum 2/2, procedural roads)
 
 ## Overview
 
@@ -31,6 +31,7 @@
 | **Phase L v3** | Crosswalks + Pedestrians (from scratch) | 5M | **28675** | ⚠️ EXPLOIT (still hacking) |
 | **Phase L v4** | Crosswalks + Pedestrians (reward redesign) | 5M | **505** | ✅ COMPLETED (3/3 peds) |
 | **Phase L v5** | Crosswalks + Pedestrians (warm start v4) | 5M | **504** | ✅ COMPLETED (3/3 peds) |
+| **Phase N v5b** | ProceduralRoadBuilder (straight roads, speed gate fix) | 3M | **+521.8** | ✅ COMPLETED (2/2 curriculum) |
 
 ---
 
@@ -1549,3 +1550,133 @@ This is a variant of the general "reward shaping exploit" problem where agents f
 ---
 
 *Phase L Complete - v5 model deployed to Phase M Test Field - 2026-02-03*
+
+---
+
+## Phase N v5b: ProceduralRoadBuilder (Straight Roads with Curriculum)
+
+### Status: ✅ COMPLETED (2026-02-06)
+
+| Item | Value |
+|------|-------|
+| **Run ID** | phase-N-v5b |
+| **Steps** | 3,000,000 |
+| **Training Time** | 41.5 min (2,488 seconds) |
+| **Peak Reward** | **+523.5** (at 2.98M) |
+| **Final Reward** | **+521.8** |
+| **Observation** | 280D (same as Phase L) |
+| **Init From** | phase-N-v5 checkpoint (272K steps, -58.5 reward) |
+
+### What's New
+
+Phase N introduces **ProceduralRoadBuilder** + **CurriculumRoadManager** for dynamically generated training environments, replacing the static WaypointManager. This enables:
+- Infinite variety of road layouts without pre-authored scenes
+- Curriculum-controlled road complexity (lanes, distance, curvature, intersections)
+- Faster iteration on environment design
+
+### Key Code Changes (v5 fixes)
+
+1. **Speed Gate on Heading Alignment** (`E2EDrivingAgent.cs:1444`)
+   - Problem: Heading alignment gave +0.02/step "free" reward at speed=0
+   - PPO couldn't discover acceleration from random exploration
+   - Fix: `speedGate = Clamp01(|currentSpeed| / 2f)` removes free reward when stationary
+
+2. **Strong Speed Reward for Phase N** (`E2EDrivingAgent.cs:1306`)
+   - When `waypointManager == null`, use `ratio * 1.0f` (was 0.1x)
+   - At 5 m/s: ratio=0.17 * 1.0 = 0.17/step >> heading's 0.02/step
+   - Breaks the local optimum at speed=0
+
+3. **goalTarget + routeWaypoints Wiring** (`DrivingSceneManager.cs:150,257`)
+   - Phase N path when `waypointManager == null`
+   - CurriculumRoadManager provides waypoints and goal target
+
+### Training History (v1-v5)
+
+| Version | Steps | Peak Reward | Issue |
+|---------|-------|-------------|-------|
+| v1 | ~40K | -83 | Crashed (Unity timeout) |
+| v2 | ~110K | -184 | Speed penalty too harsh |
+| v3 | ~250K | -83 | Speed reward (0.3x) too weak |
+| v4 | ~270K | -241 | Strong speed (1.0x) but heading local optimum |
+| **v5** | 272K | **-58.5** | Speed gate fix -- broke -83 plateau |
+| **v5b** | 3M | **+521.8** | Continued from v5 checkpoint |
+
+### Training Progression (v5b)
+
+| Step | Reward | Event |
+|------|--------|-------|
+| 10K | -54.8 | Warm start from v5 checkpoint |
+| 100K | -56.2 | Initial dip (exploration) |
+| 200K | -51.1 | Recovery |
+| 300K | -42.4 | Breaking -50 |
+| 400K | -33.6 | Accelerating |
+| 500K | -18.2 | First checkpoint saved |
+| 680K | **+10.1** | **First positive reward** |
+| 780K | +81.9 | Strong positive |
+| 1.0M | +119.0 | Checkpoint saved |
+| 1.31M | +302.3 | Broke +300 |
+| 1.5M | +309.2 | Checkpoint saved |
+| 1.64M | -- | **Curriculum: goal_distance 150m -> 300m** |
+| 1.66M | +443.3 | Curriculum jump (longer episodes) |
+| 2.0M | +488.8 | Checkpoint saved |
+| 2.35M | -- | **Curriculum: num_lanes 1 -> 2** |
+| 2.5M | +514.6 | Checkpoint saved |
+| 2.95M | +522.5 | Peak (Std 5.8) |
+| 3.0M | **+521.8** | Training complete |
+
+### Curriculum Status (2/2 COMPLETE)
+
+| Parameter | Transition | Threshold | Status |
+|-----------|-----------|-----------|--------|
+| goal_distance | 150m -> 300m | reward 250 | DONE (1.64M) |
+| num_lanes | 1 -> 2 | reward 300 | DONE (2.35M) |
+
+(road_curvature and intersection_type fixed at 0 for Phase N -- straight roads only)
+
+### Reward Evolution Summary
+
+```
+Phase N v1-v4:  -83 plateau (heading alignment local optimum)
+                 |
+                 v
+Phase N v5:     -58.5 (speed gate fix broke plateau)
+                 |
+                 v
+Phase N v5b:    -54.8 -> +521.8 (+576 points, 600-point total improvement)
+```
+
+### Key Metrics
+
+| Metric | Value |
+|--------|-------|
+| Total Improvement | +600 points (from -78.6 to +521.8) |
+| Curriculum Completed | 2/2 (goal_distance, num_lanes) |
+| Final Std | 8.9 (very stable) |
+| Training Throughput | ~72K steps/min |
+| Checkpoints Saved | 6 (500K intervals) |
+
+### Lessons Learned
+
+| Lesson ID | Description | Phase |
+|-----------|-------------|-------|
+| P-028 | Speed gate on heading alignment prevents stationary local optimum | Phase N v5 |
+| P-029 | Fresh training needs strong speed reward (1.0x) to bootstrap acceleration | Phase N v5 |
+| P-030 | GridWaypointProxy intersection index bug (Phase M inference fix) | Phase M |
+
+### Artifacts
+
+- **Config**: `python/configs/planning/vehicle_ppo_phase-N-v1.yaml`
+- **Results**: `results/phase-N-v5b/E2EDrivingAgent/`
+- **Final Model**: `results/phase-N-v5b/E2EDrivingAgent/E2EDrivingAgent-3000070.onnx`
+- **Checkpoints**: 500K, 1M, 1.5M, 2M, 2.5M, 3M
+
+### Next Steps
+
+1. **P-030 Grid Fix**: Apply GridWaypointProxy bug fix for Phase M inference
+2. **Cross-test**: Test Phase N ONNX on Phase M Grid Test Field
+3. **Phase O**: Add curves (road_curvature) and intersections (intersection_type) to procedural roads
+
+---
+
+*Phase N v5b Training Complete - 2026-02-06*
+*ProceduralRoadBuilder validated, curriculum 2/2 complete, ready for Phase O*
