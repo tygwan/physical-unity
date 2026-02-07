@@ -38,6 +38,9 @@ build/
 
 # ML-Agents
 results/
+Assets/ML-Agents/Models/
+Assets/ML-Agents/Timers/
+Assets/Screenshots/
 
 # IDE
 .vs/
