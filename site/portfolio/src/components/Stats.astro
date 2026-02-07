@@ -1,13 +1,18 @@
 ---
 import { stats } from '../data/phases';
+import { getTranslations, type Lang } from '../i18n';
+
+interface Props { lang?: Lang; }
+const { lang = 'en' } = Astro.props;
+const t = getTranslations(lang);
 
 const dashboardItems = [
-  { value: `+${stats.maxReward.toLocaleString()}`, label: 'Peak Reward', sub: 'Phase I: Curves+NPC', color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/15' },
-  { value: `${stats.completedPhases}/${stats.totalPhases}`, label: 'Phases Complete', sub: `${stats.failedAttempts} failed attempts`, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/15' },
-  { value: `${stats.observationDim}D`, label: 'Observation Space', sub: 'ego + route + NPC + lane', color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/15' },
-  { value: `${stats.parallelAreas}`, label: 'Parallel Envs', sub: 'simultaneous training', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/15' },
-  { value: stats.collisionRateTarget, label: 'Collision Rate', sub: 'safety target', color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/15' },
-  { value: stats.totalPolicies.toString(), label: 'Policies Discovered', sub: 'from trial-error', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/15' },
+  { value: `+${stats.maxReward.toLocaleString()}`, label: t.stats.peakReward, sub: t.stats.peakRewardSub, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/15' },
+  { value: `${stats.completedPhases}/${stats.totalPhases}`, label: t.stats.phasesComplete, sub: `${stats.failedAttempts} ${t.stats.failedAttempts}`, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/15' },
+  { value: `${stats.observationDim}D`, label: t.stats.observationSpace, sub: t.stats.observationSub, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/15' },
+  { value: `${stats.parallelAreas}`, label: t.stats.parallelEnvs, sub: t.stats.parallelSub, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/15' },
+  { value: stats.collisionRateTarget, label: t.stats.collisionRate, sub: t.stats.collisionSub, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/15' },
+  { value: stats.totalPolicies.toString(), label: t.stats.policiesDiscovered, sub: t.stats.policiesSub, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/15' },
 ];
 ---
 

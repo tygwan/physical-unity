@@ -1,5 +1,10 @@
 ---
 import { phases, canonicalPhases } from '../data/phases';
+import { getTranslations, type Lang } from '../i18n';
+
+interface Props { lang?: Lang; }
+const { lang = 'en' } = Astro.props;
+const t = getTranslations(lang);
 
 // Build the roadmap nodes in display order (including failed versions)
 interface RoadmapNode {
@@ -16,7 +21,7 @@ interface RoadmapNode {
 const roadmapNodes: RoadmapNode[] = phases.map((p) => ({
   id: p.id,
   label: p.name.replace('Phase ', ''),
-  subtitle: p.subtitle,
+  subtitle: lang === 'ko' && p.subtitleKo ? p.subtitleKo : p.subtitle,
   reward: p.reward,
   status: p.status,
   isFork: p.status === 'failed',
@@ -31,18 +36,25 @@ const statusStyles: Record<string, { dot: string; border: string; bg: string; te
 };
 
 function rewardDisplay(reward: number | null, status: string): string {
-  if (reward === null) return 'Training...';
+  if (reward === null) return t.phases.training;
   if (reward < 0) return reward.toLocaleString();
   return `+${reward.toLocaleString()}`;
+}
+
+function statusLabel(status: string): string {
+  if (status === 'in_progress') return t.phases.active;
+  if (status === 'success') return t.phases.success.toUpperCase();
+  if (status === 'failed') return t.phases.failed.toUpperCase();
+  return status.toUpperCase();
 }
 ---
 
 <section id="phases" class="py-24">
   <div class="mx-auto max-w-7xl px-6">
 
-    <h2 class="section-heading">Training Phases</h2>
+    <h2 class="section-heading">{t.phases.heading}</h2>
     <p class="section-sub">
-      Progressive curriculum learning across 7 phases. Failed attempts are shown as branched paths -- each failure produced design policies reused in later phases.
+      {t.phases.sub}
     </p>
 
     <!-- ========== Desktop Roadmap (horizontal flow) ========== -->
@@ -98,7 +110,7 @@ function rewardDisplay(reward: number | null, status: string): string {
                 {/* Status badge */}
                 <div class="mt-2">
                   <span class={`inline-block rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider ${s.bg} ${s.text} border ${s.border}`}>
-                    {node.status === 'in_progress' ? 'ACTIVE' : node.status.toUpperCase()}
+                    {statusLabel(node.status)}
                   </span>
                 </div>
               </div>
@@ -149,7 +161,7 @@ function rewardDisplay(reward: number | null, status: string): string {
 
     <!-- ========== Reward Evolution Chart ========== -->
     <div class="mx-auto mt-16 max-w-4xl rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6">
-      <h3 class="mb-4 text-sm font-medium text-slate-400 font-mono">Reward Evolution (all attempts)</h3>
+      <h3 class="mb-4 text-sm font-medium text-slate-400 font-mono">{t.phases.rewardEvolution}</h3>
       <div class="space-y-2 font-mono text-sm">
         {roadmapNodes.map((node) => {
           const maxAbs = 2200; // Scale reference: Phase A peak was 2113
@@ -178,15 +190,15 @@ function rewardDisplay(reward: number | null, status: string): string {
         })}
       </div>
       <div class="mt-4 flex items-center gap-4 text-xs text-slate-500">
-        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-sky-600 to-sky-400 inline-block"></span> Success</span>
-        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-red-700 to-red-500 inline-block"></span> Failed</span>
-        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-amber-600 to-amber-400 inline-block"></span> In Progress</span>
+        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-sky-600 to-sky-400 inline-block"></span> {t.phases.success}</span>
+        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-red-700 to-red-500 inline-block"></span> {t.phases.failed}</span>
+        <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded bg-gradient-to-r from-amber-600 to-amber-400 inline-block"></span> {t.phases.inProgressLabel}</span>
       </div>
     </div>
 
     <!-- ========== Phase Detail Cards ========== -->
     <div class="mt-16">
-      <h3 class="text-lg font-semibold text-white mb-6">Phase Details</h3>
+      <h3 class="text-lg font-semibold text-white mb-6">{t.phases.phaseDetails}</h3>
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {phases.map((phase) => {
           const s = statusStyles[phase.status];
@@ -197,33 +209,33 @@ function rewardDisplay(reward: number | null, status: string): string {
               <div class="flex items-start justify-between mb-3">
                 <span class={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border ${s.bg} ${s.text} ${s.border}`}>
                   <span class={`h-1.5 w-1.5 rounded-full ${s.dot} ${phase.status === 'in_progress' ? 'animate-pulse' : ''}`}></span>
-                  {phase.status === 'in_progress' ? 'IN PROGRESS' : phase.status.toUpperCase()}
+                  {statusLabel(phase.status)}
                 </span>
                 {phase.reward !== null ? (
                   <span class={`text-xl font-bold font-mono ${isFailed ? 'text-red-400' : 'text-white'}`}>
                     {phase.reward < 0 ? phase.reward.toLocaleString() : `+${phase.reward.toLocaleString()}`}
                   </span>
                 ) : (
-                  <span class="text-sm font-medium text-amber-400">Training...</span>
+                  <span class="text-sm font-medium text-amber-400">{t.phases.training}</span>
                 )}
               </div>
 
               {/* Title */}
-              <h4 class="text-base font-bold text-white">{phase.name}: {phase.subtitle}</h4>
-              <p class="mt-1.5 text-xs leading-relaxed text-slate-400">{phase.description}</p>
+              <h4 class="text-base font-bold text-white">{phase.name}: {lang === 'ko' && phase.subtitleKo ? phase.subtitleKo : phase.subtitle}</h4>
+              <p class="mt-1.5 text-xs leading-relaxed text-slate-400">{lang === 'ko' && phase.descriptionKo ? phase.descriptionKo : phase.description}</p>
 
               {/* Key insight */}
               <div class={`mt-3 rounded-lg border p-3 ${isFailed ? 'border-red-500/10 bg-red-500/5' : 'border-sky-500/10 bg-sky-500/5'}`}>
                 <p class={`text-xs font-medium ${isFailed ? 'text-red-400' : 'text-sky-400'}`}>
-                  {isFailed ? 'Failure Cause' : 'Key Insight'}
+                  {isFailed ? t.phases.failureCause : t.phases.keyInsight}
                 </p>
-                <p class="mt-1 text-xs text-slate-300">{phase.keyInsight}</p>
+                <p class="mt-1 text-xs text-slate-300">{lang === 'ko' && phase.keyInsightKo ? phase.keyInsightKo : phase.keyInsight}</p>
               </div>
 
               {/* Meta */}
               <div class="mt-3 flex items-center gap-3 text-xs text-slate-500">
-                <span>Obs: {phase.observations}</span>
-                <span>Steps: {phase.steps}</span>
+                <span>{t.phases.obs}: {phase.observations}</span>
+                <span>{t.phases.steps}: {phase.steps}</span>
               </div>
 
               {/* Tags */}

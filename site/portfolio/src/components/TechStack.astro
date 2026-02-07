@@ -1,22 +1,27 @@
 ---
 import { stats } from '../data/phases';
+import { getTranslations, type Lang } from '../i18n';
+
+interface Props { lang?: Lang; }
+const { lang = 'en' } = Astro.props;
+const t = getTranslations(lang);
 
 const techItems = [
-  { name: 'Unity 6',        category: 'Simulation',   color: 'from-slate-500 to-slate-400' },
-  { name: 'ML-Agents 3.0',  category: 'Framework',    color: 'from-sky-500 to-sky-400' },
-  { name: 'PyTorch 2.0+',   category: 'ML Engine',    color: 'from-orange-500 to-orange-400' },
-  { name: 'PPO',            category: 'RL Algorithm',  color: 'from-emerald-500 to-emerald-400' },
-  { name: 'ROS2 Humble',    category: 'Middleware',    color: 'from-blue-500 to-blue-400' },
-  { name: 'C# / Python',    category: 'Languages',     color: 'from-violet-500 to-violet-400' },
-  { name: 'CUDA',           category: 'Compute',       color: 'from-green-500 to-green-400' },
-  { name: 'TensorBoard',    category: 'Monitoring',    color: 'from-rose-500 to-rose-400' },
+  { name: 'Unity 6',        category: t.architecture.simulation,   color: 'from-slate-500 to-slate-400' },
+  { name: 'ML-Agents 3.0',  category: t.architecture.framework,    color: 'from-sky-500 to-sky-400' },
+  { name: 'PyTorch 2.0+',   category: t.architecture.mlEngine,     color: 'from-orange-500 to-orange-400' },
+  { name: 'PPO',            category: t.architecture.rlAlgorithm,   color: 'from-emerald-500 to-emerald-400' },
+  { name: 'ROS2 Humble',    category: t.architecture.middleware,    color: 'from-blue-500 to-blue-400' },
+  { name: 'C# / Python',    category: t.architecture.languages,     color: 'from-violet-500 to-violet-400' },
+  { name: 'CUDA',           category: t.architecture.compute,       color: 'from-green-500 to-green-400' },
+  { name: 'TensorBoard',    category: t.architecture.monitoring,    color: 'from-rose-500 to-rose-400' },
 ];
 
 const architecture = [
-  { label: 'Observation',  value: '254D vector', desc: 'ego state, route, NPC, lane markings, goal' },
-  { label: 'Action Space', value: 'Continuous 2D', desc: 'acceleration [-4, 2] m/s2, steering [-0.5, 0.5] rad' },
-  { label: 'Reward',       value: '7 components', desc: 'progress, speed, lane, overtaking, violation, jerk, time' },
-  { label: 'Training',     value: '16 parallel', desc: 'simultaneous environments with curriculum learning' },
+  { label: t.architecture.observation,  value: t.architecture.observationValue, desc: t.architecture.observationDesc },
+  { label: t.architecture.actionSpace,  value: t.architecture.actionValue, desc: t.architecture.actionDesc },
+  { label: t.architecture.reward,       value: t.architecture.rewardValue, desc: t.architecture.rewardDesc },
+  { label: t.architecture.trainingLabel, value: t.architecture.trainingValue, desc: t.architecture.trainingDesc },
 ];
 
 const hwSpecs = [
@@ -27,11 +32,11 @@ const hwSpecs = [
 ];
 
 const pipelineSteps = [
-  { label: 'Unity Simulation',  color: 'sky',     desc: '16 parallel envs' },
-  { label: 'ML-Agents Bridge',  color: 'violet',  desc: 'gRPC protocol' },
-  { label: 'PyTorch PPO',       color: 'orange',  desc: 'GPU training' },
-  { label: 'ONNX Export',       color: 'emerald', desc: 'model packaging' },
-  { label: 'Unity Inference',   color: 'rose',    desc: 'real-time control' },
+  { label: t.architecture.unitySimulation,  color: 'sky',     desc: t.architecture.parallelEnvs },
+  { label: t.architecture.mlAgentsBridge,   color: 'violet',  desc: t.architecture.grpcProtocol },
+  { label: t.architecture.pytorchPpo,       color: 'orange',  desc: t.architecture.gpuTraining },
+  { label: t.architecture.onnxExport,       color: 'emerald', desc: t.architecture.modelPackaging },
+  { label: t.architecture.unityInference,   color: 'rose',    desc: t.architecture.realtimeControl },
 ];
 
 const colorMap: Record<string, string> = {
@@ -44,20 +49,20 @@ const colorMap: Record<string, string> = {
 
 // System architecture comparison: Tesla vs This Project
 const systemLayers = [
-  { layer: 'Input', tesla: '8x Cameras (1280x960)', project: '254D Ground Truth Vector', icon: 'I' },
-  { layer: 'Perception', tesla: 'Occupancy Network (400M params)', project: 'Direct from simulation', icon: 'P' },
-  { layer: 'Prediction', tesla: 'Occupancy Flow (2s horizon)', project: 'Constant velocity model', icon: 'R' },
-  { layer: 'Planning', tesla: 'MCTS + Neural Evaluator', project: 'PPO RL Policy (direct)', icon: 'L' },
-  { layer: 'Control', tesla: 'Neural MPC (40ms)', project: 'RL Policy output (2D)', icon: 'C' },
+  { layer: t.architecture.input,      tesla: '8x Cameras (1280x960)',                project: '254D Ground Truth Vector',     icon: 'I' },
+  { layer: t.architecture.perception, tesla: 'Occupancy Network (400M params)',       project: 'Direct from simulation',       icon: 'P' },
+  { layer: t.architecture.prediction, tesla: 'Occupancy Flow (2s horizon)',           project: 'Constant velocity model',      icon: 'R' },
+  { layer: t.architecture.planning,   tesla: 'MCTS + Neural Evaluator',              project: 'PPO RL Policy (direct)',        icon: 'L' },
+  { layer: t.architecture.control,    tesla: 'Neural MPC (40ms)',                     project: 'RL Policy output (2D)',         icon: 'C' },
 ];
 ---
 
 <section id="architecture" class="py-24">
   <div class="mx-auto max-w-7xl px-6">
 
-    <h2 class="section-heading">Architecture</h2>
+    <h2 class="section-heading">{t.architecture.heading}</h2>
     <p class="section-sub">
-      System design, training pipeline, and hardware specifications
+      {t.architecture.sub}
     </p>
 
     <!-- ========== Tech Stack Badges ========== -->
@@ -86,7 +91,7 @@ const systemLayers = [
 
     <!-- ========== Training Pipeline ========== -->
     <div class="mt-12 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 sm:p-8">
-      <h3 class="text-lg font-semibold text-white mb-6">Training Pipeline</h3>
+      <h3 class="text-lg font-semibold text-white mb-6">{t.architecture.trainingPipeline}</h3>
       <div class="flex flex-col items-center gap-2 sm:flex-row sm:gap-0 sm:justify-between">
         {pipelineSteps.map((step, i) => (
           <>
@@ -112,7 +117,7 @@ const systemLayers = [
       <div class="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-6">
         <h3 class="text-lg font-semibold text-sky-400 mb-4 flex items-center gap-2">
           <span class="flex h-6 w-6 items-center justify-center rounded bg-sky-500/20 text-xs font-mono">AD</span>
-          This Project
+          {t.architecture.thisProject}
         </h3>
         <div class="space-y-3">
           {systemLayers.map((l) => (
@@ -131,7 +136,7 @@ const systemLayers = [
       <div class="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6">
         <h3 class="text-lg font-semibold text-rose-400 mb-4 flex items-center gap-2">
           <span class="flex h-6 w-6 items-center justify-center rounded bg-rose-500/20 text-xs font-mono">T</span>
-          Tesla FSD 12/13
+          {t.architecture.teslaFsd}
         </h3>
         <div class="space-y-3">
           {systemLayers.map((l) => (
@@ -149,7 +154,7 @@ const systemLayers = [
 
     <!-- ========== Hardware Specs ========== -->
     <div class="mt-12 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 sm:p-8">
-      <h3 class="text-lg font-semibold text-white mb-6">Hardware Environment</h3>
+      <h3 class="text-lg font-semibold text-white mb-6">{t.architecture.hardwareEnv}</h3>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {hwSpecs.map((spec) => (
           <div class="text-center">

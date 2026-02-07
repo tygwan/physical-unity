@@ -1,0 +1,22 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Hero from '../../components/Hero.astro';
+import Stats from '../../components/Stats.astro';
+import Research from '../../components/Research.astro';
+import PhaseRoadmap from '../../components/PhaseRoadmap.astro';
+import TechStack from '../../components/TechStack.astro';
+import Insights from '../../components/Insights.astro';
+import { getTranslations } from '../../i18n';
+
+const lang = 'en';
+const t = getTranslations(lang);
+---
+
+<Layout title={t.meta.title} description={t.meta.description} lang={lang}>
+  <Hero lang={lang} />
+  <Stats lang={lang} />
+  <Research lang={lang} />
+  <PhaseRoadmap lang={lang} />
+  <TechStack lang={lang} />
+  <Insights lang={lang} />
+</Layout>

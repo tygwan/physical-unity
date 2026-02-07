@@ -1,31 +1,40 @@
 ---
 import '../styles/global.css';
+import { getTranslations, getOtherLang, getLangLabel, type Lang } from '../i18n';
 
 interface Props {
   title: string;
   description?: string;
+  lang?: Lang;
 }
 
 const {
   title,
-  description = 'Autonomous Driving ML Platform - RL/IL Motion Planning Research with Unity + ML-Agents + PyTorch',
+  description,
+  lang = 'en',
 } = Astro.props;
+
+const t = getTranslations(lang);
+const desc = description ?? t.meta.description;
 const base = import.meta.env.BASE_URL;
+const otherLang = getOtherLang(lang);
+const otherLabel = getLangLabel(otherLang);
+const otherHref = `${base}${otherLang}/`;
 
 const navLinks = [
-  { label: 'Research',      href: `${base}#research` },
-  { label: 'Phases',        href: `${base}#phases` },
-  { label: 'Architecture',  href: `${base}#architecture` },
-  { label: 'Insights',      href: `${base}#insights` },
+  { label: t.nav.research,     href: `${base}${lang}/#research` },
+  { label: t.nav.phases,       href: `${base}${lang}/#phases` },
+  { label: t.nav.architecture, href: `${base}${lang}/#architecture` },
+  { label: t.nav.insights,     href: `${base}${lang}/#insights` },
 ];
 ---
 
 <!doctype html>
-<html lang="en" class="dark">
+<html lang={lang} class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={description} />
+    <meta name="description" content={desc} />
     <meta name="generator" content={Astro.generator} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -42,11 +51,11 @@ const navLinks = [
       <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
 
         <!-- Logo -->
-        <a href={base} class="flex items-center gap-2.5 text-lg font-bold text-white group">
+        <a href={`${base}${lang}/`} class="flex items-center gap-2.5 text-lg font-bold text-white group">
           <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400 text-sm font-mono transition group-hover:bg-sky-500/25">
             AD
           </span>
-          <span class="hidden sm:inline">ML Platform</span>
+          <span class="hidden sm:inline">{t.nav.brand}</span>
         </a>
 
         <!-- Desktop links -->
@@ -61,12 +70,18 @@ const navLinks = [
           ))}
           <div class="mx-2 h-4 w-px bg-slate-800"></div>
           <a
+            href={otherHref}
+            class="rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:text-white hover:bg-slate-800/60 font-medium"
+          >
+            {otherLabel}
+          </a>
+          <a
             href="https://github.com/tygwan/physical-unity"
             target="_blank"
             rel="noopener"
             class="rounded-lg border border-slate-700/60 bg-slate-800/40 px-3.5 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white hover:border-slate-600"
           >
-            GitHub
+            {t.nav.github}
           </a>
         </div>
 
@@ -94,12 +109,18 @@ const navLinks = [
             </a>
           ))}
           <a
+            href={otherHref}
+            class="mobile-nav-link block rounded-lg px-4 py-2.5 text-sm text-slate-400 transition hover:text-white hover:bg-slate-800/60 font-medium"
+          >
+            {otherLabel}
+          </a>
+          <a
             href="https://github.com/tygwan/physical-unity"
             target="_blank"
             rel="noopener"
             class="mt-2 block rounded-lg border border-slate-700/60 bg-slate-800/40 px-4 py-2.5 text-center text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
           >
-            GitHub
+            {t.nav.github}
           </a>
         </div>
       </div>
@@ -118,15 +139,15 @@ const navLinks = [
           <div>
             <div class="flex items-center gap-2.5 text-lg font-bold text-white">
               <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400 text-sm font-mono">AD</span>
-              ML Platform
+              {t.nav.brand}
             </div>
             <p class="mt-3 text-sm text-slate-500 leading-relaxed max-w-xs">
-              Autonomous driving motion planning research using reinforcement learning with curriculum-based progressive training.
+              {t.footer.description}
             </p>
           </div>
           <!-- Links -->
           <div>
-            <h4 class="text-sm font-semibold text-slate-300 mb-3">Navigation</h4>
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">{t.nav.navigation}</h4>
             <div class="space-y-2">
               {navLinks.map((link) => (
                 <a href={link.href} class="block text-sm text-slate-500 transition hover:text-slate-300">
@@ -137,16 +158,16 @@ const navLinks = [
           </div>
           <!-- Tech -->
           <div>
-            <h4 class="text-sm font-semibold text-slate-300 mb-3">Built With</h4>
+            <h4 class="text-sm font-semibold text-slate-300 mb-3">{t.nav.builtWith}</h4>
             <div class="flex flex-wrap gap-2">
-              {['Unity 6', 'ML-Agents', 'PyTorch', 'PPO', 'ROS2'].map((t) => (
-                <span class="rounded-md bg-slate-800/60 border border-slate-700/40 px-2.5 py-1 text-xs text-slate-400">{t}</span>
+              {['Unity 6', 'ML-Agents', 'PyTorch', 'PPO', 'ROS2'].map((tech) => (
+                <span class="rounded-md bg-slate-800/60 border border-slate-700/40 px-2.5 py-1 text-xs text-slate-400">{tech}</span>
               ))}
             </div>
           </div>
         </div>
         <div class="mt-12 border-t border-slate-800/40 pt-6 text-center text-xs text-slate-600">
-          Autonomous Driving ML Platform -- RL/IL Motion Planning Research
+          {t.footer.bottom}
         </div>
       </div>
     </footer>

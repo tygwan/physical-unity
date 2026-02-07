@@ -1,11 +1,16 @@
 ---
 import { stats } from '../data/phases';
+import { getTranslations, type Lang } from '../i18n';
+
+interface Props { lang?: Lang; }
+const { lang = 'en' } = Astro.props;
+const t = getTranslations(lang);
 const base = import.meta.env.BASE_URL;
 
 const heroMetrics = [
-  { value: `+${stats.maxReward.toLocaleString()}`, label: 'Peak Reward', sub: 'Phase C', accent: 'text-amber-400' },
-  { value: `${stats.completedPhases}/${stats.totalPhases}`, label: 'Phases Complete', sub: `${stats.failedAttempts} failed attempts`, accent: 'text-sky-400' },
-  { value: stats.collisionRateTarget, label: 'Collision Target', sub: 'safety benchmark', accent: 'text-emerald-400' },
+  { value: `+${stats.maxReward.toLocaleString()}`, label: t.hero.peakReward, sub: 'Phase C', accent: 'text-amber-400' },
+  { value: `${stats.completedPhases}/${stats.totalPhases}`, label: t.hero.phasesComplete, sub: `${stats.failedAttempts} ${t.hero.failedAttempts}`, accent: 'text-sky-400' },
+  { value: stats.collisionRateTarget, label: t.hero.collisionTarget, sub: t.hero.safetyBenchmark, accent: 'text-emerald-400' },
 ];
 ---
 
@@ -28,33 +33,31 @@ const heroMetrics = [
         <!-- Badge -->
         <div class="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-4 py-1.5 text-sm text-sky-400">
           <span class="inline-block h-2 w-2 rounded-full bg-sky-400 animate-pulse"></span>
-          RL Motion Planning Research
+          {t.hero.badge}
         </div>
 
         <!-- Title -->
         <h1 class="animate-fade-in-up-delay-1 mt-6 text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
-          Autonomous Driving
+          {t.hero.titleLine1}
           <span class="block bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-            ML Platform
+            {t.hero.titleLine2}
           </span>
         </h1>
 
         <!-- Subtitle -->
         <p class="animate-fade-in-up-delay-2 mt-6 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-          End-to-end motion planning using <span class="text-slate-200 font-medium">PPO reinforcement learning</span> with
-          curriculum-based training across 7 progressive phases.
-          Validated against <span class="text-slate-200 font-medium">ISO 21448 (SOTIF)</span> safety standards.
+          {t.hero.subtitlePre}<span class="text-slate-200 font-medium">{t.hero.subtitleHL1}</span>{t.hero.subtitleMid}<span class="text-slate-200 font-medium">{t.hero.subtitleHL2}</span>{t.hero.subtitlePost}
         </p>
 
         <!-- CTA row -->
         <div class="animate-fade-in-up-delay-3 mt-8 flex flex-wrap gap-3">
-          <a href={`${base}#research`}
+          <a href={`${base}${lang}/#research`}
             class="rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 hover:shadow-sky-400/25">
-            View Research
+            {t.hero.viewResearch}
           </a>
-          <a href={`${base}#phases`}
+          <a href={`${base}${lang}/#phases`}
             class="rounded-xl border border-slate-700 bg-slate-800/50 px-5 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white">
-            Phase Roadmap
+            {t.hero.phaseRoadmap}
           </a>
           <a href="https://github.com/tygwan/physical-unity" target="_blank" rel="noopener"
             class="rounded-xl border border-slate-700 bg-slate-800/50 px-5 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white">
@@ -80,7 +83,7 @@ const heroMetrics = [
         <!-- Mini progress bar -->
         <div class="mt-6 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
           <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
-            <span>Overall Progress</span>
+            <span>{t.hero.overallProgress}</span>
             <span class="font-mono text-slate-300">{Math.round((stats.completedPhases / stats.totalPhases) * 100)}%</span>
           </div>
           <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -90,9 +93,9 @@ const heroMetrics = [
             ></div>
           </div>
           <div class="mt-2 flex items-center gap-4 text-xs text-slate-500">
-            <span class="flex items-center gap-1.5"><span class="status-dot status-dot-success"></span> {stats.completedPhases} complete</span>
-            <span class="flex items-center gap-1.5"><span class="status-dot status-dot-progress"></span> 2 in progress</span>
-            <span class="flex items-center gap-1.5"><span class="status-dot status-dot-failed"></span> {stats.failedAttempts} failed</span>
+            <span class="flex items-center gap-1.5"><span class="status-dot status-dot-success"></span> {stats.completedPhases} {t.hero.complete}</span>
+            <span class="flex items-center gap-1.5"><span class="status-dot status-dot-progress"></span> 2 {t.hero.inProgress}</span>
+            <span class="flex items-center gap-1.5"><span class="status-dot status-dot-failed"></span> {stats.failedAttempts} {t.hero.failed}</span>
           </div>
         </div>
       </div>

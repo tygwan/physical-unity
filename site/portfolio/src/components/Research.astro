@@ -1,5 +1,10 @@
 ---
 import { policyDiscoveries, sotifQuadrants, teslaGapAnalysis, resourceComparisons, references, referenceCategories } from '../data/phases';
+import { getTranslations, type Lang } from '../i18n';
+
+interface Props { lang?: Lang; }
+const { lang = 'en' } = Astro.props;
+const t = getTranslations(lang);
 
 const quadrantColors: Record<number, { bg: string; border: string; text: string; label: string }> = {
   1: { bg: 'bg-emerald-500/8', border: 'border-emerald-500/20', text: 'text-emerald-400', label: 'SAFE' },
@@ -35,20 +40,19 @@ const refLabelColors: Record<string, string> = {
 <section id="research" class="py-24">
   <div class="mx-auto max-w-7xl px-6">
 
-    <h2 class="section-heading">Research</h2>
+    <h2 class="section-heading">{t.research.heading}</h2>
     <p class="section-sub">
-      Safety frameworks, competitive analysis, and policy discoveries from iterative training
+      {t.research.sub}
     </p>
 
     <!-- ========== SOTIF 4-Quadrant Model ========== -->
     <div class="mt-16">
       <h3 class="text-xl font-bold text-white flex items-center gap-2">
         <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400 text-xs font-mono">S</span>
-        SOTIF Framework (ISO 21448)
+        {t.research.sotifTitle}
       </h3>
       <p class="mt-2 text-sm text-slate-400 max-w-2xl">
-        ISO 21448 defines Safety of the Intended Functionality -- addressing risks from functional limitations rather than system faults.
-        The 4-quadrant model classifies scenarios by knowledge and safety status.
+        {t.research.sotifDesc}
       </p>
 
       <!-- Quadrant grid -->
@@ -59,10 +63,10 @@ const refLabelColors: Record<string, string> = {
             <div class={`rounded-xl border ${c.border} ${c.bg} p-5 transition hover:bg-opacity-20`}>
               <div class="flex items-center justify-between mb-3">
                 <span class={`text-xs font-bold uppercase tracking-wider ${c.text}`}>
-                  Q{q.id}: {q.label}
+                  Q{q.id}: {c.label}
                 </span>
                 <span class="text-xs text-slate-500">
-                  {q.id <= 2 ? 'KNOWN' : 'UNKNOWN'}
+                  {q.id <= 2 ? t.research.known : t.research.unknown}
                 </span>
               </div>
               <p class="text-xs text-slate-400 leading-relaxed">{q.description}</p>
@@ -76,8 +80,7 @@ const refLabelColors: Record<string, string> = {
         })}
       </div>
       <p class="mt-4 text-xs text-slate-500 max-w-2xl">
-        Goal: shrink Quadrant 2 and 3 (unsafe areas) while expanding Quadrant 1 (known safe).
-        Each training phase systematically moves scenarios from Unknown to Known.
+        {t.research.sotifGoal}
       </p>
     </div>
 
@@ -85,11 +88,10 @@ const refLabelColors: Record<string, string> = {
     <div class="mt-20">
       <h3 class="text-xl font-bold text-white flex items-center gap-2">
         <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/15 text-rose-400 text-xs font-mono">T</span>
-        Tesla FSD Gap Analysis
+        {t.research.teslaTitle}
       </h3>
       <p class="mt-2 text-sm text-slate-400 max-w-2xl">
-        Component-by-component comparison against Tesla FSD 12/13 architecture.
-        This project is a research platform, not a commercial product -- the gap is intentional and informative.
+        {t.research.teslaDesc}
       </p>
 
       <!-- Resource comparison -->
@@ -98,7 +100,7 @@ const refLabelColors: Record<string, string> = {
           <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 text-center">
             <div class="text-xs text-slate-500 uppercase tracking-wider">{r.metric}</div>
             <div class="mt-2 text-xs font-mono text-rose-400 leading-tight">{r.tesla}</div>
-            <div class="my-1.5 text-slate-700">vs</div>
+            <div class="my-1.5 text-slate-700">{t.research.vs}</div>
             <div class="text-xs font-mono text-sky-400 leading-tight">{r.thisProject}</div>
             <div class="mt-2 text-[10px] text-slate-600 font-mono">{r.ratio}</div>
           </div>
@@ -110,11 +112,11 @@ const refLabelColors: Record<string, string> = {
         <table class="w-full text-sm text-left">
           <thead>
             <tr class="border-b border-slate-800">
-              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Component</th>
-              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tesla FSD</th>
-              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">This Project</th>
-              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Gap</th>
-              <th class="py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Feasibility</th>
+              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t.research.thComponent}</th>
+              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t.research.thTesla}</th>
+              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t.research.thProject}</th>
+              <th class="py-3 pr-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t.research.thGap}</th>
+              <th class="py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t.research.thFeasibility}</th>
             </tr>
           </thead>
           <tbody>
@@ -137,10 +139,7 @@ const refLabelColors: Record<string, string> = {
 
       <div class="mt-6 rounded-xl border border-slate-800/60 bg-slate-900/40 p-5">
         <p class="text-sm text-slate-400 leading-relaxed">
-          <span class="text-slate-200 font-medium">Key Insight:</span> Tesla FSD is a commercial product backed by 4M+ fleet vehicles and Dojo supercomputer (1.1 ExaFLOPS).
-          This project operates on a single RTX 4090 (82.6 TFLOPS) -- a 13-million-fold compute gap.
-          The value lies in algorithm validation, not scale replication.
-          Vehicle Control is the only component at parity, achieved through direct RL policy output.
+          <span class="text-slate-200 font-medium">{t.research.teslaInsightLabel}</span> {t.research.teslaInsight}
         </p>
       </div>
     </div>
@@ -149,11 +148,10 @@ const refLabelColors: Record<string, string> = {
     <div class="mt-20">
       <h3 class="text-xl font-bold text-white flex items-center gap-2">
         <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 text-xs font-mono">P</span>
-        Policy Discovery Log
+        {t.research.policyTitle}
       </h3>
       <p class="mt-2 text-sm text-slate-400 max-w-2xl">
-        Design principles discovered through trial-and-error training.
-        Each failure produced actionable policies that converge with established standards.
+        {t.research.policyDesc}
       </p>
 
       <div class="mt-8 space-y-4">
@@ -161,29 +159,32 @@ const refLabelColors: Record<string, string> = {
           const statusColor = p.status === 'verified' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
             : p.status === 'in_progress' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
             : 'text-slate-400 bg-slate-500/10 border-slate-500/20';
+          const statusLabel = p.status === 'verified' ? t.research.verified
+            : p.status === 'in_progress' ? t.research.policyInProgress
+            : t.research.planned;
           return (
             <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-5 transition hover:border-slate-700 card-glow">
               <div class="flex flex-wrap items-center gap-3 mb-3">
                 <span class="text-xs font-mono font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 rounded px-2 py-0.5">{p.id}</span>
                 <span class="text-sm font-semibold text-white">{p.name}</span>
                 <span class={`text-xs font-medium rounded-full border px-2.5 py-0.5 ${statusColor}`}>
-                  {p.status === 'verified' ? 'VERIFIED' : p.status === 'in_progress' ? 'IN PROGRESS' : 'PLANNED'}
+                  {statusLabel}
                 </span>
                 <span class="ml-auto text-xs text-slate-500">{p.sourcePhase}</span>
               </div>
-              <p class="text-sm text-slate-400 leading-relaxed">{p.description}</p>
+              <p class="text-sm text-slate-400 leading-relaxed">{lang === 'ko' && p.descriptionKo ? p.descriptionKo : p.description}</p>
               <div class="mt-3 grid gap-3 sm:grid-cols-2">
                 <div class="rounded-lg border border-rose-500/10 bg-rose-500/5 p-3">
-                  <div class="text-xs font-medium text-rose-400 mb-1">FAIL</div>
-                  <p class="text-xs text-slate-400">{p.failContext}</p>
+                  <div class="text-xs font-medium text-rose-400 mb-1">{t.research.fail}</div>
+                  <p class="text-xs text-slate-400">{lang === 'ko' && p.failContextKo ? p.failContextKo : p.failContext}</p>
                 </div>
                 <div class="rounded-lg border border-emerald-500/10 bg-emerald-500/5 p-3">
-                  <div class="text-xs font-medium text-emerald-400 mb-1">FIX</div>
-                  <p class="text-xs text-slate-400">{p.fixContext}</p>
+                  <div class="text-xs font-medium text-emerald-400 mb-1">{t.research.fix}</div>
+                  <p class="text-xs text-slate-400">{lang === 'ko' && p.fixContextKo ? p.fixContextKo : p.fixContext}</p>
                 </div>
               </div>
               <div class="mt-3 text-xs text-slate-500">
-                Matching Standard: <span class="text-slate-400">{p.matchingStandard}</span>
+                {t.research.matchingStandard} <span class="text-slate-400">{p.matchingStandard}</span>
               </div>
             </div>
           );
@@ -195,10 +196,10 @@ const refLabelColors: Record<string, string> = {
     <div class="mt-20">
       <h3 class="text-xl font-bold text-white flex items-center gap-2">
         <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400 text-xs font-mono">R</span>
-        References &amp; Academic Research
+        {t.research.referencesTitle}
       </h3>
       <p class="mt-2 text-sm text-slate-400 max-w-2xl">
-        Standards, papers, and technical analyses that inform the training curriculum, reward design, and safety validation framework.
+        {t.research.referencesDesc}
       </p>
 
       <!-- Category tabs -->
@@ -241,7 +242,7 @@ const refLabelColors: Record<string, string> = {
                     </div>
                     <a href={ref.url} target="_blank" rel="noopener noreferrer"
                        class="shrink-0 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs text-slate-400 hover:text-white hover:border-slate-500 transition">
-                      Open &rarr;
+                      {t.research.openLink} &rarr;
                     </a>
                   </div>
                   <p class="mt-2 text-xs text-slate-400 leading-relaxed">{ref.relevance}</p>
@@ -254,11 +255,7 @@ const refLabelColors: Record<string, string> = {
 
       <div class="mt-8 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
         <p class="text-sm text-slate-400 leading-relaxed">
-          <span class="text-slate-200 font-medium">Convergence Insight:</span> Our empirical policies (P-001 through P-011) discovered through trial-and-error training
-          independently converge with established international safety standards.
-          P-002 (Staggered Curriculum) maps to SOTIF's incremental complexity principle.
-          P-005/P-006 (planned) directly implement UN R157/R171 numerical limits.
-          This convergence validates that RL-based policy learning naturally rediscovers safety engineering principles.
+          <span class="text-slate-200 font-medium">{t.research.convergenceInsightLabel}</span> {t.research.convergenceInsight}
         </p>
       </div>
     </div>
